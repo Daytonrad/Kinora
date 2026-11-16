@@ -102,7 +102,28 @@ func run(cfg server.Config, log *slog.Logger) error {
 	imgDir := filepath.Join(cfg.DataDir, "images")
 	sc := scanner.New(st, imgDir, log)
 
-	srv := server.New(cfg, st, log, server.Deps{Ctx: ctx, Scanner: sc, ImgDir: imgDir})
+	if v := os.Getenv("KINORA_VAAPI_DEVICE"); v != "" {
+		media.VAAPIDevice = v
+	}
+	enc := media.NewEncoders()
+	go func() {
+		res := enc.SelfTest(ctx)
+		for _, r := range res {
+			if r.OK {
+				log.Info("encoder ok", "encoder", r.Name, "ms", r.Ms)
+			} else {
+				log.Debug("encoder unavailable", "encoder", r.Name, "reason", r.Error)
+			}
+		}
+		log.Info("encoder selected", "encoder", enc.Pick(st.Setting("encoder")).Name, "tonemap", enc.ToneMap())
+	}()
+	mgr := media.NewManager(cfg.CacheDir, enc, log)
+	go mgr.Reap(ctx)
+	dl := media.NewDownloader(cfg.CacheDir, enc, log)
+	go dl.Run(ctx)
+
+	srv := server.New(cfg, st, log, server.Deps{Ctx: ctx, Scanner: sc, ImgDir: imgDir, Media: mgr, Encoders: enc,
+		Subs: media.NewSubtitles(cfg.CacheDir), Downloads: dl})
 	go srv.Background(ctx)
 	go sc.Run(ctx)
 

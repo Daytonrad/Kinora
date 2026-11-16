@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/scoty_lucas/kinora/internal/media"
 	"github.com/scoty_lucas/kinora/internal/scanner"
 	"github.com/scoty_lucas/kinora/internal/store"
 )
@@ -52,8 +53,12 @@ type Server struct {
 // Deps are the subsystems the server drives (wired in main).
 type Deps struct {
 	Ctx     context.Context // cancelled on shutdown; background work started by requests uses it
-	Scanner *scanner.Scanner
-	ImgDir  string
+	Scanner   *scanner.Scanner
+	ImgDir    string
+	Media     *media.Manager
+	Encoders  *media.Encoders
+	Subs      *media.Subtitles
+	Downloads *media.Downloader
 }
 
 // New builds the server and its routes.
@@ -339,4 +344,8 @@ func (s *Server) Background(ctx context.Context) {
 }
 
 // Shutdown stops background subsystems (ffmpeg processes, scanners, parties).
-func (s *Server) Shutdown(ctx context.Context) {}
+func (s *Server) Shutdown(ctx context.Context) {
+	if s.Media != nil {
+		s.Media.StopAll()
+	}
+}

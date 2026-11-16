@@ -24,6 +24,14 @@ func (s *Server) routes() {
 	// with profile
 	m.HandleFunc("GET /api/libraries", s.withProfile(s.handleLibraries))
 	m.HandleFunc("GET /api/images/{id}/{kind}", s.authed(s.handleImage))
+	m.HandleFunc("GET /api/hls/{session}/{file}", s.authed(s.handleHLS))
+	m.HandleFunc("DELETE /api/hls/{session}", s.authed(s.handleHLSStop))
+	m.HandleFunc("POST /api/items/{id}/playback", s.withProfile(s.handlePlayback))
+	m.HandleFunc("GET /api/stream/{id}", s.withProfile(s.handleStream))
+	m.HandleFunc("GET /api/items/{id}/subtitles/{idx}", s.withProfile(s.handleSubtitle))
+	m.HandleFunc("POST /api/items/{id}/download", s.withProfile(s.handleDownloadCreate))
+	m.HandleFunc("GET /api/downloads", s.withProfile(s.handleDownloads))
+	m.HandleFunc("GET /api/downloads/{key}/file", s.withProfile(s.handleDownloadFile))
 
 	// admin
 	m.HandleFunc("GET /api/admin/users", s.admin(s.handleUsers))
@@ -43,6 +51,7 @@ func (s *Server) routes() {
 	m.HandleFunc("DELETE /api/libraries/{id}", s.admin(s.handleLibraryDelete))
 	m.HandleFunc("POST /api/libraries/{id}/scan", s.admin(s.handleLibraryScan))
 	m.HandleFunc("GET /api/admin/scan", s.admin(s.handleScanStatus))
+	m.HandleFunc("POST /api/admin/hwtest", s.admin(s.handleHWTest))
 
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "ismeretlen API végpont")

@@ -92,4 +92,11 @@ func (s *Server) handleScanStatus(w http.ResponseWriter, r *http.Request, c *req
 func (s *Server) dashboardExtras(d map[string]any) {
 	d["library"] = s.st.Stats()
 	d["scans"] = s.Scanner.Statuses()
+	d["transcodes"] = s.Media.Sessions()
+	res, at := s.Encoders.Results()
+	d["encoders"] = res
+	d["encoders_tested_at"] = at.Unix()
+	d["encoder_selected"] = s.Encoders.Pick(s.encoderSetting())
+	d["tonemap"] = s.Encoders.ToneMap()
+	d["downloads_active"] = s.Downloads.Active()
 }
