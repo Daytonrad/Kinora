@@ -15,6 +15,11 @@ host; `scripts/go.sh` runs the toolchain in the `kinora-dev` image (golang:1.24-
    and walks setup → library → scan → playback decision → HLS segment over curl. Must end with `SMOKE OK`.
    Set `SMOKE_LOGS=1` to always print container logs.
 
+4. Optional, for UI changes: start a fresh container with the test library
+   (`docker run -d --name kinora-e2e -p 18097:8096 -v "$(pwd -W)/testmedia:/media:ro" kinora:smoke`) and run
+   `BASE=http://127.0.0.1:18097 node scripts/e2e.mjs` from a folder where `npm i playwright` was done
+   (it drives the system Edge, because Playwright's Chromium has no H.264/AAC). Look at the screenshots it writes.
+
 If Docker Desktop is not running on Windows, start it with
 `"/c/Program Files/Docker/Docker/Docker Desktop.exe" &` and wait until `docker info` reports CPUs.
 
