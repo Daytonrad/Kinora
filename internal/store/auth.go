@@ -104,6 +104,30 @@ func (s *Store) CountUsers() (int, error) {
 	return n, err
 }
 
+// ErrSetupDone is returned by CreateFirstAdmin when an account already exists.
+var ErrSetupDone = errors.New("a szerver már be van állítva")
+
+// CreateFirstAdmin creates the initial admin atomically (no race between two setup requests).
+func (s *Store) CreateFirstAdmin(username, password string) (*User, error) {
+	tx, err := s.DB.Begin() // _txlock=immediate: takes the write lock up front
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var n int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+		return nil, err
+	}
+	if n > 0 {
+		return nil, ErrSetupDone
+	}
+	u, err := createUserTx(tx, username, password, true)
+	if err != nil {
+		return nil, err
+	}
+	return u, tx.Commit()
+}
+
 // CreateUser creates an account plus a default profile named after it.
 func (s *Store) CreateUser(username, password string, admin bool) (*User, error) {
 	tx, err := s.DB.Begin()

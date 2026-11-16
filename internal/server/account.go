@@ -53,21 +53,20 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 	if !decode(w, r, &in) {
 		return
 	}
-	if n, _ := s.st.CountUsers(); n > 0 {
-		writeErr(w, http.StatusConflict, "a szerver már be van állítva")
-		return
-	}
 	if msg := validCredentials(in.Username, in.Password); msg != "" {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
 	}
-	if name := strings.TrimSpace(in.ServerName); name != "" && !s.st.Overridden("server_name") {
-		s.st.SetSetting("server_name", name)
-	}
-	u, err := s.st.CreateUser(strings.TrimSpace(in.Username), in.Password, true)
-	if err != nil {
+	u, err := s.st.CreateFirstAdmin(strings.TrimSpace(in.Username), in.Password)
+	if errors.Is(err, store.ErrSetupDone) {
+		writeErr(w, http.StatusConflict, err.Error())
+		return
+	} else if err != nil {
 		s.internalErr(w, r, err)
 		return
+	}
+	if name := strings.TrimSpace(in.ServerName); name != "" && !s.st.Overridden("server_name") {
+		s.st.SetSetting("server_name", name)
 	}
 	s.log.Info("setup complete", "admin", u.Username)
 	s.startSession(w, r, u)

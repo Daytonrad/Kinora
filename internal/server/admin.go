@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -50,7 +51,7 @@ func (s *Server) handleUserCreate(w http.ResponseWriter, r *http.Request, c *req
 		return
 	}
 	u, err := s.st.CreateUser(strings.TrimSpace(in.Username), in.Password, in.IsAdmin)
-	if err == store.ErrExists {
+	if errors.Is(err, store.ErrExists) {
 		writeErr(w, http.StatusConflict, err.Error())
 		return
 	} else if err != nil {
@@ -74,8 +75,8 @@ func (s *Server) handleUserUpdate(w http.ResponseWriter, r *http.Request, c *req
 		return
 	}
 	if in.Password != nil {
-		if len(*in.Password) < 6 {
-			writeErr(w, http.StatusBadRequest, "a jelszó legalább 6 karakter legyen")
+		if msg := validCredentials("placeholder", *in.Password); msg != "" {
+			writeErr(w, http.StatusBadRequest, msg)
 			return
 		}
 		keep := ""
