@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scoty_lucas/kinora/internal/store"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 // testMedia returns a private copy of the generated test library (scripts/mkmedia.sh).

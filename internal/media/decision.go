@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/scoty_lucas/kinora/internal/store"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 // Caps is what the browser reported it can decode (MediaSource.isTypeSupported / canPlayType).

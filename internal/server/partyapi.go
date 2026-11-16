@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/scoty_lucas/kinora/internal/party"
+	"github.com/ScotyLucas/kinora/internal/party"
 )
 
 func (s *Server) handlePartyCreate(w http.ResponseWriter, r *http.Request, c *reqCtx) {

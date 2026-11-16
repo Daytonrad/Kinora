@@ -13,7 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/scoty_lucas/kinora/internal/store"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 // Subtitles converts text subtitles to cached WebVTT.

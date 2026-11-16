@@ -17,12 +17,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/scoty_lucas/kinora/internal/media"
-	"github.com/scoty_lucas/kinora/internal/meta"
-	"github.com/scoty_lucas/kinora/internal/party"
-	"github.com/scoty_lucas/kinora/internal/scanner"
-	"github.com/scoty_lucas/kinora/internal/server"
-	"github.com/scoty_lucas/kinora/internal/store"
+	"github.com/ScotyLucas/kinora/internal/media"
+	"github.com/ScotyLucas/kinora/internal/meta"
+	"github.com/ScotyLucas/kinora/internal/party"
+	"github.com/ScotyLucas/kinora/internal/scanner"
+	"github.com/ScotyLucas/kinora/internal/server"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 func env(key, def string) string {

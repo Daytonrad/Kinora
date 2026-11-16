@@ -5,17 +5,18 @@ on:
     branches: [main]
     tags: ["v*.*.*"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
 env:
-  IMAGE: ghcr.io/scoty_lucas/kinora
+  IMAGE: ghcr.io/scotylucas/kinora
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -23,26 +24,92 @@ jobs:
           go-version: "1.24"
       - name: ffmpeg
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: test media
+        run: scripts/mkmedia.sh testmedia
       - run: go vet ./...
       - run: go test -race -count=1 ./...
 
   smoke:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: ffmpeg (test media generation)
+      - name: ffmpeg (test media + segment check)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: container smoke test
-        run: scripts/smoke.sh
+        run: SMOKE_LOGS=1 scripts/smoke.sh
 
-  image:
+  # One native build per architecture and variant (no QEMU: cgo/sqlite builds natively on the arm runner),
+  # pushed by digest and stitched into multi-arch manifests by the merge job.
+  build:
     needs: smoke
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - { name: amd64, runner: ubuntu-24.04 }
+          - { name: arm64, runner: ubuntu-24.04-arm }
+        variant:
+          - { name: default, amd: "0" }
+          - { name: amd, amd: "1" }
+    runs-on: ${{ matrix.arch.runner }}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: version
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "v=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT";
+          else echo "v=edge-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"; fi
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/${{ matrix.arch.name }}
+          build-args: |
+            VERSION=${{ steps.ver.outputs.v }}
+            AMD=${{ matrix.variant.amd }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.variant.name }}-${{ matrix.arch.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant.name }}-${{ matrix.arch.name }}
+      - name: export digest
+        run: |
+          mkdir -p /tmp/digests
+          d="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${d#sha256:}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.variant.name }}-${{ matrix.arch.name }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: build
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        variant:
+          - { name: default, suffix: "" }
+          - { name: amd, suffix: "-amd" }
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.variant.name }}-*
+          merge-multiple: true
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -53,28 +120,21 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
+          flavor: |
+            latest=false
+            suffix=${{ matrix.variant.suffix }},onlatest=true
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=edge,enable={{is_default_branch}}
             type=semver,pattern=v{{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
-      - name: version
-        id: ver
+      - name: create multi-arch manifest
+        working-directory: /tmp/digests
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "v=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT";
-          else echo "v=edge-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"; fi
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: runtime
-          # cgo (sqlite) cross build runs under QEMU for arm64
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: VERSION=${{ steps.ver.outputs.v }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: image size
-        run: docker buildx imagetools inspect ${{ env.IMAGE }}:sha-${GITHUB_SHA::7}
+          # shellcheck disable=SC2046  # tag and digest lists must split into separate arguments
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+      - name: inspect
+        run: docker buildx imagetools inspect ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}

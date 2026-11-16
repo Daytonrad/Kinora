@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scoty_lucas/kinora/internal/store"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 var chrome = Caps{Video: []string{"h264", "vp9", "av1"}, Audio: []string{"aac", "mp3", "opus", "flac"}, Containers: []string{"mp4", "webm"}}

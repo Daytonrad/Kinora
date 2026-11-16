@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/scoty_lucas/kinora/internal/scanner"
+	"github.com/ScotyLucas/kinora/internal/scanner"
 )
 
 // handleImage serves artwork with a fallback chain so cards are never empty

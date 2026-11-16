@@ -7,7 +7,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/scoty_lucas/kinora/web"
+	"github.com/ScotyLucas/kinora/web"
 )
 
 // webHandler serves the single page app (embedded, or from --web for development).

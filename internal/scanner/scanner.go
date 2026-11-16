@@ -29,8 +29,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/scoty_lucas/kinora/internal/media"
-	"github.com/scoty_lucas/kinora/internal/store"
+	"github.com/ScotyLucas/kinora/internal/media"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 // VideoExts are the recognized video file extensions.

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/scoty_lucas/kinora/internal/meta"
-	"github.com/scoty_lucas/kinora/internal/store"
+	"github.com/ScotyLucas/kinora/internal/meta"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 func (s *Server) handleMetadataRefresh(w http.ResponseWriter, r *http.Request, c *reqCtx) {

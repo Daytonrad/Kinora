@@ -1,4 +1,4 @@
-module github.com/scoty_lucas/kinora
+module github.com/ScotyLucas/kinora
 
 go 1.24
 

@@ -23,7 +23,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/scoty_lucas/kinora/internal/store"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 // Tunables (variables so tests can shorten them).

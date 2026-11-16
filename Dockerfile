@@ -21,12 +21,15 @@ ARG VERSION=dev
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=1 go build -trimpath \
-      -ldflags "-s -w -X github.com/scoty_lucas/kinora/internal/server.Version=${VERSION}" \
+      -ldflags "-s -w -X github.com/ScotyLucas/kinora/internal/server.Version=${VERSION}" \
       -o /out/kinora ./cmd/kinora
 
 FROM debian:bookworm-slim AS runtime
 ARG TARGETARCH
 ARG VERSION=dev
+# AMD=1 adds Mesa's VA-API driver (radeonsi) for AMD GPUs. It pulls in LLVM (~115 MB),
+# so the default image leaves it out: Intel VA-API/QSV, NVIDIA NVENC and software encoding work without it.
+ARG AMD=0
 # Debian's own ffmpeg (5.1, built with libzimg/zscale, VA-API, QSV via libmfx/vpl, NVENC via ffnvcodec).
 # non-free component is enabled only for intel-media-va-driver-non-free (amd64, Gen8+ Intel iGPU incl. QSV).
 RUN set -eux; \
@@ -34,7 +37,15 @@ RUN set -eux; \
     apt-get update; \
     extra=""; \
     if [ "$TARGETARCH" = "amd64" ]; then extra="intel-media-va-driver-non-free"; fi; \
-    apt-get install -y --no-install-recommends ffmpeg ca-certificates tzdata gosu mesa-va-drivers $extra; \
+    if [ "$AMD" = "1" ]; then extra="$extra mesa-va-drivers"; fi; \
+    apt-get install -y --no-install-recommends ffmpeg ca-certificates tzdata gosu $extra; \
+    if [ "$AMD" != "1" ]; then \
+      # libavdevice -> libgl1 -> libglx-mesa0 -> libgl1-mesa-dri -> libllvm15 (+ libz3). The ffmpeg CLI never
+      # creates an OpenGL context, so the Mesa DRI drivers (the only LLVM users) are dead weight here.
+      # Removed with --force-depends: apt inside this image will report the gap, which is fine for an appliance.
+      dpkg --purge --force-depends libgl1-mesa-dri libllvm15 libz3-4; \
+      ffmpeg -hide_banner -f lavfi -i testsrc2=size=320x240:rate=5 -t 1 -c:v libx264 -f null - ; \
+    fi; \
     rm -rf /var/lib/apt/lists/*; \
     groupadd -g 1000 kinora; \
     useradd -u 1000 -g 1000 -d /config -s /usr/sbin/nologin -M kinora; \
@@ -54,7 +65,7 @@ ENV KINORA_ADDR=:8096 \
 
 LABEL org.opencontainers.image.title="Kinora" \
       org.opencontainers.image.description="Self-hosted media server – a friendlier Jellyfin alternative" \
-      org.opencontainers.image.source="https://github.com/scoty_lucas/kinora" \
+      org.opencontainers.image.source="https://github.com/ScotyLucas/kinora" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.licenses="MIT"
 

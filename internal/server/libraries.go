@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/scoty_lucas/kinora/internal/scanner"
+	"github.com/ScotyLucas/kinora/internal/scanner"
 )
 
 func (s *Server) handleLibraries(w http.ResponseWriter, r *http.Request, c *reqCtx) {

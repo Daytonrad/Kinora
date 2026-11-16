@@ -14,7 +14,7 @@ Az elsődleges telepítési mód a Docker.
 # docker-compose.yml
 services:
   kinora:
-    image: ghcr.io/scoty_lucas/kinora:latest
+    image: ghcr.io/scotylucas/kinora:latest
     container_name: kinora
     ports: ["8096:8096"]
     environment:
@@ -66,9 +66,19 @@ Minden beállítás megadható környezeti változóval is. Ilyenkor az admin fe
 | `KINORA_FFMPEG`, `KINORA_FFPROBE` | `ffmpeg`, `ffprobe` | saját ffmpeg útvonala |
 | `TZ`, `PUID`, `PGID` | `UTC`, `1000`, `1000` | időzóna, a fájlok tulajdonosa |
 
+### Melyik image-et válaszd?
+
+| Tag | Mit tud | Méret (tömörítve / kicsomagolva) | Mikor válaszd |
+|---|---|---|---|
+| `latest` (és `vX.Y.Z`, `edge`) | szoftveres kódolás, **Intel** VA-API/Quick Sync (amd64), **NVIDIA** NVENC | ~165 MB / ~615 MB | Az esetek többségében: Intel iGPU-s NAS vagy mini PC, NVIDIA kártya, Raspberry Pi, vagy ha nincs GPU. |
+| `latest-amd` (és `vX.Y.Z-amd`, `edge-amd`) | ugyanez, plusz **AMD** Radeon VA-API (Mesa radeonsi) | ~225 MB / ~855 MB | Csak AMD GPU-hoz vagy AMD APU-hoz (Ryzen iGPU), ha hardveres kódolást akarsz. |
+
+Mindkettő amd64-re és arm64-re is elérhető (multi-arch manifest). Ha nem tudod, melyik kell, indítsd a `latest`-et, és nézd meg az
+**Admin → Átkódolás** oldalon az encoder-önteszt eredményét. Ha AMD géped van, és a VA-API ott „nem elérhető”, válts `latest-amd`-re.
+
 ### Hardveres gyorsítás
 
-- **Intel / AMD (VA-API, Quick Sync):** vedd ki a kommentet a `devices: ["/dev/dri:/dev/dri"]` sor elől. Az entrypoint
+- **Intel / AMD (VA-API, Quick Sync):** AMD GPU-hoz a `latest-amd` image kell. Vedd ki a kommentet a `devices: ["/dev/dri:/dev/dri"]` sor elől. Az entrypoint
   automatikusan belép abba a csoportba, amelyiké a `/dev/dri/*` eszköz (a render/video GID rendszerenként más), így a `group_add` sor el is hagyható.
 - **NVIDIA:** NVIDIA driver + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/) kell, majd:
   `docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d`
@@ -78,7 +88,7 @@ Minden beállítás megadható környezeti változóval is. Ilyenkor az admin fe
 
 ### NAS tippek
 
-- **Unraid:** Docker → Add Container, repository `ghcr.io/scoty_lucas/kinora:latest`, port 8096, path-ok: `/config` → `/mnt/user/appdata/kinora`,
+- **Unraid:** Docker → Add Container, repository `ghcr.io/scotylucas/kinora:latest`, port 8096, path-ok: `/config` → `/mnt/user/appdata/kinora`,
   `/media` → `/mnt/user/media` (read only). `PUID=99`, `PGID=100` (nobody:users). Intel iGPU-hoz: Extra Parameters: `--device=/dev/dri`.
 - **TrueNAS SCALE:** Custom App, a dataseteket hostPath-ként csatold, `PUID`/`PGID` legyen annak a felhasználónak az azonosítója, akié a dataset
   (általában `568:568` – apps). GPU: „GPU Configuration” → Intel/AMD.
@@ -177,7 +187,7 @@ Natív (Android/iOS/TV) kliensek a `POST /api/login` válaszában kapott tokent 
 ## Az ffmpeg választásáról
 
 A kép a **Debian bookworm saját `ffmpeg` csomagját** használja (5.1, `libzimg`/zscale tónusleképezéssel, VA-API, QSV (libmfx), NVENC (ffnvcodec)).
-Mellette van az `intel-media-va-driver-non-free` (amd64, Gen8+ Intel iGPU) és a `mesa-va-drivers` (AMD). Miért nem a `jellyfin-ffmpeg`?
+Mellette van az `intel-media-va-driver-non-free` (amd64, Gen8+ Intel iGPU), az `-amd` változatban pedig a `mesa-va-drivers` (AMD) is. Miért nem a `jellyfin-ffmpeg`?
 
 - Ugyanabból a Debian-tárolóból jön amd64-re és arm64-re is, így a multi-arch build egyszerű és reprodukálható.
 - A Kinora csak H.264 kimenetet és a szabványos `zscale`+`tonemap` láncot használja, ehhez nem kell a jellyfin-ffmpeg saját OpenCL/Vulkan tónusleképezése.
@@ -186,8 +196,14 @@ Mellette van az `intel-media-va-driver-non-free` (amd64, Gen8+ Intel iGPU) és a
 Ha a jellyfin-ffmpeg kell (pl. újabb Intel Arc GPU-khoz), egy saját képben telepítsd, és add meg a
 `KINORA_FFMPEG=/usr/lib/jellyfin-ffmpeg/ffmpeg` és `KINORA_FFPROBE=/usr/lib/jellyfin-ffmpeg/ffprobe` változót.
 
-Képméret: kb. 225 MB tömörítve (ennyit tölt le a `docker pull`), kicsomagolva kb. 850 MB. A legnagyobb tétel a Mesa (AMD VA-API) által
-behúzott `libllvm15` (115 MB), utána az Intel driver és a Debian ffmpeg függőségei. Maga a Kinora bináris kb. 10 MB.
+**Képméret.** A Debian ffmpeg-je a `libavdevice → libgl1 → … → libgl1-mesa-dri → libllvm15` láncon keresztül behúzza a Mesa OpenGL-drivereit
+és az LLVM-et (kb. 140 MB). Az ffmpeg parancssori eszköz soha nem hoz létre OpenGL kontextust, ezért az alap (`latest`) image-ből a build
+`dpkg --force-depends`-szel eltávolítja a `libgl1-mesa-dri`, `libllvm15` és `libz3-4` csomagot. Rögtön utána egy tesztkódolás is lefut,
+ami ellenőrzi, hogy az ffmpeg ép. Ennek az ára, hogy az image-en belül az `apt` hiányzó függőséget jelez; a konténert nem is erre szánták.
+A `latest-amd` image-ben ezek megmaradnak, mert az AMD VA-API driver (radeonsi) valóban használja az LLVM-et.
+Maga a Kinora bináris kb. 10 MB.
+
+Saját build: `docker build --target runtime .` (alap) vagy `docker build --target runtime --build-arg AMD=1 .` (AMD).
 
 ## Fejlesztés
 

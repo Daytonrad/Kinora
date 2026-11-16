@@ -1,7 +1,7 @@
 # Kinora – alap telepítés:  docker compose up -d   →  http://<szerver-ip>:8096
 services:
   kinora:
-    image: ghcr.io/scoty_lucas/kinora:latest
+    image: ghcr.io/scotylucas/kinora:latest   # AMD GPU-hoz: :latest-amd
     container_name: kinora
     ports: ["8096:8096"]
     environment:

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scoty_lucas/kinora/internal/media"
+	"github.com/ScotyLucas/kinora/internal/media"
 )
 
 // Image widths (px).
