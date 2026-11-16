@@ -116,10 +116,30 @@ INV="$(api POST /api/admin/invites '{"uses":1,"hours":24}' | json 'j["code"]')";
 api GET /api/admin/settings | json 'j["values"]["server_name"]' | grep -q Smoke && pass "settings readable" || fail "settings"
 curl -fsS -b "$JAR" -o "$TMP/backup.db" "$BASE/api/admin/backup" && head -c 15 "$TMP/backup.db" | grep -q "SQLite format" && pass "backup download" || fail "backup"
 
-if [ -f "$ROOT/scripts/smoke_media.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$ROOT/scripts/smoke_media.sh"
-fi
+# ------------------------------------------------------------------ M2: libraries & scanning
+say "libraries / scanning"
+api GET "/api/admin/browse" | json 'j["path"]' | grep -q "$MEDIA" && pass "folder picker opens at media root" || fail "browse root ($(cat "$TMP/body" | head -c 200))"
+api POST /api/libraries "{\"name\":\"Nope\",\"path\":\"$MEDIA/does-not-exist\",\"kind\":\"movies\"}" >/dev/null; expect 400 "non-existent folder rejected"
+MOV="$(api POST /api/libraries "{\"name\":\"Filmek\",\"path\":\"$MEDIA/Movies\",\"kind\":\"movies\"}" | json 'j["id"]')"; expect 201 "add movie library"
+SHO="$(api POST /api/libraries "{\"name\":\"Sorozatok\",\"path\":\"$MEDIA/Shows\",\"kind\":\"shows\"}" | json 'j["id"]')"; expect 201 "add show library"
+wait_scans() {
+    for i in $(seq 1 120); do
+        r="$(api GET /api/admin/scan | json 'sum(1 for s in j if s["running"])')"
+        [ "$r" = 0 ] && return 0
+        sleep 1
+    done
+    return 1
+}
+wait_scans && pass "scans finished" || fail "scans did not finish"
+api GET /api/admin/scan | json '[ (s["library_id"], s["changed"], s["errors"], s.get("error","")) for s in j ]'
+api GET /api/admin/dashboard | json 'j["library"]' > "$TMP/stats"
+grep -q '"movies": 3' "$TMP/stats" && grep -q '"series": 2' "$TMP/stats" && grep -q '"episodes": 5' "$TMP/stats"     && pass "3 movies, 2 series, 5 episodes ($(cat "$TMP/stats"))" || fail "library stats: $(cat "$TMP/stats")"
+api POST "/api/libraries/$MOV/scan" >/dev/null; expect 202 "manual rescan"
+wait_scans
+api GET /api/admin/scan | json "[s for s in j if s['library_id']==$MOV][0]" > "$TMP/rescan"
+"$PY" -c "import json,sys; s=json.load(open(sys.argv[1])); sys.exit(0 if s['changed']==0 and s['removed']==0 and s['took_ms']<3000 else 1)" "$TMP/rescan"     && pass "rescan: 0 changes ($(cat "$TMP/rescan" | json 'j["took_ms"]') ms)" || fail "rescan not idempotent: $(cat "$TMP/rescan")"
+ctype="$(curl -sS -b "$JAR" -o /dev/null -w '%{content_type}' "$BASE/api/images/1/backdrop")"
+[ "$ctype" = image/jpeg ] && pass "artwork served (thumb fallback)" || fail "image content-type: $ctype"
 
 # ------------------------------------------------------------------ shutdown
 if [ -z "${SMOKE_NATIVE:-}" ]; then

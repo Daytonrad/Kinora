@@ -143,6 +143,7 @@ CREATE TABLE items(
   has_poster INTEGER NOT NULL DEFAULT 0,
   has_backdrop INTEGER NOT NULL DEFAULT 0,
   missing INTEGER NOT NULL DEFAULT 0,
+  sidecar_sig TEXT NOT NULL DEFAULT '',
   added_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   UNIQUE(library_id, key)

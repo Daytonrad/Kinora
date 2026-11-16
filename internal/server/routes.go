@@ -23,6 +23,7 @@ func (s *Server) routes() {
 
 	// with profile
 	m.HandleFunc("GET /api/libraries", s.withProfile(s.handleLibraries))
+	m.HandleFunc("GET /api/images/{id}/{kind}", s.authed(s.handleImage))
 
 	// admin
 	m.HandleFunc("GET /api/admin/users", s.admin(s.handleUsers))
@@ -38,6 +39,10 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/admin/connect", s.admin(s.handleConnect))
 	m.HandleFunc("GET /api/admin/browse", s.admin(s.handleBrowse))
 	m.HandleFunc("GET /api/admin/dashboard", s.admin(s.handleDashboard))
+	m.HandleFunc("POST /api/libraries", s.admin(s.handleLibraryCreate))
+	m.HandleFunc("DELETE /api/libraries/{id}", s.admin(s.handleLibraryDelete))
+	m.HandleFunc("POST /api/libraries/{id}/scan", s.admin(s.handleLibraryScan))
+	m.HandleFunc("GET /api/admin/scan", s.admin(s.handleScanStatus))
 
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "ismeretlen API végpont")
@@ -45,13 +50,3 @@ func (s *Server) routes() {
 	m.Handle("/", s.webHandler())
 }
 
-func (s *Server) dashboardExtras(d map[string]any) {}
-
-func (s *Server) handleLibraries(w http.ResponseWriter, r *http.Request, c *reqCtx) {
-	libs, err := s.st.Libraries()
-	if err != nil {
-		s.internalErr(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, libs)
-}

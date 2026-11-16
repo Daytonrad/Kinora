@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/scoty_lucas/kinora/internal/media"
+	"github.com/scoty_lucas/kinora/internal/scanner"
 	"github.com/scoty_lucas/kinora/internal/server"
 	"github.com/scoty_lucas/kinora/internal/store"
 )
@@ -96,8 +98,13 @@ func run(cfg server.Config, log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv := server.New(cfg, st, log)
+	media.FFmpeg, media.FFprobe = ffmpeg, ffprobe
+	imgDir := filepath.Join(cfg.DataDir, "images")
+	sc := scanner.New(st, imgDir, log)
+
+	srv := server.New(cfg, st, log, server.Deps{Scanner: sc, ImgDir: imgDir})
 	go srv.Background(ctx)
+	go sc.Run(ctx)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr,
@@ -126,6 +133,7 @@ func run(cfg server.Config, log *slog.Logger) error {
 	defer cancel()
 	httpSrv.Shutdown(shCtx)
 	srv.Shutdown(shCtx)
+	waitOrTimeout(shCtx, sc.Wait)
 	log.Info("bye")
 	return nil
 }
@@ -151,4 +159,14 @@ func healthcheck() int {
 		return 1
 	}
 	return 0
+}
+
+// waitOrTimeout runs f (a blocking wait) but gives up when ctx expires.
+func waitOrTimeout(ctx context.Context, f func()) {
+	done := make(chan struct{})
+	go func() { f(); close(done) }()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }

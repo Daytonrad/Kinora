@@ -88,3 +88,27 @@ func (s *Store) DeleteLibrary(id int64) ([]int64, error) {
 func (s *Store) TouchLibraryScan(id int64) {
 	s.DB.Exec(`UPDATE libraries SET last_scan_at=? WHERE id=?`, now(), id)
 }
+
+// LibraryStats summarizes the whole collection.
+type LibraryStats struct {
+	Movies   int   `json:"movies"`
+	Series   int   `json:"series"`
+	Episodes int   `json:"episodes"`
+	Files    int   `json:"files"`
+	Missing  int   `json:"missing"`
+	Bytes    int64 `json:"bytes"`
+}
+
+// Stats counts titles, files and total size.
+func (s *Store) Stats() LibraryStats {
+	var st LibraryStats
+	s.DB.QueryRow(`SELECT
+		COALESCE(SUM(kind='movie' AND missing=0),0),
+		COALESCE(SUM(kind='series' AND missing=0),0),
+		COALESCE(SUM(kind='episode' AND missing=0),0),
+		COALESCE(SUM(kind IN ('movie','episode') AND missing=0),0),
+		COALESCE(SUM(kind IN ('movie','episode') AND missing=1),0),
+		COALESCE(SUM(CASE WHEN kind IN ('movie','episode') AND missing=0 THEN size ELSE 0 END),0)
+		FROM items`).Scan(&st.Movies, &st.Series, &st.Episodes, &st.Files, &st.Missing, &st.Bytes)
+	return st
+}
