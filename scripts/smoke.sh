@@ -18,6 +18,7 @@ BASE="http://127.0.0.1:$PORT"
 NAME=kinora-smoke
 IMAGE=kinora:smoke
 TMP="$(mktemp -d)"
+export PYTHONIOENCODING=utf-8
 JAR="$TMP/cookies"
 FAILS=0
 
@@ -38,7 +39,7 @@ fail() { printf '  \033[31m✗ %s\033[0m\n' "$*"; FAILS=$((FAILS+1)); }
 die()  { fail "$*"; exit 1; }
 
 # json <expr> : evaluates a python expression on stdin JSON bound to `j`
-json() { "$PY" -c "import json,sys; j=json.load(sys.stdin); v=($1); print(v if not isinstance(v,(dict,list)) else json.dumps(v))"; }
+json() { "$PY" -c "import json,sys; j=json.load(sys.stdin); v=($1); print(v if not isinstance(v,(dict,list)) else json.dumps(v, ensure_ascii=False))"; }
 
 api() { # api METHOD PATH [BODY]  -> body on stdout, status in $STATUS
     local m="$1" p="$2" b="${3:-}"
@@ -140,6 +141,53 @@ api GET /api/admin/scan | json "[s for s in j if s['library_id']==$MOV][0]" > "$
 "$PY" -c "import json,sys; s=json.load(open(sys.argv[1])); sys.exit(0 if s['changed']==0 and s['removed']==0 and s['took_ms']<3000 else 1)" "$TMP/rescan"     && pass "rescan: 0 changes ($(cat "$TMP/rescan" | json 'j["took_ms"]') ms)" || fail "rescan not idempotent: $(cat "$TMP/rescan")"
 ctype="$(curl -sS -b "$JAR" -o /dev/null -w '%{content_type}' "$BASE/api/images/1/backdrop")"
 [ "$ctype" = image/jpeg ] && pass "artwork served (thumb fallback)" || fail "image content-type: $ctype"
+
+# ------------------------------------------------------------------ M3: playback
+say "playback"
+idof() { api GET "/api/search?q=$1" | json "[i['id'] for i in j if i['title']=='$2'][0]"; }
+BIG="$(idof Big 'Big%20Test%20Movie' 2>/dev/null || true)"
+BIG="$(api GET "/api/search?q=Big" | json "[i['id'] for i in j if i['title']=='Big Test Movie'][0]")"
+SPACE="$(api GET "/api/search?q=Space" | json "[i['id'] for i in j if i['title']=='Space Drama'][0]")"
+EP1="$(api GET "/api/search?q=Pilot" | json "[i['id'] for i in j if i['title']=='Pilot Part 1'][0]")"
+CAPS='"caps":{"video":["h264","vp9"],"audio":["aac","mp3","opus"],"containers":["mp4","webm"]}'
+api POST "/api/items/$BIG/playback" "{$CAPS}" | json 'j["mode"]' | grep -qx direct && pass "mp4 h264/aac → direct" || fail "direct: $(cat "$TMP/body")"
+curl -sS -b "$JAR" -r 0-1023 -o /dev/null -w '%{http_code}' "$BASE/api/stream/$BIG" | grep -qx 206 && pass "direct stream supports Range (206)" || fail "range request"
+api POST "/api/items/$EP1/playback" "{$CAPS}" > "$TMP/remux.json"
+json 'j["mode"]' < "$TMP/remux.json" | grep -qx remux && pass "mkv h264/aac → remux" || fail "remux: $(cat "$TMP/remux.json")"
+api POST "/api/items/$SPACE/playback" "{$CAPS,\"start\":10}" > "$TMP/tc.json"
+json 'j["mode"]' < "$TMP/tc.json" | grep -qx transcode && pass "mkv hevc/ac3 → transcode ($(json 'j["encoder"]' < "$TMP/tc.json"))" || fail "transcode: $(cat "$TMP/tc.json")"
+json '"; ".join(j["reasons"])' < "$TMP/tc.json" | grep -q "hevc" && pass "reasons: $(json '"; ".join(j["reasons"])' < "$TMP/tc.json")" || fail "no reasons"
+URL="$(json 'j["url"]' < "$TMP/tc.json")"
+curl -fsS -b "$JAR" "$BASE$URL" > "$TMP/pl.m3u8" && grep -q seg00000.ts "$TMP/pl.m3u8" && pass "HLS playlist has segments" || fail "playlist: $(cat "$TMP/pl.m3u8")"
+sleep 2
+SEGURL="${URL%index.m3u8}seg00000.ts"
+curl -fsS -b "$JAR" -o "$TMP/seg.ts" "$BASE$SEGURL"
+codecs="$(ffprobe -v error -show_entries stream=codec_name -of csv=p=0 "$TMP/seg.ts" 2>/dev/null | tr -d '\r' | grep -v '^$' | sort -u | tr '\n' ',')"
+[ "$codecs" = "aac,h264," ] && pass "HLS segment decodes as h264+aac" || fail "segment codecs: $codecs"
+curl -sS -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE${URL%index.m3u8}..%2F..%2Fkinora.db" | grep -qx 400 && pass "HLS path traversal rejected" || fail "traversal not rejected"
+SUBIDX="$(api GET "/api/items/$BIG" | json "[s['type_index'] for s in j['item']['streams'] if s['type']=='subtitle' and s['lang']=='hun'][0]")"
+curl -fsS -b "$JAR" "$BASE/api/items/$BIG/subtitles/$SUBIDX" > "$TMP/sub.vtt"
+grep -q "Árvíztűrő tükörfúrógép" "$TMP/sub.vtt" && pass "CP1250 .srt → UTF-8 WebVTT with correct accents" || fail "subtitle: $(head -c 200 "$TMP/sub.vtt")"
+KEY="$(api POST "/api/items/$BIG/download" '{"quality":"360p"}' | json 'j["key"]')"; expect 202 "download job queued"
+for i in $(seq 1 60); do st="$(api GET /api/downloads | json "[x['status'] for x in j['jobs'] if x['key']=='$KEY'][0]")"; [ "$st" = done ] && break; [ "$st" = error ] && break; sleep 1; done
+[ "$st" = done ] && pass "360p download finished" || fail "download status: $st"
+curl -fsS -b "$JAR" -D "$TMP/dlh" -o "$TMP/dl.mp4" "$BASE/api/downloads/$KEY/file" && grep -qi "filename\*=UTF-8''Big" "$TMP/dlh" && pass "download served with UTF-8 filename" || fail "download file"
+api POST /api/admin/hwtest > "$TMP/hw.json"; expect 200 "encoder self-test"
+echo "    encoders: $(json '", ".join(r["name"]+(" ok" if r["ok"] else " -") for r in j["results"])' < "$TMP/hw.json")"
+
+# ------------------------------------------------------------------ M4: browsing, kids filter
+say "browsing / kids profile"
+api GET "/api/items?limit=100" | json 'j["total"]' | grep -qx 5 && pass "library lists 3 movies + 2 series" || fail "items: $(head -c 300 "$TMP/body")"
+api POST "/api/items/$BIG/progress" '{"position":30}' >/dev/null; expect 200 "progress report"
+api GET /api/home | json '[r["title"] for r in j["rows"]]' > "$TMP/rows"
+grep -q "Folytatás" "$TMP/rows" && pass "home rows: $(cat "$TMP/rows")" || fail "home rows: $(cat "$TMP/rows")"
+api PATCH "/api/profiles/$KID" '{"pin":""}' >/dev/null
+api POST "/api/profiles/$KID/select" '{"pin":"1234"}' >/dev/null; expect 200 "switch to kids profile (PIN)"
+api GET "/api/items?limit=100" | json "[i['title'] for i in j['items']]" > "$TMP/kidlist"
+grep -q "Space Drama" "$TMP/kidlist" && fail "kid sees R film: $(cat "$TMP/kidlist")" || pass "kid list hides R film: $(cat "$TMP/kidlist")"
+api GET "/api/items/$SPACE" >/dev/null; expect 404 "kid: R film details → 404"
+curl -sS -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE/api/stream/$SPACE" | grep -qx 404 && pass "kid: R film stream → 404" || fail "kid stream not blocked"
+api POST /api/collections '{"name":"x"}' >/dev/null; expect 403 "kid cannot create collections"
 
 # ------------------------------------------------------------------ shutdown
 if [ -z "${SMOKE_NATIVE:-}" ]; then

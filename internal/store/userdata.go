@@ -1,6 +1,9 @@
 package store
 
-import "database/sql"
+import (
+	"database/sql"
+	"strings"
+)
 
 // UserData is per-profile state of an item.
 type UserData struct {
@@ -30,9 +33,143 @@ func (s *Store) GetUserData(profileID, itemID int64) UserData {
 	return d
 }
 
-func ensureUD(q interface {
+type execer interface {
 	Exec(string, ...any) (sql.Result, error)
-}, profileID, itemID int64) error {
+}
+
+func ensureUD(q execer, profileID, itemID int64) error {
 	_, err := q.Exec(`INSERT OR IGNORE INTO user_data(profile_id,item_id) VALUES(?,?)`, profileID, itemID)
 	return err
+}
+
+// PlayedThreshold marks an item played after this fraction of its runtime.
+const PlayedThreshold = 0.92
+
+// ReportProgress stores a playback position. Past 92% the item becomes played.
+// Any progress un-hides the item and its series (rewatching brings it back).
+func (s *Store) ReportProgress(profileID int64, it *Item, position float64, ended bool) (played bool, err error) {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	if err := ensureUD(tx, profileID, it.ID); err != nil {
+		return false, err
+	}
+	t := now()
+	if position < 0 {
+		position = 0
+	}
+	done := ended || (it.RuntimeSec > 0 && position/float64(it.RuntimeSec) >= PlayedThreshold)
+	if done {
+		_, err = tx.Exec(`UPDATE user_data SET position=0, played=1, play_count=play_count+CASE WHEN played=1 AND position=0 THEN 0 ELSE 1 END,
+			last_played_at=?, hidden=0 WHERE profile_id=? AND item_id=?`, t, profileID, it.ID)
+	} else {
+		_, err = tx.Exec(`UPDATE user_data SET position=?, last_played_at=?, hidden=0 WHERE profile_id=? AND item_id=?`, position, t, profileID, it.ID)
+	}
+	if err != nil {
+		return false, err
+	}
+	if it.SeriesID != nil {
+		tx.Exec(`UPDATE user_data SET hidden=0 WHERE profile_id=? AND item_id=?`, profileID, *it.SeriesID)
+	}
+	return done, tx.Commit()
+}
+
+// episodeIDs returns the present episodes below a series/season.
+func episodeIDs(q interface {
+	Query(string, ...any) (*sql.Rows, error)
+}, it *Item) []int64 {
+	var ids []int64
+	var rows *sql.Rows
+	var err error
+	if it.Kind == "series" {
+		rows, err = q.Query(`SELECT id FROM items WHERE series_id=? AND kind='episode' AND missing=0`, it.ID)
+	} else {
+		rows, err = q.Query(`SELECT id FROM items WHERE parent_id=? AND kind='episode' AND missing=0`, it.ID)
+	}
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// SetPlayed marks an item (or every episode of a series/season) played or unplayed.
+func (s *Store) SetPlayed(profileID int64, it *Item, played bool) error {
+	ids := []int64{it.ID}
+	if it.Kind == "series" || it.Kind == "season" {
+		ids = episodeIDs(s.DB, it)
+	}
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	t := now()
+	for _, id := range ids {
+		ensureUD(tx, profileID, id)
+		if played {
+			_, err = tx.Exec(`UPDATE user_data SET played=1, position=0, play_count=MAX(play_count,1), last_played_at=? WHERE profile_id=? AND item_id=?`, t, profileID, id)
+		} else {
+			_, err = tx.Exec(`UPDATE user_data SET played=0, position=0 WHERE profile_id=? AND item_id=?`, profileID, id)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// SetFlag sets favorite or hidden.
+func (s *Store) SetFlag(profileID, itemID int64, flag string, v bool) error {
+	col := map[string]string{"favorite": "favorite", "hidden": "hidden"}[flag]
+	if col == "" {
+		return ErrNotFound
+	}
+	if err := ensureUD(s.DB, profileID, itemID); err != nil {
+		return err
+	}
+	_, err := s.DB.Exec(`UPDATE user_data SET `+col+`=? WHERE profile_id=? AND item_id=?`, v, profileID, itemID)
+	return err
+}
+
+// SetStars sets a 1..5 rating (nil clears it).
+func (s *Store) SetStars(profileID, itemID int64, stars *int) error {
+	if err := ensureUD(s.DB, profileID, itemID); err != nil {
+		return err
+	}
+	_, err := s.DB.Exec(`UPDATE user_data SET stars=? WHERE profile_id=? AND item_id=?`, stars, profileID, itemID)
+	return err
+}
+
+// SetTags replaces the tags of an item.
+func (s *Store) SetTags(itemID int64, tags []string) ([]string, error) {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM item_tags WHERE item_id=?`, itemID); err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		if t == "" || len([]rune(t)) > 40 || seen[strings.ToLower(t)] {
+			continue
+		}
+		seen[strings.ToLower(t)] = true
+		out = append(out, t)
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO item_tags(item_id,tag) VALUES(?,?)`, itemID, t); err != nil {
+			return nil, err
+		}
+	}
+	return out, tx.Commit()
 }
