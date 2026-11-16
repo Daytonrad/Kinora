@@ -84,7 +84,7 @@ func runFFmpeg(ctx context.Context, dst string, args ...string) error {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		os.Remove(tmp)
-		return fmt.Errorf("ffmpeg kép: %s", strings.TrimSpace(lastLine(string(out))+" "+err.Error()))
+		return fmt.Errorf("ffmpeg kép: %s", strings.TrimSpace(media.LastLine(string(out))+" "+err.Error()))
 	}
 	if st, err := os.Stat(tmp); err != nil || st.Size() == 0 {
 		os.Remove(tmp)

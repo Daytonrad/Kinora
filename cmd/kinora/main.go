@@ -102,7 +102,7 @@ func run(cfg server.Config, log *slog.Logger) error {
 	imgDir := filepath.Join(cfg.DataDir, "images")
 	sc := scanner.New(st, imgDir, log)
 
-	srv := server.New(cfg, st, log, server.Deps{Scanner: sc, ImgDir: imgDir})
+	srv := server.New(cfg, st, log, server.Deps{Ctx: ctx, Scanner: sc, ImgDir: imgDir})
 	go srv.Background(ctx)
 	go sc.Run(ctx)
 

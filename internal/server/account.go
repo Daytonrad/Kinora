@@ -53,7 +53,10 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 	if !decode(w, r, &in) {
 		return
 	}
-	if n, err := s.st.CountUsers(); err != nil || n > 0 { // fast path; CreateFirstAdmin re-checks atomically
+	if n, err := s.st.CountUsers(); err != nil {
+		s.internalErr(w, r, err)
+		return
+	} else if n > 0 { // fast path; CreateFirstAdmin re-checks atomically
 		writeErr(w, http.StatusConflict, store.ErrSetupDone.Error())
 		return
 	}

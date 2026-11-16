@@ -213,6 +213,9 @@ func CreditsStart(ch []Chapter, duration float64) *float64 {
 	return nil
 }
 
+// LastLine returns the last non-empty line (ffmpeg's real error is usually there).
+func LastLine(s string) string { return lastLine(s) }
+
 func lastLine(s string) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {

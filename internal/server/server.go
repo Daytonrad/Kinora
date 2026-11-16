@@ -51,13 +51,17 @@ type Server struct {
 
 // Deps are the subsystems the server drives (wired in main).
 type Deps struct {
+	Ctx     context.Context // cancelled on shutdown; background work started by requests uses it
 	Scanner *scanner.Scanner
 	ImgDir  string
 }
 
 // New builds the server and its routes.
 func New(cfg Config, st *store.Store, log *slog.Logger, deps Deps) *Server {
-	s := &Server{cfg: cfg, st: st, log: log, started: time.Now(), mux: http.NewServeMux(), limiter: newRateLimiter(), Deps: deps, bgCtx: context.Background()}
+	s := &Server{cfg: cfg, st: st, log: log, started: time.Now(), mux: http.NewServeMux(), limiter: newRateLimiter(), Deps: deps, bgCtx: deps.Ctx}
+	if s.bgCtx == nil {
+		s.bgCtx = context.Background()
+	}
 	s.routes()
 	return s
 }
@@ -322,7 +326,6 @@ func (rl *rateLimiter) allow(key string, limit int, window time.Duration) bool {
 
 // Background runs periodic housekeeping until ctx is done.
 func (s *Server) Background(ctx context.Context) {
-	s.bgCtx = ctx
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
 	for {
