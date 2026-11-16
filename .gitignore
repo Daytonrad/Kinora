@@ -1,0 +1,21 @@
+# runtime data
+/data/
+/cache/
+/config/
+/testmedia/
+/screenshots/
+*.db
+*.db-shm
+*.db-wal
+
+# build output
+/kinora
+/kinora.exe
+/dist/
+
+# tooling
+node_modules/
+.e2e/
+*.log
+.DS_Store
+Thumbs.db

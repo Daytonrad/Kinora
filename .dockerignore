@@ -1,0 +1,14 @@
+.git
+.github
+.claude
+data
+cache
+config
+testmedia
+dist
+screenshots
+node_modules
+*.db
+*.db-*
+*.log
+docker-compose*.yml

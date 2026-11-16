@@ -1,0 +1,15 @@
+# Fejlesztés: helyi build + a webkliens a forrásból (szerkesztés után elég frissíteni a böngészőt).
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+services:
+  kinora:
+    image: kinora:dev
+    build:
+      context: .
+      args:
+        VERSION: dev
+    command: ["/usr/local/bin/kinora", "--web", "/web"]
+    environment:
+      - KINORA_LOG_LEVEL=debug
+    volumes:
+      - ./web/static:/web:ro
+      - ./testmedia:/media/test:ro

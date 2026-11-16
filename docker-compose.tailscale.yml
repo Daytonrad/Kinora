@@ -1,0 +1,25 @@
+# Távoli elérés Tailscale-en át, portnyitás nélkül.
+# A Kinora a Tailscale sidecar hálózati névterét használja, így a tailneten
+# http://kinora:8096 (MagicDNS) címen érhető el.
+#   1. https://login.tailscale.com/admin/settings/keys → auth key (Reusable, Ephemeral nem kell)
+#   2. TS_AUTHKEY=tskey-... docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d
+services:
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: kinora-tailscale
+    hostname: kinora
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+    volumes:
+      - ./tailscale:/var/lib/tailscale
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    cap_add: [NET_ADMIN, SYS_MODULE]
+    ports: ["8096:8096"]   # LAN elérés továbbra is megmarad
+    restart: unless-stopped
+
+  kinora:
+    network_mode: service:tailscale
+    ports: !reset []
+    depends_on: [tailscale]

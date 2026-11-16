@@ -1,0 +1,15 @@
+# NVIDIA (NVENC) hardveres kódolás – szükséges: NVIDIA driver + NVIDIA Container Toolkit a gazdagépen.
+#   docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d
+services:
+  kinora:
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+      # - KINORA_ENCODER=h264_nvenc
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, video]

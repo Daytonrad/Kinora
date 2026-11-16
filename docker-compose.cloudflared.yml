@@ -1,0 +1,18 @@
+# Távoli elérés Cloudflare Tunnellel (saját domain, HTTPS, portnyitás nélkül).
+#   1. Cloudflare Zero Trust → Networks → Tunnels → Create tunnel → token kimásolása
+#   2. Public hostname: kinora.pelda.hu → Service: http://kinora:8096
+#   3. CF_TUNNEL_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d
+# Figyelem: a Cloudflare ÁSZF-je korlátozhatja a nagy mennyiségű videóforgalmat a tunnelen.
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: kinora-cloudflared
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+    depends_on: [kinora]
+    restart: unless-stopped
+
+  kinora:
+    environment:
+      - KINORA_PUBLIC_URL=${KINORA_PUBLIC_URL:-}

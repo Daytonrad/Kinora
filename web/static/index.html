@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kinora</title>
+</head>
+<body>
+<h1>Kinora</h1>
+<p id="s">…</p>
+<script>
+fetch('/api/status').then(r => r.json()).then(j => {
+  document.getElementById('s').textContent = j.server_name + ' – ' + j.version + (j.setup_needed ? ' (beállításra vár)' : '');
+});
+</script>
+</body>
+</html>
