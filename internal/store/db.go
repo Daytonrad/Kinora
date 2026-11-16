@@ -76,7 +76,7 @@ CREATE TABLE profiles(
   id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  color TEXT NOT NULL DEFAULT '#e50914',
+  color TEXT NOT NULL DEFAULT '#3e9bd6',
   pin_hash TEXT,
   is_kids INTEGER NOT NULL DEFAULT 0,
   max_rating_level INTEGER,

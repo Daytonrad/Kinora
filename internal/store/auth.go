@@ -156,7 +156,7 @@ func createUserTx(tx *sql.Tx, username, password string, admin bool) (*User, err
 	}
 	id, _ := res.LastInsertId()
 	if _, err := tx.Exec(`INSERT INTO profiles(user_id,name,color,sub_langs,audio_langs,created_at) VALUES(?,?,?,?,?,?)`,
-		id, username, "#e50914", "hun,eng", "hun,eng", t); err != nil {
+		id, username, "#3e9bd6", "hun,eng", "hun,eng", t); err != nil {
 		return nil, err
 	}
 	return &User{ID: id, Username: username, IsAdmin: admin, CreatedAt: t}, nil
