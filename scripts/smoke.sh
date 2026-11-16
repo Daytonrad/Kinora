@@ -181,6 +181,10 @@ api GET "/api/items?limit=100" | json 'j["total"]' | grep -qx 5 && pass "library
 api POST "/api/items/$BIG/progress" '{"position":30}' >/dev/null; expect 200 "progress report"
 api GET /api/home | json '[r["title"] for r in j["rows"]]' > "$TMP/rows"
 grep -q "Folytatás" "$TMP/rows" && pass "home rows: $(cat "$TMP/rows")" || fail "home rows: $(cat "$TMP/rows")"
+CODE="$(api POST /api/party "{\"item_id\":$BIG}" | json 'j["code"]')"; expect 201 "watch party created ($CODE)"
+api GET "/api/party/$CODE" | json 'j["item_id"]' | grep -qx "$BIG" && pass "party info" || fail "party info"
+ws="$(curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13'     -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Origin: http://evil.example' "$BASE/api/party/$CODE/ws")"
+[ "$ws" = 403 ] && pass "party websocket rejects foreign Origin" || fail "cross-origin ws: $ws"
 api PATCH "/api/profiles/$KID" '{"pin":""}' >/dev/null
 api POST "/api/profiles/$KID/select" '{"pin":"1234"}' >/dev/null; expect 200 "switch to kids profile (PIN)"
 api GET "/api/items?limit=100" | json "[i['title'] for i in j['items']]" > "$TMP/kidlist"

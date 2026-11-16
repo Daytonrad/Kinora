@@ -1,0 +1,513 @@
+// Package meta fetches optional online metadata from TMDB.
+//
+// It only runs when an admin configured a TMDB key, never overwrites local NFO
+// or manually edited items (tmdb_id = -1), remembers "no match" (tmdb_id = 0)
+// so it doesn't hammer the API on every scan, backs off on HTTP 429, and lets
+// the admin fix a wrong match by applying a specific TMDB id.
+package meta
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/scoty_lucas/kinora/internal/store"
+)
+
+// Fetcher talks to TMDB.
+type Fetcher struct {
+	st     *store.Store
+	imgDir string
+	log    *slog.Logger
+	hc     *http.Client
+
+	BaseURL  string
+	ImageURL string
+	Delay    time.Duration
+
+	mu     sync.Mutex
+	status Status
+}
+
+// Status is the progress of a refresh.
+type Status struct {
+	Running   bool   `json:"running"`
+	Total     int    `json:"total"`
+	Done      int    `json:"done"`
+	Matched   int    `json:"matched"`
+	NoMatch   int    `json:"no_match"`
+	LastError string `json:"last_error,omitempty"`
+	FinishedAt int64 `json:"finished_at,omitempty"`
+}
+
+// New creates a fetcher writing artwork below imgDir.
+func New(st *store.Store, imgDir string, log *slog.Logger) *Fetcher {
+	return &Fetcher{st: st, imgDir: imgDir, log: log, hc: &http.Client{Timeout: 20 * time.Second},
+		BaseURL: "https://api.themoviedb.org/3", ImageURL: "https://image.tmdb.org/t/p/", Delay: 120 * time.Millisecond}
+}
+
+// Status returns a snapshot.
+func (f *Fetcher) Status() Status {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.status
+}
+
+// Enabled reports whether a key is configured.
+func (f *Fetcher) Enabled() bool { return strings.TrimSpace(f.st.Setting("tmdb_key")) != "" }
+
+// ErrNoKey is returned when no TMDB key is configured.
+var ErrNoKey = errors.New("nincs megadva TMDB API kulcs (Admin → Metaadat)")
+
+func (f *Fetcher) get(ctx context.Context, path string, q url.Values, out any) error {
+	key := strings.TrimSpace(f.st.Setting("tmdb_key"))
+	if key == "" {
+		return ErrNoKey
+	}
+	if q == nil {
+		q = url.Values{}
+	}
+	q.Set("language", f.st.Setting("metadata_lang"))
+	bearer := len(key) > 40
+	if !bearer {
+		q.Set("api_key", key)
+	}
+	u := f.BaseURL + path + "?" + q.Encode()
+	for attempt := 0; attempt < 4; attempt++ {
+		req, _ := http.NewRequestWithContext(ctx, "GET", u, nil)
+		req.Header.Set("Accept", "application/json")
+		if bearer {
+			req.Header.Set("Authorization", "Bearer "+key)
+		}
+		resp, err := f.hc.Do(req)
+		if err != nil {
+			return fmt.Errorf("TMDB nem érhető el: %w", err)
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		resp.Body.Close()
+		switch {
+		case resp.StatusCode == http.StatusTooManyRequests:
+			wait := 2 * time.Second
+			if s, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && s > 0 {
+				wait = time.Duration(s) * time.Second
+			}
+			f.log.Info("tmdb rate limited", "wait", wait)
+			select {
+			case <-time.After(wait):
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		case resp.StatusCode == http.StatusUnauthorized:
+			return errors.New("a TMDB kulcs érvénytelen (401)")
+		case resp.StatusCode == http.StatusNotFound:
+			return errNotFound
+		case resp.StatusCode >= 300:
+			return fmt.Errorf("TMDB hiba: HTTP %d", resp.StatusCode)
+		}
+		if f.Delay > 0 {
+			time.Sleep(f.Delay)
+		}
+		return json.Unmarshal(body, out)
+	}
+	return errors.New("TMDB: túl sok kérés (429), később próbáld újra")
+}
+
+var errNotFound = errors.New("not found")
+
+// ------------------------------------------------------------------ API types
+
+type genre struct {
+	Name string `json:"name"`
+}
+
+type movieDetails struct {
+	ID           int64   `json:"id"`
+	Title        string  `json:"title"`
+	ReleaseDate  string  `json:"release_date"`
+	Overview     string  `json:"overview"`
+	VoteAverage  float64 `json:"vote_average"`
+	Genres       []genre `json:"genres"`
+	PosterPath   string  `json:"poster_path"`
+	BackdropPath string  `json:"backdrop_path"`
+	Collection   *struct {
+		Name string `json:"name"`
+	} `json:"belongs_to_collection"`
+	ReleaseDates struct {
+		Results []struct {
+			Country string `json:"iso_3166_1"`
+			Dates   []struct {
+				Certification string `json:"certification"`
+			} `json:"release_dates"`
+		} `json:"results"`
+	} `json:"release_dates"`
+}
+
+type tvDetails struct {
+	ID             int64   `json:"id"`
+	Name           string  `json:"name"`
+	FirstAirDate   string  `json:"first_air_date"`
+	Overview       string  `json:"overview"`
+	VoteAverage    float64 `json:"vote_average"`
+	Genres         []genre `json:"genres"`
+	PosterPath     string  `json:"poster_path"`
+	BackdropPath   string  `json:"backdrop_path"`
+	ContentRatings struct {
+		Results []struct {
+			Country string `json:"iso_3166_1"`
+			Rating  string `json:"rating"`
+		} `json:"results"`
+	} `json:"content_ratings"`
+}
+
+type seasonDetails struct {
+	PosterPath string `json:"poster_path"`
+	Episodes   []struct {
+		EpisodeNumber int     `json:"episode_number"`
+		Name          string  `json:"name"`
+		Overview      string  `json:"overview"`
+		StillPath     string  `json:"still_path"`
+		VoteAverage   float64 `json:"vote_average"`
+	} `json:"episodes"`
+}
+
+// SearchResult is a match candidate for the manual "fix match" dialog.
+type SearchResult struct {
+	ID       int64   `json:"id"`
+	Title    string  `json:"title"`
+	Year     int     `json:"year"`
+	Overview string  `json:"overview"`
+	Poster   string  `json:"poster,omitempty"`
+	Rating   float64 `json:"rating"`
+}
+
+type searchResp struct {
+	Results []struct {
+		ID           int64   `json:"id"`
+		Title        string  `json:"title"`
+		Name         string  `json:"name"`
+		ReleaseDate  string  `json:"release_date"`
+		FirstAirDate string  `json:"first_air_date"`
+		Overview     string  `json:"overview"`
+		PosterPath   string  `json:"poster_path"`
+		VoteAverage  float64 `json:"vote_average"`
+	} `json:"results"`
+}
+
+func yearOf(date string) int {
+	if len(date) >= 4 {
+		y, _ := strconv.Atoi(date[:4])
+		return y
+	}
+	return 0
+}
+
+// Search queries TMDB; kind is "movie" or "series".
+func (f *Fetcher) Search(ctx context.Context, kind, query string, year int) ([]SearchResult, error) {
+	path := "/search/movie"
+	q := url.Values{"query": {query}, "include_adult": {"false"}}
+	if kind == "series" {
+		path = "/search/tv"
+		if year > 0 {
+			q.Set("first_air_date_year", strconv.Itoa(year))
+		}
+	} else if year > 0 {
+		q.Set("year", strconv.Itoa(year))
+	}
+	var r searchResp
+	if err := f.get(ctx, path, q, &r); err != nil {
+		return nil, err
+	}
+	out := []SearchResult{}
+	for _, x := range r.Results {
+		sr := SearchResult{ID: x.ID, Title: x.Title, Year: yearOf(x.ReleaseDate), Overview: x.Overview, Rating: x.VoteAverage}
+		if kind == "series" {
+			sr.Title, sr.Year = x.Name, yearOf(x.FirstAirDate)
+		}
+		if x.PosterPath != "" {
+			sr.Poster = f.ImageURL + "w185" + x.PosterPath
+		}
+		out = append(out, sr)
+	}
+	return out, nil
+}
+
+// pickCert returns the first certification by country priority HU > US > DE > GB.
+func pickCert(byCountry map[string]string) string {
+	for _, c := range []string{"HU", "US", "DE", "GB"} {
+		if v := strings.TrimSpace(byCountry[c]); v != "" {
+			if c == "US" || c == "GB" {
+				return v
+			}
+			return c + ":" + v
+		}
+	}
+	return ""
+}
+
+// ------------------------------------------------------------------ refresh
+
+type target struct {
+	id, libID int64
+	kind      string
+	title     string
+	year      int
+}
+
+// Refresh fetches metadata for every movie/series without it. retryNoMatch also
+// retries items previously marked as "no match".
+func (f *Fetcher) Refresh(ctx context.Context, retryNoMatch bool) error {
+	if !f.Enabled() {
+		return ErrNoKey
+	}
+	f.mu.Lock()
+	if f.status.Running {
+		f.mu.Unlock()
+		return errors.New("a metaadat-frissítés már fut")
+	}
+	f.status = Status{Running: true}
+	f.mu.Unlock()
+	defer func() {
+		f.mu.Lock()
+		f.status.Running = false
+		f.status.FinishedAt = time.Now().Unix()
+		f.mu.Unlock()
+	}()
+
+	cond := "tmdb_id IS NULL"
+	if retryNoMatch {
+		cond = "(tmdb_id IS NULL OR tmdb_id=0)"
+	}
+	rows, err := f.st.DB.Query(`SELECT id,library_id,kind,title,COALESCE(year,0) FROM items WHERE kind IN ('movie','series') AND missing=0 AND ` + cond)
+	if err != nil {
+		return err
+	}
+	var ts []target
+	for rows.Next() {
+		var t target
+		rows.Scan(&t.id, &t.libID, &t.kind, &t.title, &t.year)
+		ts = append(ts, t)
+	}
+	rows.Close()
+	f.mu.Lock()
+	f.status.Total = len(ts)
+	f.mu.Unlock()
+	libs := map[int64]bool{}
+	for _, t := range ts {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		matched, err := f.fetchOne(ctx, t, 0)
+		f.mu.Lock()
+		f.status.Done++
+		if err != nil {
+			f.status.LastError = t.title + ": " + err.Error()
+		} else if matched {
+			f.status.Matched++
+		} else {
+			f.status.NoMatch++
+		}
+		f.mu.Unlock()
+		if err != nil {
+			f.log.Warn("tmdb", "title", t.title, "err", err)
+			if errors.Is(err, ErrNoKey) || strings.Contains(err.Error(), "401") {
+				return err
+			}
+			continue
+		}
+		libs[t.libID] = true
+	}
+	for id := range libs {
+		f.st.FinishScan(id) // propagate series ratings to episodes
+	}
+	f.log.Info("tmdb refresh finished", "items", len(ts))
+	return nil
+}
+
+// Match applies a specific TMDB id to an item (manual "fix match").
+func (f *Fetcher) Match(ctx context.Context, itemID, tmdbID int64) error {
+	var t target
+	err := f.st.DB.QueryRow(`SELECT id,library_id,kind,title,COALESCE(year,0) FROM items WHERE id=? AND kind IN ('movie','series')`, itemID).
+		Scan(&t.id, &t.libID, &t.kind, &t.title, &t.year)
+	if err != nil {
+		return store.ErrNotFound
+	}
+	if _, err := f.fetchOne(ctx, t, tmdbID); err != nil {
+		return err
+	}
+	return f.st.FinishScan(t.libID)
+}
+
+func (f *Fetcher) fetchOne(ctx context.Context, t target, forceID int64) (bool, error) {
+	id := forceID
+	if id == 0 {
+		res, err := f.Search(ctx, t.kind, t.title, t.year)
+		if err != nil {
+			return false, err
+		}
+		if len(res) == 0 && t.year > 0 {
+			if res, err = f.Search(ctx, t.kind, t.title, 0); err != nil {
+				return false, err
+			}
+		}
+		if len(res) == 0 {
+			return false, f.st.SetTmdbID(t.id, 0) // remember: don't retry on every scan
+		}
+		best := res[0]
+		for _, r := range res { // prefer an exact year match
+			if t.year > 0 && r.Year == t.year {
+				best = r
+				break
+			}
+		}
+		id = best.ID
+	}
+	if t.kind == "series" {
+		return true, f.applySeries(ctx, t, id)
+	}
+	return true, f.applyMovie(ctx, t, id)
+}
+
+func (f *Fetcher) applyMovie(ctx context.Context, t target, id int64) error {
+	var d movieDetails
+	if err := f.get(ctx, fmt.Sprintf("/movie/%d", id), url.Values{"append_to_response": {"release_dates"}}, &d); err != nil {
+		if errors.Is(err, errNotFound) {
+			return fmt.Errorf("a TMDB azonosító (%d) nem létezik", id)
+		}
+		return err
+	}
+	certs := map[string]string{}
+	for _, r := range d.ReleaseDates.Results {
+		for _, x := range r.Dates {
+			if x.Certification != "" && certs[r.Country] == "" {
+				certs[r.Country] = x.Certification
+			}
+		}
+	}
+	m := store.OnlineMeta{TmdbID: d.ID, Title: d.Title, Year: yearOf(d.ReleaseDate), Overview: d.Overview,
+		ContentRating: pickCert(certs)}
+	if d.VoteAverage > 0 {
+		m.Rating = &d.VoteAverage
+	}
+	for _, g := range d.Genres {
+		m.Genres = append(m.Genres, g.Name)
+	}
+	if d.Collection != nil && d.Collection.Name != "" {
+		m.Tags = append(m.Tags, d.Collection.Name)
+	}
+	if err := f.st.ApplyOnline(t.id, m); err != nil {
+		return err
+	}
+	f.artwork(ctx, t.id, d.PosterPath, d.BackdropPath)
+	return nil
+}
+
+func (f *Fetcher) applySeries(ctx context.Context, t target, id int64) error {
+	var d tvDetails
+	if err := f.get(ctx, fmt.Sprintf("/tv/%d", id), url.Values{"append_to_response": {"content_ratings"}}, &d); err != nil {
+		if errors.Is(err, errNotFound) {
+			return fmt.Errorf("a TMDB azonosító (%d) nem létezik", id)
+		}
+		return err
+	}
+	certs := map[string]string{}
+	for _, r := range d.ContentRatings.Results {
+		certs[r.Country] = r.Rating
+	}
+	m := store.OnlineMeta{TmdbID: d.ID, Title: d.Name, Year: yearOf(d.FirstAirDate), Overview: d.Overview, ContentRating: pickCert(certs)}
+	if d.VoteAverage > 0 {
+		m.Rating = &d.VoteAverage
+	}
+	for _, g := range d.Genres {
+		// TMDB tv genres look like "Sci-Fi & Fantasy"
+		for _, part := range strings.Split(g.Name, " & ") {
+			m.Genres = append(m.Genres, strings.TrimSpace(part))
+		}
+	}
+	if err := f.st.ApplyOnline(t.id, m); err != nil {
+		return err
+	}
+	f.artwork(ctx, t.id, d.PosterPath, d.BackdropPath)
+
+	seasons, err := f.st.SeasonsOf(t.id)
+	if err != nil {
+		return err
+	}
+	for _, sn := range seasons {
+		var sd seasonDetails
+		if err := f.get(ctx, fmt.Sprintf("/tv/%d/season/%d", d.ID, sn.Num), nil, &sd); err != nil {
+			if errors.Is(err, errNotFound) {
+				continue
+			}
+			return err
+		}
+		if sd.PosterPath != "" {
+			if f.image(ctx, "w500", sd.PosterPath, filepath.Join(f.imgDir, fmt.Sprint(sn.ID), "poster.jpg")) {
+				_, b := f.st.ImageFlags(sn.ID)
+				f.st.SetImageFlags(sn.ID, true, b)
+			}
+		}
+		for _, ep := range sd.Episodes {
+			eid := f.st.EpisodeID(t.id, sn.Num, ep.EpisodeNumber)
+			if eid == 0 {
+				continue
+			}
+			f.st.ApplyEpisode(eid, d.ID, ep.Name, ep.Overview)
+			if ep.StillPath != "" {
+				f.image(ctx, "w300", ep.StillPath, filepath.Join(f.imgDir, fmt.Sprint(eid), "thumb.jpg"))
+			}
+		}
+	}
+	return nil
+}
+
+func (f *Fetcher) artwork(ctx context.Context, id int64, poster, backdrop string) {
+	hasP, hasB := f.st.ImageFlags(id)
+	dir := filepath.Join(f.imgDir, fmt.Sprint(id))
+	if !hasP && f.image(ctx, "w500", poster, filepath.Join(dir, "poster.jpg")) {
+		hasP = true
+	}
+	if !hasB && f.image(ctx, "w1280", backdrop, filepath.Join(dir, "backdrop.jpg")) {
+		hasB = true
+	}
+	f.st.SetImageFlags(id, hasP, hasB)
+}
+
+func (f *Fetcher) image(ctx context.Context, size, path, dst string) bool {
+	if path == "" {
+		return false
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", f.ImageURL+size+path, nil)
+	resp, err := f.hc.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return false
+	}
+	os.MkdirAll(filepath.Dir(dst), 0o755)
+	tmp := dst + ".tmp"
+	out, err := os.Create(tmp)
+	if err != nil {
+		return false
+	}
+	_, err = io.Copy(out, io.LimitReader(resp.Body, 10<<20))
+	out.Close()
+	if err != nil {
+		os.Remove(tmp)
+		return false
+	}
+	return os.Rename(tmp, dst) == nil
+}

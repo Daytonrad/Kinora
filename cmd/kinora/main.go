@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/scoty_lucas/kinora/internal/media"
+	"github.com/scoty_lucas/kinora/internal/meta"
+	"github.com/scoty_lucas/kinora/internal/party"
 	"github.com/scoty_lucas/kinora/internal/scanner"
 	"github.com/scoty_lucas/kinora/internal/server"
 	"github.com/scoty_lucas/kinora/internal/store"
@@ -123,8 +125,24 @@ func run(cfg server.Config, log *slog.Logger) error {
 	dl.EncoderSetting = func() string { return st.Setting("encoder") }
 	go dl.Run(ctx)
 
+	hub := party.NewHub(log)
+	hub.CanSee = func(profileID, itemID int64) bool {
+		p, err := st.Profile(profileID)
+		return err == nil && st.ItemVisible(itemID, p)
+	}
+	go hub.Run(ctx)
+
+	fetcher := meta.New(st, imgDir, log)
+	sc.OnScanned = func(libID int64) {
+		if fetcher.Enabled() && !fetcher.Status().Running {
+			if err := fetcher.Refresh(ctx, false); err != nil {
+				log.Warn("metadata refresh", "err", err)
+			}
+		}
+	}
+
 	srv := server.New(cfg, st, log, server.Deps{Ctx: ctx, Scanner: sc, ImgDir: imgDir, Media: mgr, Encoders: enc,
-		Subs: media.NewSubtitles(cfg.CacheDir), Downloads: dl})
+		Subs: media.NewSubtitles(cfg.CacheDir), Downloads: dl, Party: hub, Meta: fetcher})
 	go srv.Background(ctx)
 	go sc.Run(ctx)
 

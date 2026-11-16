@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/scoty_lucas/kinora/internal/media"
+	"github.com/scoty_lucas/kinora/internal/meta"
+	"github.com/scoty_lucas/kinora/internal/party"
 	"github.com/scoty_lucas/kinora/internal/scanner"
 	"github.com/scoty_lucas/kinora/internal/store"
 )
@@ -59,6 +61,8 @@ type Deps struct {
 	Encoders  *media.Encoders
 	Subs      *media.Subtitles
 	Downloads *media.Downloader
+	Party     *party.Hub
+	Meta      *meta.Fetcher
 }
 
 // New builds the server and its routes.

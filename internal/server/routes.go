@@ -30,6 +30,9 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/items/{id}/next", s.withProfile(s.handleNext))
 	m.HandleFunc("POST /api/items/{id}/{action}", s.withProfile(s.handleItemAction))
 	m.HandleFunc("PUT /api/items/{id}/tags", s.withProfile(notKids(s.handleTags)))
+	m.HandleFunc("POST /api/party", s.withProfile(s.handlePartyCreate))
+	m.HandleFunc("GET /api/party/{code}", s.withProfile(s.handlePartyInfo))
+	m.HandleFunc("GET /api/party/{code}/ws", s.withProfile(s.handlePartyWS))
 	m.HandleFunc("GET /api/search", s.withProfile(s.handleSearch))
 	m.HandleFunc("GET /api/facets", s.withProfile(s.handleFacets))
 	m.HandleFunc("GET /api/collections", s.withProfile(s.handleCollections))
@@ -70,6 +73,10 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/libraries/{id}/scan", s.admin(s.handleLibraryScan))
 	m.HandleFunc("GET /api/admin/scan", s.admin(s.handleScanStatus))
 	m.HandleFunc("POST /api/admin/hwtest", s.admin(s.handleHWTest))
+	m.HandleFunc("POST /api/admin/metadata/refresh", s.admin(s.handleMetadataRefresh))
+	m.HandleFunc("GET /api/admin/metadata", s.admin(s.handleMetadataStatus))
+	m.HandleFunc("GET /api/admin/metadata/search", s.admin(s.handleMetadataSearch))
+	m.HandleFunc("POST /api/items/{id}/metadata/match", s.admin(s.handleMetadataMatch))
 
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "ismeretlen API végpont")

@@ -99,4 +99,6 @@ func (s *Server) dashboardExtras(d map[string]any) {
 	d["encoder_selected"] = s.Encoders.Pick(s.encoderSetting())
 	d["tonemap"] = s.Encoders.ToneMap()
 	d["downloads_active"] = s.Downloads.Active()
+	rooms, members := s.Party.Count()
+	d["parties"] = map[string]int{"rooms": rooms, "members": members}
 }

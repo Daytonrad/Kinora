@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/scoty_lucas/kinora/internal/media"
+	"github.com/scoty_lucas/kinora/internal/meta"
+	"github.com/scoty_lucas/kinora/internal/party"
 	"github.com/scoty_lucas/kinora/internal/scanner"
 	"github.com/scoty_lucas/kinora/internal/store"
 )
@@ -63,7 +65,7 @@ func newTestServer(t *testing.T) (*client, *store.Store) {
 	enc := media.NewEncoders()
 	srv := New(Config{Addr: ":0", DataDir: dir, CacheDir: dir}, st, log, Deps{
 		Ctx: context.Background(), Scanner: sc, ImgDir: filepath.Join(dir, "images"),
-		Media: media.NewManager(dir, enc, log), Encoders: enc, Subs: media.NewSubtitles(dir), Downloads: media.NewDownloader(dir, enc, log)})
+		Media: media.NewManager(dir, enc, log), Encoders: enc, Subs: media.NewSubtitles(dir), Downloads: media.NewDownloader(dir, enc, log), Party: party.NewHub(log), Meta: meta.New(st, filepath.Join(dir, "images"), log)})
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	t.Cleanup(func() { srv.Shutdown(context.Background()) })
