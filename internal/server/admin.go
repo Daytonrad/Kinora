@@ -189,9 +189,6 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request, c *reqCt
 	writeJSON(w, http.StatusOK, map[string]any{"values": vals, "env": env})
 }
 
-// SettingsChanged is invoked after settings are saved (wired by main).
-var SettingsChanged func(keys []string)
-
 func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	var in map[string]string
 	if !decode(w, r, &in) {
@@ -236,8 +233,8 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 		}
 		changed = append(changed, k)
 	}
-	if SettingsChanged != nil && len(changed) > 0 {
-		SettingsChanged(changed)
+	if len(changed) > 0 {
+		s.log.Info("settings changed", "keys", strings.Join(changed, ","))
 	}
 	s.handleSettings(w, r, c)
 }
