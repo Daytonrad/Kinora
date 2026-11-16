@@ -120,6 +120,7 @@ func run(cfg server.Config, log *slog.Logger) error {
 	mgr := media.NewManager(cfg.CacheDir, enc, log)
 	go mgr.Reap(ctx)
 	dl := media.NewDownloader(cfg.CacheDir, enc, log)
+	dl.EncoderSetting = func() string { return st.Setting("encoder") }
 	go dl.Run(ctx)
 
 	srv := server.New(cfg, st, log, server.Deps{Ctx: ctx, Scanner: sc, ImgDir: imgDir, Media: mgr, Encoders: enc,

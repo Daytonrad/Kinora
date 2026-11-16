@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -38,6 +37,7 @@ type Session struct {
 	stderr   *tailBuffer
 	err      error
 	lastSeen atomic.Int64
+	stopping atomic.Bool // set by Stop: an exit after this is expected
 }
 
 // Finished reports whether ffmpeg exited.
@@ -166,7 +166,7 @@ func (m *Manager) Start(ctx context.Context, sp HLSSpec) (*Session, error) {
 	go func() {
 		s.err = cmd.Wait()
 		close(s.done)
-		if s.err != nil && !errors.Is(ctx.Err(), context.Canceled) {
+		if s.err != nil && !s.stopping.Load() {
 			m.log.Warn("ffmpeg exited", "session", id, "err", s.err, "stderr", lastLine(tb.String()))
 		}
 	}()
@@ -229,6 +229,7 @@ func (m *Manager) Stop(id string) {
 	if s == nil {
 		return
 	}
+	s.stopping.Store(true)
 	if !s.Finished() {
 		gracefulStop(s.cmd)
 		select {

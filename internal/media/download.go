@@ -67,9 +67,11 @@ type Job struct {
 
 	src      string
 	duration float64
+	hdr      bool
 }
 
-// Downloader runs one download job at a time.
+// Downloader runs one download job at a time: a single worker goroutine
+// drains the queue, which acts as the semaphore.
 type Downloader struct {
 	dir   string
 	enc   *Encoders
@@ -77,15 +79,15 @@ type Downloader struct {
 	queue chan *Job
 	mu    sync.Mutex
 	jobs  map[string]*Job
-	sem   chan struct{}
-	ctx   context.Context
-	cur   *exec.Cmd
+
+	// EncoderSetting returns the admin's encoder choice ("auto" or a name).
+	EncoderSetting func() string
 }
 
 // NewDownloader loads finished jobs from <cache>/downloads.
 func NewDownloader(cacheDir string, enc *Encoders, log *slog.Logger) *Downloader {
 	d := &Downloader{dir: filepath.Join(cacheDir, "downloads"), enc: enc, log: log, jobs: map[string]*Job{},
-		queue: make(chan *Job, 256), sem: make(chan struct{}, 1)}
+		queue: make(chan *Job, 256), EncoderSetting: func() string { return "auto" }}
 	os.MkdirAll(d.dir, 0o755)
 	entries, _ := os.ReadDir(d.dir)
 	for _, e := range entries {
@@ -120,7 +122,6 @@ func JobKey(it *store.Item, quality string, audioIdx int) string {
 
 // Run processes the queue until ctx ends; it also prunes old downloads hourly.
 func (d *Downloader) Run(ctx context.Context) {
-	d.ctx = ctx
 	d.prune()
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
@@ -131,9 +132,7 @@ func (d *Downloader) Run(ctx context.Context) {
 		case <-t.C:
 			d.prune()
 		case j := <-d.queue:
-			d.sem <- struct{}{}
 			d.run(ctx, j)
-			<-d.sem
 		}
 	}
 }
@@ -160,7 +159,7 @@ func (d *Downloader) Enqueue(it *store.Item, userID int64, q Quality, audioIdx i
 		return j
 	}
 	j := &Job{Key: key, ItemID: it.ID, UserID: userID, Title: it.Title, FileName: fileName, Quality: q.Name, AudioIdx: audioIdx,
-		Status: "queued", CreatedAt: time.Now().Unix(), src: it.Path, duration: float64(it.RuntimeSec)}
+		Status: "queued", CreatedAt: time.Now().Unix(), src: it.Path, duration: float64(it.RuntimeSec), hdr: it.HDR != ""}
 	d.jobs[key] = j
 	d.mu.Unlock()
 	d.queue <- j
@@ -213,8 +212,8 @@ func (d *Downloader) set(j *Job, f func(*Job)) {
 
 func (d *Downloader) run(ctx context.Context, j *Job) {
 	q, _ := QualityByName(j.Quality)
-	enc := d.enc.Pick("")
-	opts := EncodeOpts{Bitrate: q.Bitrate, Width: q.Width}
+	enc := d.enc.Pick(d.EncoderSetting())
+	opts := EncodeOpts{Bitrate: q.Bitrate, Width: q.Width, ToneMap: j.hdr && d.enc.ToneMap()}
 	part := d.file(j.Key) + ".part"
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-y"}
 	args = append(args, enc.InitArgs()...)
