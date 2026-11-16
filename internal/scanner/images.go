@@ -93,7 +93,3 @@ func runFFmpeg(ctx context.Context, dst string, args ...string) error {
 	return os.Rename(tmp, dst)
 }
 
-func lastLine(s string) string {
-	lines := strings.Split(strings.TrimSpace(s), "\n")
-	return strings.TrimSpace(lines[len(lines)-1])
-}

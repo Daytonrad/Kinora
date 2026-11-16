@@ -228,7 +228,7 @@ func lastLine(s string) string {
 
 func firstNonEmpty(a ...string) string {
 	for _, s := range a {
-		if s != "" {
+		if strings.TrimSpace(s) != "" {
 			return s
 		}
 	}
