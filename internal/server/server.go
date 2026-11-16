@@ -277,8 +277,11 @@ func (sr *statusRecorder) Unwrap() http.ResponseWriter { return sr.ResponseWrite
 // Hijack lets WebSocket upgrades pass through the logging middleware.
 func (sr *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if hj, ok := sr.ResponseWriter.(http.Hijacker); ok {
-		sr.status = http.StatusSwitchingProtocols
-		return hj.Hijack()
+		c, rw, err := hj.Hijack()
+		if err == nil {
+			sr.status = http.StatusSwitchingProtocols
+		}
+		return c, rw, err
 	}
 	return nil, nil, errors.New("hijack not supported")
 }

@@ -437,13 +437,14 @@ function card(it, style = 'poster', opts = {}) {
 function popMenu(anchor, entries) {
   document.querySelectorAll('.menu-pop.floating').forEach(m => m.remove());
   const r = anchor.getBoundingClientRect();
+  const close = () => { pop.remove(); document.removeEventListener('mousedown', off); };
   const pop = h('div.menu-pop.floating', { role: 'menu', style: { position: 'fixed', top: (r.bottom + 6) + 'px', left: Math.min(r.left, innerWidth - 240) + 'px', right: 'auto' } },
-    entries.filter(Boolean).map(([label, fn]) => h('button', { role: 'menuitem', onclick: () => { pop.remove(); fn(); } }, label)));
+    entries.filter(Boolean).map(([label, fn]) => h('button', { role: 'menuitem', onclick: () => { close(); fn(); } }, label)));
   document.body.append(pop);
-  const off = e => { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('mousedown', off); } };
+  const off = e => { if (!pop.contains(e.target)) close(); };
   setTimeout(() => document.addEventListener('mousedown', off), 0);
   pop.querySelector('button')?.focus();
-  onCleanup(() => pop.remove());
+  onCleanup(close);
 }
 function shelf(title, items, style, opts = {}) {
   const track = h('div.shelf-track.' + style, { role: 'list' }, items.map(it => card(it, style, { menu: opts.menu, reason: opts.reasons && opts.reasons[it.id], playOnClick: opts.playOnClick })));
