@@ -67,6 +67,9 @@ func (f *Fetcher) Status() Status {
 // Enabled reports whether a key is configured.
 func (f *Fetcher) Enabled() bool { return strings.TrimSpace(f.st.Setting("tmdb_key")) != "" }
 
+// ErrRunning is returned when a refresh is already in progress.
+var ErrRunning = errors.New("a metaadat-frissítés már fut")
+
 // ErrNoKey is returned when no TMDB key is configured.
 var ErrNoKey = errors.New("nincs megadva TMDB API kulcs (Admin → Metaadat)")
 
@@ -274,7 +277,7 @@ func (f *Fetcher) Refresh(ctx context.Context, retryNoMatch bool) error {
 	f.mu.Lock()
 	if f.status.Running {
 		f.mu.Unlock()
-		return errors.New("a metaadat-frissítés már fut")
+		return ErrRunning
 	}
 	f.status = Status{Running: true}
 	f.mu.Unlock()

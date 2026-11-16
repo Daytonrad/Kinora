@@ -134,11 +134,14 @@ func run(cfg server.Config, log *slog.Logger) error {
 
 	fetcher := meta.New(st, imgDir, log)
 	sc.OnScanned = func(libID int64) {
-		if fetcher.Enabled() && !fetcher.Status().Running {
-			if err := fetcher.Refresh(ctx, false); err != nil {
+		if !fetcher.Enabled() {
+			return
+		}
+		go func() { // never block the scanner on network I/O
+			if err := fetcher.Refresh(ctx, false); err != nil && !errors.Is(err, meta.ErrRunning) {
 				log.Warn("metadata refresh", "err", err)
 			}
-		}
+		}()
 	}
 
 	srv := server.New(cfg, st, log, server.Deps{Ctx: ctx, Scanner: sc, ImgDir: imgDir, Media: mgr, Encoders: enc,

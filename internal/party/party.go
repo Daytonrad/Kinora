@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -62,7 +63,7 @@ type member struct {
 	bufSince  time.Time
 	ignored   bool // buffered too long: the room continues without them
 	host      bool
-	closed    bool
+	closed    atomic.Bool
 }
 
 // Room is one party.
@@ -308,7 +309,7 @@ func (r *Room) broadcastLocked(b []byte) {
 
 // push never blocks: a slow client just misses messages (the next state catches it up).
 func (m *member) push(b []byte) {
-	if m.closed {
+	if m.closed.Load() {
 		return
 	}
 	select {
@@ -397,7 +398,7 @@ func (h *Hub) Serve(w http.ResponseWriter, req *http.Request, r *Room, who Who) 
 	close(done)
 
 	r.mu.Lock()
-	m.closed = true
+	m.closed.Store(true)
 	for i, x := range r.members {
 		if x == m {
 			r.members = append(r.members[:i], r.members[i+1:]...)
