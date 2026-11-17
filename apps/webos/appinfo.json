@@ -1,0 +1,15 @@
+{
+  "id": "io.github.scotylucas.kinora",
+  "version": "1.0.0",
+  "vendor": "Kinora",
+  "type": "web",
+  "main": "index.html",
+  "title": "Kinora",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "splashBackground": "splash.png",
+  "bgColor": "#141210",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "requiredACG": []
+}

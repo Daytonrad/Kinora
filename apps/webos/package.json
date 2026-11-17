@@ -1,0 +1,14 @@
+{
+  "name": "webos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kinora for LG Smart TV (webOS 4.x+ web app, .ipk)",
+  "scripts": {
+    "build": "node build.mjs",
+    "install-tv": "node build.mjs --install",
+    "launch": "ares-launch -d tv io.github.scotylucas.kinora"
+  },
+  "devDependencies": {
+    "@webos-tools/cli": "3.2.6"
+  }
+}
