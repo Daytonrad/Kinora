@@ -158,6 +158,8 @@ export const T = {
   netErr: 'Nem érem el a szervert.',
   offlineTitle: 'A szerver nem érhető el',
   offlineLede: (a: string) => `A(z) ${a} nem válaszol. Lehet, hogy a szerver ki van kapcsolva, vagy a telefon/TV másik hálózaton van.`,
+  offlineTried: (list: string) => `Kipróbált címek: ${list}`,
+  offlineAway: 'Otthonról távol: a szerver adminfelületén add meg a Beállítások → Nyilvános URL mezőt (pl. https://kinora.pelda.hu), vagy a Szerverváltás menüben add hozzá a külső címet – az app ezután magától vált a címek között.',
   sessionExpired: 'A bejelentkezés lejárt, lépj be újra.',
   exitConfirm: 'Kilépsz a Kinorából?',
   exit: 'Kilépés',

@@ -232,6 +232,22 @@ Ezután az app a TV Apps képernyőjén is megtalálható.
 
 ---
 
+## 7½. Hálózaton kívülről (mobilnet, máshol lévő TV)
+
+Az appok szerverenként **több címet** jegyeznek meg (otthoni IP, külső domain), és magától átváltanak arra, amelyik épp válaszol.
+Ehhez a szervernek tudnia kell a külső címét:
+
+1. Webes felület → **Admin → Beállítások → Nyilvános URL**: az a cím, amin kívülről a webappot is eléred
+   (pl. `https://kinora.pelda.hu` Cloudflare Tunnel vagy reverse proxy mögött, vagy `http://<publikus-ip>:8096` porttovábbításnál) → Mentés.
+2. Az appot egyszer nyisd meg otthon (vagy indítsd újra): ilyenkor megtanulja a nyilvános címet.
+3. Kívülről az app az otthoni cím helyett magától a nyilvános címet használja. A beállítások alján a „Szerver” sor mutatja, épp melyiket.
+
+Ha nem akarsz nyilvános URL-t beállítani: az appban **Beállítások → Szerverváltás** → írd be a külső címet. Ugyanaz a szerver
+(azonos szerverazonosító) nem lesz kétszer a listában, hanem a meglévő bejegyzés kap egy új címet.
+
+Tipp: a domainnév nélküli sémát az app `https://`-sel kezdi (reverse proxy), az IP-címet `http://…:8096`-tal.
+Ha a proxy a `http`-t `https`-re irányítja át, az app a végső `https` címet jegyzi meg.
+
 ## 8. Ha valami nem megy
 
 | Tünet | Megoldás |

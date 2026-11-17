@@ -1,7 +1,8 @@
 // App state, router, layers (sheets/dialogs), back handling and shared UI pieces.
 import { h, put, icon, toast, Child } from './dom';
 import { T } from './i18n';
-import { Api, SavedServer, loadServers, currentServerId, saveServers, setCurrentServer } from './api';
+import { Api, SavedServer, loadServers, currentServerId, saveServers, setCurrentServer, serverURLs } from './api';
+import { isLocalHost } from './address';
 import { uiMode, Mode, exitApp, keyAction, onNativeBack, isTyping } from './platform';
 import { move, focusFirst, focusEl, scope } from './focus';
 
@@ -276,6 +277,8 @@ export function offline(): void {
   const root = document.getElementById('app')!;
   put(root, h('div.center.tall', null, h('div.panel-auth', null,
     icon('wifi'), h('h1', null, T.offlineTitle), h('p.lede', null, T.offlineLede(s ? s.name + ' (' + s.url + ')' : '')),
+    s && h('p.muted.small', null, T.offlineTried(serverURLs(s).join(', '))),
+    s && serverURLs(s).every(u => isLocalHost(u.replace(/^https?:\/\//, '').split(/[:/]/)[0])) && h('p.muted', null, T.offlineAway),
     h('div.actions', null,
       h('button.btn.primary.big', { 'data-autofocus': '', onclick: () => render() }, T.retry),
       h('a.btn.big', { href: '#/servers' }, T.switchServer)))));

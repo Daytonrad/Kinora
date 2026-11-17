@@ -35,6 +35,7 @@ UninstallDisplayIcon={app}\kinora.exe
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+ShowLanguageDialog=no
 CloseApplications=no
 LicenseFile={#Src}\LICENSE
 

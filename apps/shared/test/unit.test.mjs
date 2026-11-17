@@ -16,7 +16,7 @@ async function load(entry) {
   return import(pathToFileURL(f).href);
 }
 
-const { candidateURLs } = await load('address.ts');
+const { candidateURLs, baseFromResponse, mergeURLs, isLocalHost } = await load('address.ts');
 const { parseVTT, activeCues } = await load('player/subs.ts');
 const { PLATFORM_CAPS, mergeCaps } = await load('player/caps.ts');
 
@@ -36,6 +36,19 @@ test('scheme + port is used as given; hostnames work', () => {
   assert.deepEqual(candidateURLs('HTTP://nas.local:8096'), ['http://nas.local:8096']);
   assert.equal(candidateURLs('nas.local')[0], 'http://nas.local:8096');
   assert.deepEqual(candidateURLs(''), []);
+});
+
+test('public names try https first (reverse proxy / Cloudflare), home names http', () => {
+  assert.deepEqual(candidateURLs('kinora.pelda.hu'), ['https://kinora.pelda.hu', 'http://kinora.pelda.hu:8096', 'http://kinora.pelda.hu']);
+  assert.deepEqual(candidateURLs('mozi.duckdns.org:8920'), ['https://mozi.duckdns.org:8920', 'http://mozi.duckdns.org:8920']);
+  assert.equal(candidateURLs('nas')[0], 'http://nas:8096');
+  assert.ok(isLocalHost('192.168.1.10') && isLocalHost('nas.local') && isLocalHost('nas') && !isLocalHost('kinora.pelda.hu'));
+});
+test('the address after a redirect is kept, addresses merge without duplicates', () => {
+  assert.equal(baseFromResponse('https://kinora.pelda.hu/api/status', 'http://kinora.pelda.hu'), 'https://kinora.pelda.hu');
+  assert.equal(baseFromResponse('', 'http://10.0.0.5:8096'), 'http://10.0.0.5:8096');
+  assert.deepEqual(mergeURLs('http://192.168.1.10:8096', ['https://kinora.pelda.hu/', 'http://192.168.1.10:8096'], undefined, ''),
+    ['http://192.168.1.10:8096', 'https://kinora.pelda.hu']);
 });
 
 test('WebVTT parsing: timing, tags, multi-line, comma decimals', () => {

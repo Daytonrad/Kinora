@@ -7,6 +7,7 @@ import { discover } from '../discover';
 import { state, go, route, sheet, onCleanup, persistServer, loadMe, currentServer, brandMark, Profile, render, setRestore } from '../app';
 import { focusFirst } from '../focus';
 import { APP_VERSION } from '../platform';
+import { mergeURLs } from '../address';
 
 function authFrame(...kids: any[]): HTMLElement {
   const root = document.getElementById('app')!;
@@ -18,6 +19,14 @@ function authFrame(...kids: any[]): HTMLElement {
 async function useServer(s: SavedServer): Promise<void> {
   state.api = new Api(s);
   state.api.onUnauthorized = () => onSessionLost();
+  state.api.onAddressChange = srv => { persistServer(srv); };
+  // learn the public address (Admin → Beállítások → Nyilvános URL), so the app keeps
+  // working away from home; the request itself fails over if the saved address is gone
+  const st = await state.api.get('/api/status').catch(() => null);
+  if (st && st.public_url) {
+    const urls = mergeURLs(s.url, s.urls, st.public_url);
+    if (urls.join() !== mergeURLs(s.url, s.urls).join()) { s.urls = urls; persistServer(s); }
+  }
   state.branding = await state.api.get('/api/branding').catch(() => null);
 }
 

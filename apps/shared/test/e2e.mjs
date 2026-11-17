@@ -194,6 +194,19 @@ console.log('Phone (390×844, touch, http://localhost)');
   await page.waitForSelector('.facade');
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(out, 'phone-06-landscape.png') });
+  // away from home: the saved (home) address is dead, the server's other address works
+  await page.setViewportSize({ width: 390, height: 844 });
+  const moved = await page.evaluate(async real => {
+    const list = JSON.parse(localStorage.getItem('kinora.servers'));
+    list[0].urls = [real];
+    list[0].url = 'http://127.0.0.1:9'; // nothing listens there
+    localStorage.setItem('kinora.servers', JSON.stringify(list));
+    return list[0].id;
+  }, SERVER);
+  await page.evaluate(() => { location.hash = '#/start'; location.reload(); });
+  await page.waitForSelector('.facade', { timeout: 30000 }).then(() => ok('dead home address → switched to the other address'), () => bad('no failover to the working address'));
+  const now = await page.evaluate(id => JSON.parse(localStorage.getItem('kinora.servers')).filter(x => x.id === id)[0].url, moved);
+  check(now === SERVER, 'working address remembered: ' + now);
   check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await ctx.close();
   srv.close();

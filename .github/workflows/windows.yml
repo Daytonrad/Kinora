@@ -24,6 +24,7 @@ env:
 jobs:
   installer:
     runs-on: windows-2022
+    timeout-minutes: 25
     defaults:
       run:
         shell: bash
@@ -70,7 +71,9 @@ jobs:
       - name: silent install test
         shell: pwsh
         run: |
-          $p = Start-Process dist\KinoraSetup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=setup.log' -Wait -PassThru
+          # wait for the installer process only (-Wait would also wait for every descendant)
+          $p = Start-Process dist\KinoraSetup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LANG=hu','/LOG=setup.log' -PassThru
+          if (-not $p.WaitForExit(300000)) { Write-Host "installer still running after 5 min"; Get-Content setup.log -Tail 80; Stop-Process $p -Force; exit 1 }
           Write-Host "installer exit code: $($p.ExitCode)"
           $ok = $false
           for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
@@ -85,7 +88,9 @@ jobs:
             exit 1
           }
           Write-Host "service answers: $($r.server_name) $($r.version)"
-          $u = Start-Process "${env:ProgramFiles}\Kinora\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -Wait -PassThru
+          $u = Start-Process "${env:ProgramFiles}\Kinora\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/LOG=uninstall.log' -PassThru
+          if (-not $u.WaitForExit(180000)) { Write-Host "uninstaller still running"; Get-Content uninstall.log -Tail 60 -ErrorAction SilentlyContinue; exit 1 }
+          Start-Sleep 3   # the uninstaller hands over to a temporary copy of itself
           Write-Host "uninstaller exit code: $($u.ExitCode)"
           # a deleted service disappears once the service manager releases it
           for ($i = 0; $i -lt 20 -and (Get-Service Kinora -ErrorAction SilentlyContinue); $i++) { Start-Sleep 1 }

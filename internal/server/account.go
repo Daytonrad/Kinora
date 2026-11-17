@@ -41,6 +41,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, c *reqCtx)
 		"min_client_api":       MinClientAPI,
 		"server_id":            s.serverID(),
 		"server_name":          s.st.Setting("server_name"),
+		"public_url":           s.st.Setting("public_url"), // apps switch to it outside the home network
 		"logo_url":             s.logoURL(),
 		"quickconnect_enabled": s.qcEnabled(),
 		"logged_in":            c.User != nil,
