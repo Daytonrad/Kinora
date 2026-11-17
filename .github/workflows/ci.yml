@@ -37,7 +37,7 @@ jobs:
       - name: ffmpeg (test media + segment check)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: container smoke test
-        run: SMOKE_LOGS=1 scripts/smoke.sh
+        run: SMOKE_LOGS=1 bash scripts/smoke.sh
 
   # One native build per architecture and variant (no QEMU: cgo/sqlite builds natively on the arm runner),
   # pushed by digest and stitched into multi-arch manifests by the merge job.
