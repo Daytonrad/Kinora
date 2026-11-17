@@ -1,5 +1,7 @@
 # Kinora
 
+**Magyar** · [English](README.en.md)
+
 Saját gépen futó médiaszerver filmekhez és sorozatokhoz – a Jellyfin és a Plex alternatívája, magyar felülettel.
 A neve az 1890-es évek kézi „mozgókép-nézegetőjéből” jön.
 
