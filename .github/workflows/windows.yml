@@ -70,16 +70,26 @@ jobs:
       - name: silent install test
         shell: pwsh
         run: |
-          Start-Process dist\KinoraSetup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          $p = Start-Process dist\KinoraSetup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=setup.log' -Wait -PassThru
+          Write-Host "installer exit code: $($p.ExitCode)"
           $ok = $false
-          for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
-            try { $r = Invoke-RestMethod http://127.0.0.1:8096/api/status; $ok = $r.product -eq 'kinora' } catch { Start-Sleep 1 }
+          for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
+            try { $r = Invoke-RestMethod http://127.0.0.1:8096/api/status -TimeoutSec 3; $ok = $r.product -eq 'kinora' } catch { Start-Sleep 1 }
           }
-          Get-Service Kinora | Format-List Name,Status,StartType
-          if (-not $ok) { Get-Content "$env:ProgramData\Kinora\kinora.log" -Tail 40; exit 1 }
+          Get-Service Kinora -ErrorAction SilentlyContinue | Format-List Name,Status,StartType
+          sc.exe qc Kinora
+          if (-not $ok) {
+            Write-Host "--- kinora.log"; Get-Content "$env:ProgramData\Kinora\kinora.log" -Tail 60 -ErrorAction SilentlyContinue
+            Write-Host "--- setup.log"; Get-Content setup.log -Tail 80
+            Get-ChildItem "${env:ProgramFiles}\Kinora" -Recurse | Select-Object FullName,Length | Format-Table -AutoSize
+            exit 1
+          }
           Write-Host "service answers: $($r.server_name) $($r.version)"
-          Start-Process "${env:ProgramFiles}\Kinora\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -Wait
-          if (Get-Service Kinora -ErrorAction SilentlyContinue) { Write-Error "service left behind"; exit 1 }
+          $u = Start-Process "${env:ProgramFiles}\Kinora\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -Wait -PassThru
+          Write-Host "uninstaller exit code: $($u.ExitCode)"
+          # a deleted service disappears once the service manager releases it
+          for ($i = 0; $i -lt 20 -and (Get-Service Kinora -ErrorAction SilentlyContinue); $i++) { Start-Sleep 1 }
+          if (Get-Service Kinora -ErrorAction SilentlyContinue) { sc.exe query Kinora; Write-Error "service left behind"; exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: kinora-windows
