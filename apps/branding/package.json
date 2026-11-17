@@ -1,0 +1,12 @@
+{
+  "name": "branding",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Generates every app icon, TV banner and splash from one source logo",
+  "scripts": {
+    "brand": "node brand.mjs"
+  },
+  "devDependencies": {
+    "sharp": "0.34.4"
+  }
+}

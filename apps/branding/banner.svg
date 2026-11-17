@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <!-- Android TV banner (16:9): the mark plus a monoline condensed wordmark drawn as strokes,
+       so it renders identically without any installed font. -->
+  <rect width="1280" height="720" fill="#141210"/>
+  <g transform="translate(150 200) scale(10)" fill="none" stroke-linecap="round">
+    <rect width="32" height="32" rx="7" fill="#221d19"/>
+    <path d="M10 7v18M10 16l10-9M13 14l8 11" stroke="#f0b44c" stroke-width="3.4"/>
+  </g>
+  <g transform="translate(560 250)" fill="none" stroke="#efe7da" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M0 0V220M0 120L80 0M28 92L86 220"/>
+    <path transform="translate(130 0)" d="M0 0V220"/>
+    <path transform="translate(180 0)" d="M0 220V0L80 220V0"/>
+    <path transform="translate(310 0)" d="M18 0H62A18 18 0 0 1 80 18V202A18 18 0 0 1 62 220H18A18 18 0 0 1 0 202V18A18 18 0 0 1 18 0Z"/>
+    <path transform="translate(440 0)" d="M0 220V0H56A24 24 0 0 1 80 24V86A24 24 0 0 1 56 110H0M40 110L80 220"/>
+    <path transform="translate(570 0)" d="M0 220L40 0L80 220M14 145H66"/>
+  </g>
+</svg>

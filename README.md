@@ -64,6 +64,11 @@ Minden beállítás megadható környezeti változóval is. Ilyenkor az admin fe
 | `KINORA_LOG_FORMAT` | szöveg | `json` esetén JSON naplózás (a `docker logs` mindkettőt mutatja) |
 | `KINORA_LOG_LEVEL` | `info` | `debug` |
 | `KINORA_FFMPEG`, `KINORA_FFPROBE` | `ffmpeg`, `ffprobe` | saját ffmpeg útvonala |
+| `KINORA_QUICKCONNECT` | `1` | belépés 6 jegyű kóddal TV-ről/telefonról (`0` = ki) |
+| `KINORA_DISCOVERY` | `1` | szerverkeresés a helyi hálózaton (`0` = ki) |
+| `KINORA_DISCOVERY_PORT` | `7359` | a felderítés UDP-portja (`0` = a figyelés sem indul el) |
+| `KINORA_CORS_ORIGINS` | – | további app-originek tokenes CORS-hoz, vesszővel elválasztva |
+| `KINORA_ACCENT` | – | akcentszín (`#rrggbb`), az appok is használják |
 | `TZ`, `PUID`, `PGID` | `UTC`, `1000`, `1000` | időzóna, a fájlok tulajdonosa |
 
 ### Melyik image-et válaszd?
@@ -176,7 +181,21 @@ Figyelem: a Cloudflare felhasználási feltételei korlátozhatják a nagy menny
 `reverse_proxy 127.0.0.1:8096`. Nginx-re kész példát találsz az **Admin → Csatlakozás** oldalon. A Kinora követi az `X-Forwarded-Proto`
 fejlécet: HTTPS mögött a session cookie `Secure` jelzést kap.
 
-Natív (Android/iOS/TV) kliensek a `POST /api/login` válaszában kapott tokent `Authorization: Bearer <token>` fejlécben küldhetik.
+## Kliensappok és telepítés telefonra
+
+- **Android (telefon + Android TV), Samsung Tizen, LG webOS, iOS:** az `apps/` mappában, egy közös felülettel. Építés és telepítés: [`apps/README.md`](apps/README.md),
+  a mai kipróbálás lépésről lépésre, Windowsról: [`docs/TESZTELES_MA.md`](docs/TESZTELES_MA.md).
+- **iPhone ma, Mac nélkül:** a webkliens telepíthető webes app (PWA): Safari → Megosztás → „Főképernyőhöz adás”. Teljes képernyőn, saját ikonnal fut.
+- **Belépés kóddal (Quick Connect):** a TV egy 6 jegyű kódot mutat; egy bejelentkezett eszközön (profil menü → **Eszköz csatlakoztatása**) jóváhagyod,
+  és kiválasztod, melyik profillal lépjen be. A kód 5 percig él, egyszer használható; a próbálkozások IP-nként és felhasználónként korlátozottak.
+- **Eszközök:** a Fiók oldalon látszanak a bejelentkezett eszközeid (név, platform, appverzió, IP, utolsó aktivitás), egyenként vagy egyszerre kiléptethetők;
+  az admin az **Admin → Eszközök** oldalon mindet látja.
+- **Szerverkeresés:** az appok UDP-broadcasttal (7359) vagy a helyi alhálózat pásztázásával találják meg a szervert. Dockerben a broadcast nem megy át
+  a bridge hálózaton: ehhez `network_mode: host` kell (vagy a címet kézzel kell megadni).
+
+Az appok a `POST /api/login` (vagy a Quick Connect) után kapott tokent `Authorization: Bearer <token>` fejlécben küldik. A CORS csak az app-originekre
+(`capacitor://localhost`, `http(s)://localhost`, `null`) és csak tokenes kérésekre engedélyezett, `Access-Control-Allow-Credentials` nélkül.
+A `<video>`/`<img>` számára a lejátszási válasz rövid életű, aláírt stream-tokent (`?st=`) tesz az URL-ekbe; ez elemre, felhasználóra és eszközre szól.
 
 ## Mentés és visszaállítás
 
@@ -239,7 +258,7 @@ A webkliens összes szövege az `app.js` elején, a `T` objektumban van, így az
 
 ### Tudatosan későbbre hagyva (v2)
 
-Beépített relay/NAT-áttörés, natív Android/iOS/TV kliensek (a Bearer tokenes API már támogatja őket), intro-felismerés audio-ujjlenyomattal,
+Beépített relay/NAT-áttörés, offline letöltés az appokba, watch party az appokból, intro-felismerés audio-ujjlenyomattal,
 trickplay előnézeti képek, zenei könyvtár, élő TV, hiányzó gyűjteményelemek TMDB-ből, Postgres, angol fordítás.
 
 ## Dizájn

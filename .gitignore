@@ -19,3 +19,15 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# client apps (generated / build output)
+apps/*/www/
+apps/*/dist/
+apps/ios/build/
+apps/shared/public/fonts/
+apps/shared/src/styles/tokens.gen.css
+apps/shared/test/out/
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
