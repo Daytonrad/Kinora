@@ -14,8 +14,8 @@ services:
     volumes:
       - ./config:/config
       - ./cache:/cache
-      - /mnt/Filmek_file:/Filmek:/media/movies:ro
-      - /mnt/Filmek_file:/Sorozatok:/media/shows:ro
+      - /mnt/Filmek_file/Filmek:/media/movies:ro
+      - /mnt/Filmek_file/Sorozatok:/media/shows:ro
     # Intel/AMD hardveres gyorsítás:
     # devices: ["/dev/dri:/dev/dri"]
     # group_add: ["video", "render"]
