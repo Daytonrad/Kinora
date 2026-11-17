@@ -1,0 +1,24 @@
+# Optional override: makes the host's usual media locations visible inside the container,
+# read-only, under /host – so any folder can be added later in Admin → Libraries without
+# editing the compose file again.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
+#
+# Security: the container (running as PUID) can READ everything below these paths that
+# PUID may read on the host – e.g. other users' readable files in /home. It can never write
+# there (:ro), and Kinora itself never writes to media folders. If that is too broad, list
+# only the folders you need, or use the native install (install.sh), which is simpler.
+services:
+  kinora:
+    environment:
+      - KINORA_MEDIA_ROOT=/host        # the folder picker opens here (shortcuts: /media, /host/…)
+    volumes:
+      - /home:/host/home:ro
+      - /mnt:/host/mnt:ro
+      - /media:/host/media:ro
+      - /srv:/host/srv:ro
+      # The whole file system instead (broadest; still read-only):
+      # - /:/host:ro
+    # LAN server discovery for the apps ("Szerver keresése") needs broadcasts to reach the
+    # container; uncomment to use the host network (then "ports:" is ignored):
+    # network_mode: host

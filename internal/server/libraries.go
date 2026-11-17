@@ -38,8 +38,13 @@ func (s *Server) handleLibraryCreate(w http.ResponseWriter, r *http.Request, c *
 	}
 	p := filepath.Clean(in.Path)
 	st, err := os.Stat(p)
-	if err != nil || !st.IsDir() {
-		writeErr(w, http.StatusBadRequest, "a mappa nem létezik vagy nem olvasható: "+p)
+	if err != nil && !isPerm(err) || err == nil && !st.IsDir() {
+		writeErr(w, http.StatusBadRequest, "a mappa nem létezik: "+p)
+		return
+	}
+	// an unreadable folder would just scan empty: say why and how to fix it
+	if rep, err := s.permReport(p); err == nil && !rep.OK {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": rep.Message, "perm": rep})
 		return
 	}
 	if in.Name == "" {

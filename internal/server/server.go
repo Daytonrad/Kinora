@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ScotyLucas/kinora/internal/intro"
 	"github.com/ScotyLucas/kinora/internal/media"
 	"github.com/ScotyLucas/kinora/internal/meta"
 	"github.com/ScotyLucas/kinora/internal/party"
@@ -74,6 +75,7 @@ type Deps struct {
 	Downloads *media.Downloader
 	Party     *party.Hub
 	Meta      *meta.Fetcher
+	Intro     *intro.Analyzer // skip intro / credits detection (nil = off)
 }
 
 // New builds the server and its routes.

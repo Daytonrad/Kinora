@@ -560,6 +560,8 @@ pre.code { background: var(--g1); border-left: var(--hair) solid var(--rule-hi);
 .opt svg { width: var(--i-s); height: var(--i-s); }
 .why-list { margin: 0; padding-left: var(--s4); }
 .why-list li { margin-bottom: var(--s1); }
+/* skip intro / credits: the one amber action over the picture, bottom right */
+.skip-seg { position: absolute; right: var(--s5); bottom: calc(var(--hit) + var(--s9)); z-index: 4; margin: 0; }
 .upnext { position: absolute; right: var(--s5); bottom: calc(var(--hit) + var(--s9)); width: min(var(--upnext-w), calc(100% - var(--s7))); background: var(--g2); border: var(--hair) solid var(--rule-hi); border-radius: var(--r2); overflow: hidden; z-index: 4; }
 .upnext .art { aspect-ratio: 16/9; background: var(--g3); position: relative; }
 .upnext .art img { width: 100%; height: 100%; object-fit: cover; }

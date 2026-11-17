@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ScotyLucas/kinora/internal/intro"
 	"github.com/ScotyLucas/kinora/internal/media"
 	"github.com/ScotyLucas/kinora/internal/meta"
 	"github.com/ScotyLucas/kinora/internal/party"
@@ -148,8 +149,23 @@ func run(cfg server.Config, log *slog.Logger) error {
 		}()
 	}
 
+	// skip intro / credits: Chromaprint fingerprints, one season at a time, paused during playback
+	analyzer := intro.NewAnalyzer(st, intro.Detect(ffmpeg), cfg.CacheDir, log)
+	analyzer.Busy = func() bool { return len(mgr.Sessions()) > 0 }
+	analyzer.Settings = func() (bool, int) { return st.Setting("intro_detection") != "0", st.SettingInt("intro_window_min", 10) }
+	log.Info("intro detection", "backend", analyzer.Status().Backend)
+	go analyzer.Run(ctx)
+	prevScanned := sc.OnScanned
+	sc.OnScanned = func(libID int64) {
+		if prevScanned != nil {
+			prevScanned(libID)
+		}
+		analyzer.Kick()
+	}
+
 	srv := server.New(cfg, st, log, server.Deps{Ctx: ctx, Scanner: sc, ImgDir: imgDir, Media: mgr, Encoders: enc,
-		Subs: media.NewSubtitles(cfg.CacheDir), Downloads: dl, Party: hub, Meta: fetcher})
+		Subs: media.NewSubtitles(cfg.CacheDir), Downloads: dl, Party: hub, Meta: fetcher, Intro: analyzer})
+	srv.ApplyStartupBranding()
 	go srv.Background(ctx)
 	go srv.RunDiscovery(ctx)
 	go sc.Run(ctx)

@@ -79,6 +79,20 @@ const T = {
   myDevices: 'Bejelentkezett eszközök', thisDevice: 'ez az eszköz', signOutDevice: 'Kiléptetés', signOutOthers: 'Kiléptetés mindenhonnan (ezen kívül)',
   signedOutN: n => `${n} eszköz kiléptetve.`, lastActive: 'Utoljára aktív', aDevices: 'Eszközök',
   platforms: { web: 'Böngésző', android: 'Android', androidtv: 'Android TV', ios: 'iOS', tizen: 'Samsung TV', webos: 'LG TV' },
+  // folders & permissions
+  permCheck: 'Jogosultság ellenőrzése', permOk: 'Olvasható – rendben.', permFix: 'Javítás (futtasd a szerveren):', permGroup: 'Vagy csoporton keresztül:',
+  locked: 'nincs jog', hostPath: p => `A hoston: ${p}`, shortcuts: 'Gyorsugrás',
+  mediaHintNative: 'Bármelyik mappa választható, amit a Kinora szolgáltatás felhasználója olvashat; a lakat jelzi, ahová nincs joga.',
+  mediaHintDocker: 'Dockerben a /media alatt vannak a csatolt mappák; a docker-compose.host.yml-lel a /host alatt a teljes gép is.',
+  // skip intro / credits
+  skipIntro: 'Intró átugrása', skipRecap: 'Előzmények átugrása', skipCredits: 'Stáblista átugrása', skippedIntro: 'Intró átugorva',
+  skipMode: 'Intró és stáblista', skipModes: { manual: 'Átugrás gombbal', auto: 'Automatikus átugrás', off: 'Kikapcsolva' },
+  markIntroStart: 'Intró eleje itt', markIntroEnd: 'Intró vége itt', markCredits: 'Stáblista kezdete itt', clearIntro: 'Kézi intró-jelölés törlése',
+  markStartFirst: 'Előbb jelöld meg az intró elejét.', markSaved: 'Jelölés mentve.',
+  propagateAsk: 'Alkalmazod az évad többi részére is, ahol ugyanez a főcím szól?', propagated: n => `${n} további résznél beállítva.`,
+  aSegments: 'Intró-felismerés', segAnalyze: 'Intró-felismerés futtatása', segQueued: n => `Sorba állítva: ${n} évad.`,
+  segBackend: 'Ujjlenyomat-készítő', segQueue: 'Várakozó évadok', segRunning: 'Most fut', segStats: (e, a, i, c, m) => `${a}/${e} rész elemezve · intró: ${i} · stáblista: ${c} · kézi jelölés: ${m}`,
+  segDetection: 'Intró- és stáblista-felismerés', segWindow: 'Intró keresése az első N percben (2–30)',
   qcEnabled: 'Belépés kóddal (Quick Connect)', discEnabled: 'Szerverkeresés a helyi hálózaton (UDP 7359)', on: 'Bekapcsolva', off: 'Kikapcsolva',
   ago: s => { const m = Math.round(s / 60); if (m < 1) return 'most'; if (m < 60) return `${m} perce`; const h = Math.round(m / 60); if (h < 48) return `${h} órája`; return `${Math.round(h / 24)} napja`; },
 };
@@ -447,12 +461,13 @@ function profileEditor(p) {
   const auds = h('input', { type: 'text', value: p.audio_langs });
   const mode = h('select', null, Object.entries(T.subModes).map(([k, v]) => h('option', { value: k, selected: p.sub_mode === k }, v)));
   const auto = h('input', { type: 'checkbox', checked: p.autoplay_next });
+  const skipSel = h('select', null, Object.entries(T.skipModes).map(([k, v]) => h('option', { value: k, selected: (p.skip_intro || 'manual') === k }, v)));
   const br = h('select', null, T.bitrateOpts.map(([v, l]) => h('option', { value: v, selected: p.max_bitrate === v }, l)));
   const body = h('div', null, field(T.profileName, name), h('label.field', null, h('span', null, T.color), sw), field(T.pin, pin),
     p.has_pin && h('label.check', null, removePin, T.removePin),
     h('label.check', null, kids, T.isKids), field(T.maxRating, lvl),
     h('div.grid2', null, field(T.subLangs, subs, T.langHint), field(T.audioLangs, auds, T.langHint)),
-    h('div.grid2', null, field(T.subMode, mode), field(T.maxBitrate, br)), h('label.check', null, auto, T.autoplayNext));
+    h('div.grid2', null, field(T.subMode, mode), field(T.maxBitrate, br)), field(T.skipMode, skipSel), h('label.check', null, auto, T.autoplayNext));
   modal(isNew ? T.addProfile : p.name, body, close => [
     !isNew && state.me.profiles.length > 1 && h('button.btn.danger', { class: 'push', onclick: async () => {
       if (!(await confirmBox(T.confirmDelete(p.name)))) return;
@@ -460,7 +475,7 @@ function profileEditor(p) {
     } }, T.delete),
     h('button.btn', { onclick: close }, T.cancel),
     h('button.btn.primary', { onclick: async () => {
-      const body = { name: name.value, color, is_kids: kids.checked, max_rating_level: +lvl.value, sub_langs: subs.value, audio_langs: auds.value, sub_mode: mode.value, autoplay_next: auto.checked, max_bitrate: +br.value };
+      const body = { name: name.value, color, is_kids: kids.checked, max_rating_level: +lvl.value, sub_langs: subs.value, audio_langs: auds.value, sub_mode: mode.value, autoplay_next: auto.checked, max_bitrate: +br.value, skip_intro: skipSel.value };
       if (pin.value) body.pin = pin.value; else if (removePin.checked) body.pin = '';
       if (isNew) await POST('/api/profiles', body); else await api('PATCH', '/api/profiles/' + p.id, body);
       close(); toast(T.saved); viewProfiles(!isNew);
@@ -733,6 +748,7 @@ async function viewItem(id) {
     canParty && [T.startParty, async () => { const r = await POST('/api/party', { item_id: (playTarget || it).id, everyone: false }); go(`#/play/${(playTarget || it).id}?party=${r.code}`); }],
     canDl && [T.download + '…', () => modal(T.download, h('div', null, h('p.muted', null, T.dlKept), downloadWidget(it)), close => [h('button.btn', { onclick: close }, T.close)])],
     state.me.user.is_admin && (it.kind === 'movie' || it.kind === 'series') && [T.fixMatch, () => fixMatchDialog(it)],
+    state.me.user.is_admin && (it.kind === 'series' || it.kind === 'season') && [T.segAnalyze, async () => { const r = await POST('/api/admin/segments/analyze', { item_id: it.id }); toast(T.segQueued(r.seasons)); }],
   ]) }, icon('more', true), T.moreBtn);
   const tagBox = !kidsP && tagEditor(it);
   const sideInfo = h('dl.side-info', null,
@@ -1131,13 +1147,14 @@ async function viewPlayer(id, q) {
   const fsBtn = h('button.p-btn', { 'aria-label': T.fullscreen, title: T.fullscreen + ' (F)' }, icon('fs'));
   const pop = h('div.p-pop.hidden');
   const upnext = h('div.upnext.hidden');
+  const skipBtn = h('button.btn.primary.big.skip-seg.hidden', { onclick: () => doSkip() });
   const ui = h('div.ui', null,
     h('div.p-top', null, h('button.p-btn', { 'aria-label': T.back, onclick: () => exit() }, icon('back')), h('div.t', null, titleEl, subEl)),
     mid,
     h('div.p-bottom', null, timeline, h('div.p-bar', null,
       playBtn, h('button.p-btn', { 'aria-label': T.rewind, title: T.rewind, onclick: () => seekBy(-10) }, icon('rw')), h('button.p-btn', { 'aria-label': T.forward, title: T.forward, onclick: () => seekBy(10) }, icon('ff')),
       volBtn, vol, timeEl, h('span.grow'), nextBtn, favBtn, moreBtn, whyBtn, ccBtn, gearBtn, fsBtn)));
-  const stage = h('div.stage', null, video, ui, pop, upnext);
+  const stage = h('div.stage', null, video, ui, pop, upnext, skipBtn);
   const player = h('div.player', null, stage);
   root.append(player);
 
@@ -1146,6 +1163,8 @@ async function viewPlayer(id, q) {
   let audioIdx = null, burnIdx = null, maxBitrate = 0, force = '', subIdx = -1, showAllLangs = false;
   let duration = 0, credits = null, nextItem = null, nextShown = false, nextTimer = null, lastReport = 0, exiting = false;
   let dragging = false, dead = false;
+  let segments = [], shownSeg = null, markStart = null;
+  const skipped = new Set();
   const caps = detectCaps();
   const partyCode = q.get('party');
   let party = null;
@@ -1174,6 +1193,9 @@ async function viewPlayer(id, q) {
     if (dead) { if (r.session) fetch('/api/hls/' + r.session, { method: 'DELETE', credentials: 'same-origin' }); return; }
     info = r; mode = r.mode; session = r.session || null; offset = r.start_offset || 0;
     duration = r.duration || 0; credits = r.credits_start ?? null;
+    segments = r.segments || [];
+    const cr = segments.find(g => g.type === 'credits');
+    if (cr) credits = cr.start;
     if (audioIdx == null) audioIdx = r.audio_idx;
     if (hls) { hls.destroy(); hls = null; }
     video.removeAttribute('src');
@@ -1315,6 +1337,15 @@ async function viewPlayer(id, q) {
       opt(T.addToCollection, false, () => addToCollectionMenu(item, moreBtn)),
       opt(T.tags + '…', false, () => modal(T.tags, tagEditor(item), close => [h('button.btn', { onclick: close }, T.close)])),
       !partyCode && opt(T.startParty, false, async () => { const r = await POST('/api/party', { item_id: id }); exiting = true; await report(); go(`#/play/${id}?party=${r.code}&t=${Math.floor(pos())}`); }),
+      state.me.user.is_admin && opt(T.markIntroStart + ` (${fmtTime(pos())})`, false, () => { markStart = pos(); toast(T.markIntroStart + ': ' + fmtTime(markStart)); }),
+      state.me.user.is_admin && opt(T.markIntroEnd + ` (${fmtTime(pos())})`, false, () => {
+        if (markStart == null || pos() <= markStart) return toast(T.markStartFirst, true);
+        saveMark('intro', markStart, pos()); markStart = null;
+      }),
+      state.me.user.is_admin && opt(T.markCredits + ` (${fmtTime(pos())})`, false, () => saveMark('credits', pos(), duration || pos() + 60)),
+      state.me.user.is_admin && segments.some(g => g.source === 'manual') && opt(T.clearIntro, false, async () => {
+        await api('DELETE', `/api/items/${id}/segments/intro`); const f = await GET(`/api/items/${id}/segments`); segments = f.segments; toast(T.deleted);
+      }),
     ];
   }
   ccBtn.onclick = () => info && openPop(buildTracks);
@@ -1376,6 +1407,7 @@ async function viewPlayer(id, q) {
     const now = Date.now();
     if (now - lastReport > 10000 && !video.paused) { lastReport = now; report(); }
     checkUpNext();
+    checkSkip();
   });
   video.addEventListener('ended', () => {
     if (dead) return;
@@ -1416,6 +1448,45 @@ async function viewPlayer(id, q) {
     if (!item || (!ended && pos() < 1)) return;
     try { await POST(`/api/items/${id}/progress`, { position: pos(), ended: !!ended }, { keepalive: true, quiet: true }); } catch { /* offline */ }
   }
+  // ---------------------------------------------------------------- skip intro / recap / credits
+  function currentSeg() {
+    const p = pos();
+    return segments.find(g => g.type !== 'preview' && p >= g.start && p < g.end - 1) || null;
+  }
+  function checkSkip() {
+    const mode = profile.skip_intro || 'manual';
+    let g = mode === 'off' ? null : currentSeg();
+    if (g && g.type === 'credits' && nextItem) g = null; // the next-episode card takes over
+    if (g && mode === 'auto' && !skipped.has(g.type + g.start) && !party) {
+      skipped.add(g.type + g.start);
+      toast(T.skippedIntro);
+      userSeek(g.end);
+      return;
+    }
+    if (g === shownSeg) return;
+    shownSeg = g;
+    skipBtn.classList.toggle('hidden', !g);
+    if (g) skipBtn.textContent = g.type === 'credits' ? T.skipCredits : g.type === 'recap' ? T.skipRecap : T.skipIntro;
+  }
+  function doSkip() {
+    const g = currentSeg();
+    if (!g) return;
+    skipped.add(g.type + g.start);
+    skipBtn.classList.add('hidden'); shownSeg = null;
+    if (party) party.send({ t: 'skip', pos: g.end, kind: g.type }); // everyone in the party jumps
+    seekTo(g.end);
+  }
+  async function saveMark(type, start, end) {
+    const r = await api('PUT', `/api/items/${id}/segments/${type}`, { start, end });
+    toast(T.markSaved);
+    const fresh = await GET(`/api/items/${id}/segments`).catch(() => null);
+    if (fresh) segments = fresh.segments;
+    if (r.can_propagate && await confirmBox(T.propagateAsk)) {
+      const p = await POST(`/api/items/${id}/segments/${type}/propagate`, {});
+      toast(T.propagated(p.updated));
+    }
+  }
+
   function checkUpNext() {
     if (!nextItem || nextShown || !duration) return;
     const at = credits ?? Math.max(0, duration - 30);
@@ -1610,6 +1681,7 @@ function scanTable(scans) {
 
 async function adminLibs(body) {
   let t;
+  if (!state.installMode) state.installMode = (await GET('/api/admin/browse?path=/').catch(() => ({}))).mode || '';
   const render = async () => {
     const [libs, scans] = await Promise.all([GET('/api/libraries'), GET('/api/admin/scan')]);
     state.libs = libs;
@@ -1623,6 +1695,7 @@ async function adminLibs(body) {
               : s && s.error ? h('span.bad', null, s.error) : l.last_scan_at ? T.ago(Date.now() / 1000 - l.last_scan_at) : T.never,
               s && s.errors ? h('div.small.bad', { title: s.last_error }, `${s.errors} hibás fájl: ${s.last_error}`) : null),
             h('td', null, h('div.row-gap', null, h('button.btn', { onclick: async () => { await POST(`/api/libraries/${l.id}/scan`); render(); } }, T.scan),
+              h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?library=' + l.id)) }, T.permCheck),
               h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(l.name))) { await api('DELETE', '/api/libraries/' + l.id); state.libs = null; render(); } } }, T.delete))));
         })))) : h('p.muted', null, T.homeEmptyAdmin)));
     clearTimeout(t);
@@ -1636,22 +1709,42 @@ async function adminLibs(body) {
     const path = h('input', { type: 'text', placeholder: '/media/movies' });
     const kind = h('select', null, Object.entries(T.kinds).map(([k, v]) => h('option', { value: k }, v)));
     modal(T.addLibrary, h('div', null, field(T.libName, name), h('label.field', null, h('span', null, T.libPath), h('div.row-gap', { class: 'nowrap' }, path, h('button.btn', { type: 'button', onclick: () => folderPicker(path.value, p => { path.value = p; if (!name.value) name.value = p.split(/[\\/]/).filter(Boolean).pop() || ''; }) }, T.choose))),
-      h('div.hint', { class: 'mt0' }, T.mediaHint), field(T.libKind, kind)), close => [h('button.btn', { onclick: close }, T.cancel),
-      h('button.btn.primary', { onclick: async () => { await POST('/api/libraries', { name: name.value, path: path.value, kind: kind.value }); close(); state.libs = null; render(); } }, T.addLibrary)]);
+      h('div.hint', { class: 'mt0' }, state.installMode === 'docker' ? T.mediaHintDocker : T.mediaHintNative), field(T.libKind, kind)), close => [h('button.btn', { onclick: close }, T.cancel),
+      h('button.btn.primary', { onclick: async () => {
+        try { await POST('/api/libraries', { name: name.value, path: path.value, kind: kind.value }, { quiet: true }); }
+        catch (e) { if (e.body && e.body.perm) permDialog(e.body.perm); else toast(e.message, true); return; }
+        close(); state.libs = null; render();
+      } }, T.addLibrary)]);
   }
+}
+
+function permDialog(rep) {
+  const copyBlock = lines => h('div', null, h('pre.code', null, lines.join('\n')), h('button.btn', { onclick: () => copyText(lines.join('\n')) }, T.copy));
+  modal(T.permCheck, h('div', null,
+    h('p', { class: rep.ok ? 'ok' : 'bad' }, rep.ok ? T.permOk : rep.message),
+    !rep.ok && rep.problems.length > 0 && h('ul.small', null, rep.problems.map(pr => h('li.mono', null, `${pr.path}: ${pr.need === 'x' ? 'belépés (x)' : 'olvasás (rX)'}`))),
+    !rep.ok && rep.commands.length > 0 && [h('p', { class: 'mt3' }, T.permFix), copyBlock(rep.commands)],
+    !rep.ok && rep.group_commands && [h('p', { class: 'mt3' }, T.permGroup), copyBlock(rep.group_commands)],
+    rep.hint && h('p.muted.small', { class: 'mt3' }, rep.hint)), close => [h('button.btn.primary', { onclick: close }, T.close)]);
 }
 
 async function folderPicker(start, onPick) {
   const list = h('div', { class: 'scroll-list' });
   const cur = h('div.mono');
+  const shortcuts = h('div.chips', { 'aria-label': T.shortcuts });
   let current = '';
   const load = async p => {
     const r = await GET('/api/admin/browse' + (p ? '?path=' + encodeURIComponent(p) : ''));
-    current = r.path; cur.textContent = r.path;
-    put(list, r.parent && h('button.opt', { onclick: () => load(r.parent) }, '↑ ' + T.up), ...r.dirs.map(d => h('button.opt', { onclick: () => load(r.path.replace(/[\\/]$/, '') + r.sep + d) }, d)));
+    current = r.path; cur.textContent = r.path + (r.host_path && r.host_path !== r.path ? '  ·  ' + T.hostPath(r.host_path) : '');
+    put(shortcuts, (r.shortcuts || []).map(sc => h('button.chip' + (sc === r.path ? '.on' : ''), { onclick: () => load(sc) }, sc)));
+    const locked = new Set(r.locked || []);
+    put(list, r.parent && h('button.opt', { onclick: () => load(r.parent) }, '↑ ' + T.up), ...r.dirs.map(d => h('button.opt', { onclick: () => load(r.path.replace(/[\\/]$/, '') + r.sep + d) },
+      locked.has(d) && [icon('lock'), ' '], d, locked.has(d) && h('span.muted.small', null, ' · ' + T.locked))));
     if (!r.dirs.length) list.append(h('p.muted.small', null, 'Nincs almappa.'));
   };
-  modal(T.pickFolder, h('div', null, cur, list), close => [h('button.btn', { onclick: close }, T.cancel), h('button.btn.primary', { onclick: () => { onPick(current); close(); } }, T.useFolder)]);
+  modal(T.pickFolder, h('div', null, shortcuts, cur, list), close => [h('button.btn', { onclick: close }, T.cancel),
+    h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?path=' + encodeURIComponent(current))) }, T.permCheck),
+    h('button.btn.primary', { onclick: () => { onPick(current); close(); } }, T.useFolder)]);
   await load(start || '').catch(() => load(''));
 }
 
@@ -1722,7 +1815,21 @@ async function adminTranscode(body) {
   put(body, 
     h('div.panel', null, h('h2', null, 'Encoder-önteszt'), h('p.muted', null, 'Minden encoder valóban lekódol 1 másodpercnyi tesztvideót – így az derül ki, ami tényleg működik, nem csak az, amit az ffmpeg ismer.'), btn, h('div', { class: 'mt3' }, tbl),
       h('p', { class: 'mt3' }, h('span.muted', null, T.selectedEnc + ': '), d.encoder_selected.label), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))),
-    h('div.panel', null, h('h2', null, T.encSetting), settingsForm(s.values, s.env, [['encoder', T.encSetting, 'select', encOpts]], () => adminTranscode(body))));
+    h('div.panel', null, h('h2', null, T.encSetting), settingsForm(s.values, s.env, [['encoder', T.encSetting, 'select', encOpts]], () => adminTranscode(body))),
+    await segmentsPanel(s));
+}
+
+async function segmentsPanel(s) {
+  const st = await GET('/api/admin/segments').catch(() => null);
+  const onoff = [['1', T.on], ['0', T.off]];
+  return h('div.panel', null, h('h2', null, T.aSegments),
+    st && h('dl.side-info', null,
+      h('dt', null, T.segBackend), h('dd', { class: st.available ? 'ok' : 'bad' }, st.backend),
+      st.stats && [h('dt', null, 'Állapot'), h('dd', null, T.segStats(st.stats.episodes, st.stats.analysed, st.stats.with_intro, st.stats.with_credits, st.stats.manual))],
+      h('dt', null, T.segQueue), h('dd', null, String(st.queue || 0)),
+      st.running && [h('dt', null, T.segRunning), h('dd', null, st.running)],
+      st.last_error && [h('dt', null, 'Utolsó hiba'), h('dd.bad.small', null, st.last_error)]),
+    settingsForm(s.values, s.env, [['intro_detection', T.segDetection, 'select', onoff], ['intro_window_min', T.segWindow, 'number']]));
 }
 
 async function adminMeta(body) {

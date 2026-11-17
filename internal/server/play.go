@@ -81,6 +81,7 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request, c *reqCt
 	resp := map[string]any{
 		"stream_token":  tok,
 		"subtitles":     subs,
+		"segments":      s.effectiveSegments(it),
 		"mode":          d.Mode,
 		"reasons":       d.Reasons,
 		"audio_idx":     d.AudioIdx,

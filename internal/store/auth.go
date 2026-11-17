@@ -298,6 +298,7 @@ type Profile struct {
 	SubMode        string `json:"sub_mode"`
 	AutoplayNext   bool   `json:"autoplay_next"`
 	MaxBitrate     int    `json:"max_bitrate"`
+	SkipIntro      string `json:"skip_intro"` // manual | auto | off
 	CreatedAt      int64  `json:"created_at"`
 	pinHash        string
 }
@@ -328,13 +329,13 @@ func (p *Profile) CheckPIN(pin string) bool {
 	return CheckPassword(p.pinHash, pin)
 }
 
-const profileCols = `id,user_id,name,color,COALESCE(pin_hash,''),is_kids,max_rating_level,sub_langs,audio_langs,sub_mode,autoplay_next,max_bitrate,created_at`
+const profileCols = `id,user_id,name,color,COALESCE(pin_hash,''),is_kids,max_rating_level,sub_langs,audio_langs,sub_mode,autoplay_next,max_bitrate,skip_intro,created_at`
 
 func scanProfile(row interface{ Scan(...any) error }) (*Profile, error) {
 	p := &Profile{}
 	var lvl sql.NullInt64
 	if err := row.Scan(&p.ID, &p.UserID, &p.Name, &p.Color, &p.pinHash, &p.IsKids, &lvl,
-		&p.SubLangs, &p.AudioLangs, &p.SubMode, &p.AutoplayNext, &p.MaxBitrate, &p.CreatedAt); err != nil {
+		&p.SubLangs, &p.AudioLangs, &p.SubMode, &p.AutoplayNext, &p.MaxBitrate, &p.SkipIntro, &p.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -383,6 +384,7 @@ type ProfileInput struct {
 	SubMode        *string `json:"sub_mode"`
 	AutoplayNext   *bool   `json:"autoplay_next"`
 	MaxBitrate     *int    `json:"max_bitrate"`
+	SkipIntro      *string `json:"skip_intro"`
 }
 
 // Validate checks the input and returns a Hungarian error message.
@@ -404,6 +406,9 @@ func (in *ProfileInput) Validate() error {
 	}
 	if in.MaxRatingLevel != nil && (*in.MaxRatingLevel < -1 || *in.MaxRatingLevel > 4) {
 		return errors.New("érvénytelen korhatár-szint")
+	}
+	if in.SkipIntro != nil && *in.SkipIntro != "manual" && *in.SkipIntro != "auto" && *in.SkipIntro != "off" {
+		return errors.New("érvénytelen intró-átugrási mód")
 	}
 	if in.MaxBitrate != nil && (*in.MaxBitrate < 0 || *in.MaxBitrate > 200000) {
 		return errors.New("érvénytelen bitráta")
@@ -495,6 +500,9 @@ func (s *Store) UpdateProfile(id int64, in ProfileInput) error {
 	}
 	if in.MaxBitrate != nil {
 		add("max_bitrate", *in.MaxBitrate)
+	}
+	if in.SkipIntro != nil {
+		add("skip_intro", *in.SkipIntro)
 	}
 	if len(set) == 0 {
 		return nil

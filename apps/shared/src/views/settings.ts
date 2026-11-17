@@ -66,9 +66,12 @@ route('settings', async () => {
       }),
       row(T.autoplayNext, p.autoplay_next ? T.on : T.off, () => editProfile({ autoplay_next: !p.autoplay_next }))),
     section(T.appName,
-      row(T.skipIntroMode, T.skipModes[prefGet('skipIntro', 'manual')], async () => {
-        const v = await choose(T.skipIntroMode, Object.keys(T.skipModes).map(k => [k, T.skipModes[k]] as [string, string]), prefGet('skipIntro', 'manual'));
-        if (v) { prefSet('skipIntro', v); syncSkipMode(v); render(); }
+      row(T.skipIntroMode, T.skipModes[p.skip_intro || prefGet('skipIntro', 'manual')], async () => {
+        const cur = p.skip_intro || prefGet('skipIntro', 'manual');
+        const v = await choose(T.skipIntroMode, Object.keys(T.skipModes).map(k => [k, T.skipModes[k]] as [string, string]), cur);
+        if (!v) return;
+        prefSet('skipIntro', v);
+        if (canEdit) editProfile({ skip_intro: v }); else render();
       }),
       row(T.uiMode, T.uiModes[prefGet('uiMode', 'auto')], async () => {
         const v = await choose(T.uiMode, Object.keys(T.uiModes).map(k => [k, T.uiModes[k]] as [string, string]), prefGet('uiMode', 'auto'));
@@ -90,12 +93,6 @@ route('settings', async () => {
     h('p.muted.small.ver', null, `${T.appName} ${APP_VERSION} · ${T.platforms[getPlatform()] || getPlatform()}`)));
   loadDevices();
 });
-
-// The skip-intro mode is also a profile setting on the server (milestone 6); keep both in step.
-function syncSkipMode(v: string) {
-  const me = state.me;
-  if (me && me.profile) api().patch('/api/profiles/' + me.profile.id, { skip_intro: v }).catch(() => { /* older server */ });
-}
 
 // ------------------------------------------------------------------ approve another device's code (phone → TV)
 

@@ -364,7 +364,10 @@ type inMsg struct {
 	ItemID int64    `json:"item_id"`
 	Text   string   `json:"text"`
 	Emoji  string   `json:"emoji"`
+	Kind   string   `json:"kind"` // skip: intro | recap | credits
 }
+
+var skipNames = map[string]string{"intro": "az intrót", "recap": "az előzményeket", "credits": "a stáblistát"}
 
 // Serve upgrades the request and runs the member until it disconnects.
 func (h *Hub) Serve(w http.ResponseWriter, req *http.Request, r *Room, who Who) {
@@ -519,6 +522,19 @@ func (h *Hub) handle(r *Room, m *member, in inMsg) {
 		r.pos = clampPos(*in.Pos)
 		r.ref = now
 		r.sysLocked(fmt.Sprintf("%s ide tekert: %s", m.who.Name, fmtTime(r.pos)))
+		r.changed(m)
+	case "skip": // a seek everyone performs, announced as a skip
+		if !control || in.Pos == nil {
+			deny()
+			return
+		}
+		r.pos = clampPos(*in.Pos)
+		r.ref = now
+		what := skipNames[in.Kind]
+		if what == "" {
+			what = "egy részt"
+		}
+		r.sysLocked(fmt.Sprintf("%s átugrotta %s", m.who.Name, what))
 		r.changed(m)
 	case "item":
 		if !control || in.ItemID == 0 {

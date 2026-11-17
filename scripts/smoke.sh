@@ -175,6 +175,17 @@ for i in $(seq 1 60); do st="$(api GET /api/downloads | json "[x['status'] for x
 [ "$st" = done ] && pass "360p download finished" || fail "download status: $st"
 curl -fsS -b "$JAR" -D "$TMP/dlh" -o "$TMP/dl.mp4" "$BASE/api/downloads/$KEY/file" && grep -qi "filename\*=UTF-8''Big" "$TMP/dlh" && pass "download served with UTF-8 filename" || fail "download file"
 api POST /api/admin/hwtest > "$TMP/hw.json"; expect 200 "encoder self-test"
+api GET /api/admin/segments | json 'j["available"]' | grep -qx True && pass "skip intro: fingerprinting available ($(api GET /api/admin/segments | json 'j["backend"]'))" || fail "skip intro backend: $(cat "$TMP/body")"
+docker exec "$NAME" fpcalc -version >/dev/null 2>&1 && pass "fpcalc in image" || fail "fpcalc missing in image"
+docker exec -u kinora "$NAME" sh -c 'mkdir -p /cache/locked/inner && chmod 000 /cache/locked'
+api GET "/api/admin/permcheck?path=/cache/locked" > "$TMP/perm.json"
+if json 'j["ok"]' < "$TMP/perm.json" | grep -qx False && json '" ".join(j["commands"])' < "$TMP/perm.json" | grep -q "setfacl -R -m u:1000:rX /cache/locked"; then
+    pass "permission check: unreadable folder explained ($(json 'j["message"]' < "$TMP/perm.json"))"
+else
+    fail "permcheck: $(cat "$TMP/perm.json")"
+fi
+api POST /api/libraries '{"name":"Zárt","path":"/cache/locked","kind":"movies"}' > /dev/null; expect 400 "adding an unreadable folder is refused with the fix"
+MSYS_NO_PATHCONV=1 docker exec -u kinora "$NAME" chmod 755 /cache/locked
 echo "    encoders: $(json '", ".join(r["name"]+(" ok" if r["ok"] else " -") for r in j["results"])' < "$TMP/hw.json")"
 
 # ------------------------------------------------------------------ M4: browsing, kids filter

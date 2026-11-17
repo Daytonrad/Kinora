@@ -5,7 +5,7 @@ import { Api, SavedServer, loadServers, currentServerId, saveServers, setCurrent
 import { uiMode, Mode, exitApp, keyAction, onNativeBack, isTyping } from './platform';
 import { move, focusFirst, focusEl, scope } from './focus';
 
-export interface Profile { id: number; name: string; color: string; has_pin: boolean; is_kids: boolean; sub_langs: string; audio_langs: string; sub_mode: string; autoplay_next: boolean; max_bitrate: number }
+export interface Profile { id: number; name: string; color: string; has_pin: boolean; is_kids: boolean; sub_langs: string; audio_langs: string; sub_mode: string; autoplay_next: boolean; max_bitrate: number; skip_intro?: string }
 export interface Me { user: { id: number; username: string; is_admin: boolean }; profile: Profile | null; profiles: Profile[]; profile_locked: boolean; device_id: string; media_token: string; server_name: string; version: string }
 export interface Item {
   id: number; kind: string; title: string; year?: number; overview?: string; series_title?: string; series_id?: number;

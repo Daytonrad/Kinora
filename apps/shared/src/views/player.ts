@@ -80,7 +80,7 @@ route('play', async (parts, q) => {
   let nextTimer = 0;
   let nextDismissed = false;
   const skippedSeg: Record<number, boolean> = {};
-  const skipMode = prefGet('skipIntro', 'manual');
+  const skipMode = profile.skip_intro || prefGet('skipIntro', 'manual'); // profile setting (server), older servers: local
   const pos = () => offset + (video.currentTime || 0);
   const duration = () => (info && info.duration) || (video.duration && isFinite(video.duration) ? offset + video.duration : 0);
 
@@ -378,12 +378,19 @@ route('play', async (parts, q) => {
       case 'stop': leave(); return true;
       case 'ff': case 'next': seekBy(30); return true;
       case 'rw': case 'prev': seekBy(-10); return true;
-      case 'back':
-        if (chromeShown && inChrome) { stage.classList.remove('show'); (document.activeElement as HTMLElement).blur(); return true; }
+      case 'back': // first back hides the controls, the next one leaves the player
+        if (chromeShown) {
+          stage.classList.remove('show');
+          if (inChrome) (document.activeElement as HTMLElement).blur();
+          return true;
+        }
         leave(); return true;
-      case 'left': case 'right':
-        if (document.activeElement === rail || (!chromeShown && !skipVisible() && !nextVisible())) { seekBy(a === 'left' ? -10 : 10); return true; }
+      case 'left': case 'right': {
+        // outside the control bar the arrows always seek, even with the skip button focused
+        const onCard = document.activeElement && nextCard.contains(document.activeElement);
+        if (document.activeElement === rail || (!inChrome && !onCard)) { seekBy(a === 'left' ? -10 : 10); return true; }
         showChrome(); return false;
+      }
       case 'ok':
         if (!chromeShown && !skipVisible() && !nextVisible()) { togglePlay(); focusEl(playBtn); return true; }
         showChrome(); return false;

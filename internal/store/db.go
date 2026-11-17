@@ -235,6 +235,26 @@ UPDATE sessions SET device_id=lower(hex(randomblob(8))) WHERE device_id='';
 CREATE UNIQUE INDEX sessions_device ON sessions(device_id);
 CREATE INDEX sessions_user ON sessions(user_id);
 `,
+	// 3: skip intro / credits segments, analysis bookkeeping, per-profile skip mode
+	`
+CREATE TABLE item_segments(
+  item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK(type IN ('intro','recap','credits','preview')),
+  start REAL NOT NULL,
+  end REAL NOT NULL,
+  source TEXT NOT NULL CHECK(source IN ('manual','chapter','auto')),
+  confidence REAL NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(item_id, type, source)
+);
+CREATE TABLE segment_scans(
+  item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+  file_sig TEXT NOT NULL,
+  scanned_at INTEGER NOT NULL,
+  error TEXT NOT NULL DEFAULT ''
+);
+ALTER TABLE profiles ADD COLUMN skip_intro TEXT NOT NULL DEFAULT 'manual';
+`,
 }
 
 func (s *Store) migrate() error {
@@ -290,6 +310,8 @@ var SettingDefaults = map[string]string{
 	"quickconnect_enabled": "1",
 	"discovery_enabled":    "1",
 	"brand_accent":         "",
+	"intro_detection":      "1",
+	"intro_window_min":     "10",
 }
 
 // SetOverride forces a setting from the environment (shown as locked in the admin UI).

@@ -99,6 +99,15 @@ console.log('TV (1920×1080, file://, D-pad)');
   await page.waitForSelector('.player', { timeout: 10000 });
   await page.waitForFunction(() => { const v = document.querySelector('video'); return v && v.currentTime > 0.5; }, null, { timeout: 20000 }).then(() => ok('direct play runs'), () => bad('video did not start'));
   await page.waitForTimeout(500);
+  // the test movie has an "Intro" chapter: the skip button shows and takes focus; OK skips it
+  const skip = await page.evaluate(() => { const b = document.querySelector('.skip'); return b && b.style.display !== 'none' ? { text: b.textContent, focused: document.activeElement === b } : null; });
+  check(skip && skip.text === 'Intró átugrása' && skip.focused, 'skip intro button shown and focused: ' + JSON.stringify(skip));
+  await page.screenshot({ path: join(out, 'tv-07a-skip.png') });
+  const s0 = await page.evaluate(() => document.querySelector("video").currentTime);
+  await press(page, 'Enter');
+  await page.waitForTimeout(600);
+  const s1 = await page.evaluate(() => document.querySelector("video").currentTime);
+  check(s1 > s0 + 5, `OK skips the intro (${s0.toFixed(1)} → ${s1.toFixed(1)})`);
   await press(page, 'ArrowUp');
   await page.screenshot({ path: join(out, 'tv-07-player.png') });
   const before = await page.evaluate(() => document.querySelector('video').currentTime);
@@ -108,8 +117,10 @@ console.log('TV (1920×1080, file://, D-pad)');
   await page.waitForTimeout(500);
   const after = await page.evaluate(() => document.querySelector('video').currentTime);
   check(after > before + 5, `right = +10 s (${before.toFixed(1)} → ${after.toFixed(1)})`);
+  await press(page, 'Escape'); // the seek showed the controls: the first back hides them
+  check(await page.evaluate(() => !document.querySelector('.player').classList.contains('show')), 'back hides the controls first');
   await press(page, 'Escape');
-  await page.waitForSelector('.detail-head', { timeout: 10000 }).then(() => ok('back leaves the player'), () => bad('back did not leave player'));
+  await page.waitForSelector('.detail-head', { timeout: 10000 }).then(() => ok('second back leaves the player'), () => bad('back did not leave player'));
   // series detail: seasons + episodes
   const shows = await (await fetch(SERVER + '/api/search?q=Test%20Show', { headers: auth })).json();
   const series = shows.filter(s => s.kind === 'series')[0];

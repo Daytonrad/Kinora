@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"fmt"
 	"net"
 	"net/http"
@@ -643,3 +644,7 @@ func TestDiscovery(t *testing.T) {
 		t.Fatal("discovery answered while disabled")
 	}
 }
+
+func jsonUnmarshal(b []byte, v any) { json.Unmarshal(b, v) }
+
+func jsonDecode(r io.Reader, v any) { json.NewDecoder(r).Decode(v) }

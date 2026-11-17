@@ -1,0 +1,20 @@
+#!/bin/sh
+# Runs before every start (ExecStartPre). After a self-update the new binary must confirm
+# that it is healthy; if it crashed twice or did not confirm within 90 s, roll back.
+# Kept identical to the copy written by install.sh.
+marker=/var/lib/kinora/update/pending
+[ -f "$marker" ] || exit 0
+bin=/opt/kinora/bin
+attempts=$(sed -n 's/^attempts=//p' "$marker"); attempts=${attempts:-0}
+started=$(sed -n 's/^started=//p' "$marker"); started=${started:-0}
+now=$(date +%s)
+if [ "$attempts" -ge 2 ] || [ $((now - started)) -gt 90 ]; then
+    if [ -x "$bin/kinora.prev" ]; then
+        mv -f "$bin/kinora.prev" "$bin/kinora"
+        echo "result=rolled_back" > /var/lib/kinora/update/last
+        echo "kinora-guard: the update did not become healthy – previous version restored" >&2
+    fi
+    rm -f "$marker"
+    exit 0
+fi
+sed -i "s/^attempts=.*/attempts=$((attempts + 1))/" "$marker" 2>/dev/null || echo "attempts=$((attempts + 1))" >> "$marker"

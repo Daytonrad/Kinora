@@ -8,7 +8,7 @@ ARG GO_VERSION=1.24
 
 FROM golang:${GO_VERSION}-bookworm AS dev
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg \
+ && apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 
@@ -31,6 +31,7 @@ ARG VERSION=dev
 # so the default image leaves it out: Intel VA-API/QSV, NVIDIA NVENC and software encoding work without it.
 ARG AMD=0
 # Debian's own ffmpeg (5.1, built with libzimg/zscale, VA-API, QSV via libmfx/vpl, NVENC via ffnvcodec).
+# libchromaprint-tools adds fpcalc, the fallback fingerprinter of the Skip Intro detector.
 # non-free component is enabled only for intel-media-va-driver-non-free (amd64, Gen8+ Intel iGPU incl. QSV).
 RUN set -eux; \
     sed -i 's/^Components: main$/Components: main non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources; \
@@ -38,7 +39,7 @@ RUN set -eux; \
     extra=""; \
     if [ "$TARGETARCH" = "amd64" ]; then extra="intel-media-va-driver-non-free"; fi; \
     if [ "$AMD" = "1" ]; then extra="$extra mesa-va-drivers"; fi; \
-    apt-get install -y --no-install-recommends ffmpeg ca-certificates tzdata gosu $extra; \
+    apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools ca-certificates tzdata gosu $extra; \
     if [ "$AMD" != "1" ]; then \
       # libavdevice -> libgl1 -> libglx-mesa0 -> libgl1-mesa-dri -> libllvm15 (+ libz3). The ffmpeg CLI never
       # creates an OpenGL context, so the Mesa DRI drivers (the only LLVM users) are dead weight here.
@@ -56,7 +57,8 @@ COPY --from=build /out/kinora /usr/local/bin/kinora
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/kinora
 
-ENV KINORA_ADDR=:8096 \
+ENV KINORA_INSTALL=docker \
+    KINORA_ADDR=:8096 \
     KINORA_DATA=/config \
     KINORA_CACHE=/cache \
     KINORA_MEDIA_ROOT=/media \

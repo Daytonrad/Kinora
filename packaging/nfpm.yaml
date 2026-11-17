@@ -1,0 +1,61 @@
+# .deb and .rpm packages (nfpm). Built by the release workflow:
+#   VERSION=1.2.3 ARCH=amd64 nfpm package -f packaging/nfpm.yaml -p deb -t dist/
+# The package installs the same layout as install.sh and runs as the dedicated "kinora"
+# system user. To run it as your own user instead:
+#   sudo systemctl edit kinora   →   [Service] User=<you>  Group=<your group>
+name: kinora
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: video
+priority: optional
+maintainer: ScotyLucas <https://github.com/ScotyLucas>
+description: |
+  Saját gépen futó médiaszerver filmekhez és sorozatokhoz (magyar felület).
+  Self-hosted media server for films and series.
+vendor: Kinora
+homepage: https://github.com/ScotyLucas/kinora
+license: MIT
+
+depends:
+  - ffmpeg
+recommends:
+  - acl
+  - libchromaprint-tools
+overrides:
+  rpm:
+    depends:
+      - ffmpeg
+    recommends:
+      - acl
+      - chromaprint-tools
+
+contents:
+  - src: ./dist/kinora-linux-${ARCH}
+    dst: /opt/kinora/bin/kinora
+    file_info:
+      mode: 0755
+  - src: ./packaging/kinora-guard
+    dst: /opt/kinora/bin/kinora-guard
+    file_info:
+      mode: 0755
+  - src: /opt/kinora/bin/kinora
+    dst: /usr/bin/kinora
+    type: symlink
+  - src: ./packaging/kinora.service
+    dst: /lib/systemd/system/kinora.service
+  - src: ./packaging/kinora.env
+    dst: /etc/kinora/kinora.env
+    type: config|noreplace
+  - dst: /var/lib/kinora
+    type: dir
+    file_info:
+      mode: 0750
+  - dst: /var/cache/kinora
+    type: dir
+    file_info:
+      mode: 0750
+
+scripts:
+  postinstall: ./packaging/postinstall.sh
+  preremove: ./packaging/preremove.sh

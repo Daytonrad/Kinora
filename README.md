@@ -102,7 +102,21 @@ Mindkettő amd64-re és arm64-re is elérhető (multi-arch manifest). Ha nem tud
 - Hálózati megosztás (SMB/NFS) esetén ha a megosztás leesik, a Kinora **nem töröl semmit**: a szkennelés hibával leáll, a hiányzó fájlok csak
   „hiányzó” jelölést kapnak, és visszatéréskor megmarad a megnézett állapotuk.
 
-### Natív bináris (másodlagos lehetőség)
+### Natív telepítés Linuxra (systemd)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ScotyLucas/kinora/main/install.sh | bash
+```
+
+A telepítő letölti és ellenőrzi (SHA-256 + ed25519 aláírás) a legfrissebb kiadást, telepíti az ffmpeg-et, és systemd szolgáltatást készít,
+amely a saját felhasználódként vagy dedikált `kinora` felhasználóként fut. Így a Kinora **bármelyik mappát látja, amit a szolgáltatás olvashat**,
+és új mappát bármikor hozzáadhatsz. Ha egy mappát nem tud olvasni, a felület megmondja, miért, és megadja a javító parancsot.
+Van `.deb` és `.rpm` csomag is. Részletek, jogosultságok, SMB/NFS-csatolás: [`docs/LINUX.md`](docs/LINUX.md).
+
+**Dockerben utólag bármelyik mappa:** a `docker-compose.host.yml` csak olvashatóan becsatolja a `/home`, `/mnt`, `/media` és `/srv` mappát a `/host` alá
+(`docker compose -f docker-compose.yml -f docker-compose.host.yml up -d`). A biztonsági mérlegelés a [`docs/LINUX.md`](docs/LINUX.md)-ben van.
+
+### Fordítás forrásból
 
 Szükséges: Go 1.24+, C fordító (a sqlite miatt cgo kell), valamint `ffmpeg` és `ffprobe` a PATH-on.
 
