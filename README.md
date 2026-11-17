@@ -121,18 +121,16 @@ Van `.deb` és `.rpm` csomag is. Részletek, jogosultságok, SMB/NFS-csatolás: 
 
 ### Windows
 
-Töltsd le a kiadásból a **`KinoraSetup.exe`**-t. A telepítő megkérdezi a szerver nevét, a portot, a logót (opcionális) és a kezdő médiamappákat,
-majd a Kinorát **Windows-szolgáltatásként** telepíti (a gép indulásakor magától elindul), megnyitja a portot a tűzfalon (magán- és tartományi
-hálózaton), és a Start menübe tesz egy „Kinora megnyitása” parancsikont. Az ffmpeg a csomagban van. Adatok: `C:\ProgramData\Kinora`,
-napló: `C:\ProgramData\Kinora\kinora.log`. Eltávolítás: Gépház → Alkalmazások; az adatokat csak külön megerősítésre törli.
-Parancssorból: `kinora.exe service install|uninstall|start|stop` (rendszergazdaként).
+Windowsra nincs külön telepítő; az ajánlott út a Docker Desktop (lásd fent). Haladóknak: a forrásból fordított `kinora.exe`
+Windows-szolgáltatásként is futtatható (`kinora.exe service install --data C:\ProgramData\Kinora`, rendszergazdaként; ffmpeg a PATH-on
+vagy a program melletti `ffmpeg\` mappában).
 
 ### Saját logó és név
 
 Az **Admin → Beállítások → Megjelenés** oldalon tölthetsz fel logót sötét és világos háttérre (PNG, JPG, WebP vagy SVG, legfeljebb 2 MB).
 A faviconét és az app-ikonokat a Kinora készíti el belőle, és az appok is ezt mutatják a belépő- és a kezdőképernyőn. Az SVG-t csak szkript
 és külső hivatkozás nélkül fogadja el, és kizárólag képként szolgálja ki. Az első indítás varázslója is kér logót (nem kötelező).
-Dockerben: `KINORA_LOGO=/config/logo.png`. A natív telepítők (`install.sh --logo`, `KinoraSetup.exe`) az első induláskor adják át.
+Dockerben: `KINORA_LOGO=/config/logo.png`. A Linux-telepítő (`install.sh --logo`) az első induláskor adja át.
 
 ### Fordítás forrásból
 
