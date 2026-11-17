@@ -52,8 +52,9 @@ A repó gyökerében egy helyi szerver (`go run ./cmd/kinora …` vagy a Docker 
 `http://localhost:8096` címen. A simulator ugyanazon a gépen fut, port-továbbítás nem kell. Telefonról a Mac LAN-címével
 (`http://192.168.x.y:8096`), vagy a „Szerver keresése” gombbal.
 
-Távoli szerverhez HTTPS kell (reverse proxy, Cloudflare, Tailscale): az App Transport Security csak helyi címekre
-(`NSAllowsLocalNetworking`: IP-címek és `.local` nevek) engedi a sima HTTP-t.
+Az app bármilyen címre enged sima HTTP-t (`NSAllowsArbitraryLoads`), mert a szervert a felhasználó adja meg, és
+sok otthoni szerver nyilvános címen is HTTP-n válaszol. Interneten át viszont ilyenkor a jelszó és a token titkosítatlanul
+megy, ezért távoli eléréshez HTTPS ajánlott (reverse proxy, Cloudflare, Tailscale).
 
 ## Ütemterv
 

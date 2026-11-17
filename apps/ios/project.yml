@@ -72,11 +72,11 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        # Home servers answer on plain HTTP at LAN addresses (http://192.168.1.10:8096).
-        # IP literals and .local names fall under NSAllowsLocalNetworking; public servers
-        # are expected to use HTTPS (reverse proxy, Cloudflare/Tailscale).
+        # The user picks the server, and self-hosted servers often answer on plain HTTP,
+        # at home and at a public address alike (http://203.0.113.5:8096). iOS ignores
+        # NSAllowsArbitraryLoads when NSAllowsLocalNetworking is also set, so only this one.
         NSAppTransportSecurity:
-          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: A Kinora a helyi hálózaton keresi és éri el a médiaszerveredet.
   KinoraWidgets:
     type: app-extension
@@ -110,7 +110,7 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
         NSAppTransportSecurity:
-          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
 schemes:
   Kinora:
     build:
