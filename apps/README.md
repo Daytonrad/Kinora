@@ -1,16 +1,16 @@
 # Kinora kliensappok
 
-Egy közös felület (`shared`) négy platformra csomagolva: **Android** (telefon + Android TV, egy APK), **iOS** (iPhone/iPad),
-**Samsung Tizen** (`.wgt`) és **LG webOS** (`.ipk`). A mai kipróbálás lépései: [`docs/TESZTELES_MA.md`](../docs/TESZTELES_MA.md).
+Egy közös felület (`shared`) három platformra csomagolva: **Android** (telefon + Android TV, egy APK), **Samsung Tizen** (`.wgt`)
+és **LG webOS** (`.ipk`). Az **iOS** (iPhone/iPad) app natív SwiftUI, külön projekt: [`ios/README.md`](ios/README.md). A mai kipróbálás lépései: [`docs/TESZTELES_MA.md`](../docs/TESZTELES_MA.md).
 
 ```
 apps/
   shared/         közös TypeScript app (Vite): API-kliens, állapot, lejátszó, felület – "mobile" és "tv" mód
   android/        Capacitor-projekt (android/), build.mjs → dist/kinora.apk
-  ios/            Capacitor-projekt (ios/App/App.xcodeproj), build.mjs → Xcode-projekt / simulator build
+  ios/            natív SwiftUI app (XcodeGen: project.yml) + KinoraKit Swift csomag – nem npm-munkaterület
   tizen/          config.xml + build.mjs → dist/kinora.wgt
   webos/          appinfo.json + build.mjs → dist/kinora_<ver>_all.ipk
-  native-plugin/  KinoraNative iOS plugin (Swift, SPM); az Android változat az android/ projektben van
+  native-plugin/  a régi Capacitor-iOS KinoraNative pluginja (Swift, SPM) – már nem használja semmi; az Android változat az android/ projektben van
   branding/       logo.svg + banner.svg + brand.mjs: minden ikon, banner és splash egy forrásból
   scripts/        közös build-segédek (parancsfuttatás, zip)
 ```
@@ -25,7 +25,7 @@ Egyszer: `cd apps && npm install`. Utána minden platformnak egy parancsa van (W
 | Android release | `npm run build:release -w android` | `android/dist/kinora-release.apk` | ugyanaz + aláírókulcs env-ben (lásd lent) |
 | LG webOS | `npm run build:webos` | `webos/dist/kinora_1.0.0_all.ipk` | semmi (a webOS CLI devDependency) |
 | Samsung Tizen | `npm run build:tizen` | `tizen/dist/kinora.wgt`, CLI nélkül `kinora-unsigned.wgt` | Tizen Studio CLI + Samsung-tanúsítvány az aláíráshoz |
-| iOS | `npm run build:ios` (macOS-en: `node ios/build.mjs --simulator`) | `ios/ios/App/App.xcodeproj` | macOS + Xcode a fordításhoz |
+| iOS | `cd ios && xcodegen`, majd Xcode (lásd [`ios/README.md`](ios/README.md)) | `ios/Kinora.xcodeproj` | macOS + Xcode 16+ + XcodeGen |
 | közös UI | `npm run build:shared`, `npm test`, `npm run e2e -w shared` | `shared/dist/` | E2E-hez Edge vagy Chrome + futó szerver |
 
 A `shared` build egyetlen klasszikus (nem modul) `app.js`-t ad ES2015 szintaxissal és a szükséges polyfillekkel, relatív útvonalakkal,
@@ -51,9 +51,9 @@ A CI-ban ugyanezek GitHub Secrets-ként szerepelnek (`ANDROID_KEYSTORE_BASE64`, 
 - **Samsung Tizen:** a TV-n fejlesztői mód (Apps → 12345), Samsung-tanúsítvány a Certificate Managerrel, majd `KINORA_TV_IP=… npm run install-tv -w tizen`.
 - **iPhone:**
   - Ma, Mac nélkül: a webkliens PWA-ként is telepíthető (Safari → Megosztás → „Főképernyőhöz adás”).
-  - Natív app: Mac + Xcode + **ingyenes Apple ID** kell. `npm run build:ios`, utána az Xcode-ban nyisd meg az `ios/ios/App/App.xcodeproj`-ot → App target → Signing & Capabilities → Team: a saját Apple ID-d → csatlakoztasd az iPhone-t → Run. Az iPhone-on: Beállítások → Általános → VPN és eszközkezelés → a fejlesztő megbízhatóvá tétele.
+  - Natív app: Mac + Xcode + XcodeGen kell. A Team ID a git-ignorált `ios/Config/Local.xcconfig`-ba kerül, utána `cd ios && xcodegen`, Xcode-ban megnyitni a `Kinora.xcodeproj`-ot → csatlakoztasd az iPhone-t → Run. Részletek: [`ios/README.md`](ios/README.md).
   - Az ingyenes fiókkal aláírt app **7 napig** fut, utána újra kell telepíteni. Tartósan, illetve TestFlightra vagy az App Store-ba fizetős Apple Developer Program (évi 99 USD) kell.
-  - A CI (`.github/workflows/apps.yml`) macOS runneren aláírás nélkül lefordítja a simulator buildet, ez igazolja, hogy a projekt fordul.
+  - A CI (`.github/workflows/apps.yml`) macOS runneren lefuttatja a KinoraKit teszteket (`swift test`), majd XcodeGen után aláírás nélkül lefordítja a simulator buildet.
 
 ## Belépés
 
@@ -66,7 +66,7 @@ A szerver címe lehet `192.168.1.10`, `192.168.1.10:8096`, `nas.local`, `http://
 Több szerver menthető, a Beállítások → Szerverváltás menüben lehet köztük váltani.
 
 **Szerver keresése:** Android/Android TV-n UDP-broadcast a 7359-es portra (`who is KinoraServer?`). iOS-en és TV-n HTTP-s pásztázás a saját /24-es alhálózaton
-(a böngészőmotor nem tud UDP-t küldeni; iOS-en az UDP-broadcast fogadásához külön Apple-jogosultság kellene).
+(a TV-k böngészőmotorja nem tud UDP-t küldeni; iOS-en az UDP-broadcast fogadásához külön Apple-jogosultság kellene, ezért a natív app is pásztáz).
 **Dockerben** a broadcast nem jut át a bridge hálózaton: a felderítéshez `network_mode: host` kell (vagy írd be kézzel a címet). Kikapcsolás: Admin → Beállítások, vagy `KINORA_DISCOVERY=0`.
 
 ## Miért kell a cleartext (HTTP) engedélyezése?
@@ -77,8 +77,8 @@ a platformok alapból viszont csak HTTPS-t engednek:
 - **Android:** `network_security_config.xml` → `base-config cleartextTrafficPermitted="true"` és `usesCleartextTraffic`. A `domain-config` csak előre ismert
   hostokra szűkíthetne, egy tetszőleges LAN-IP-re nem. HTTPS-szervereknél a rendszer tanúsítványellenőrzése változatlanul érvényes.
   A Capacitor `androidScheme: "http"`, hogy a WebView ne blokkolja a HTTPS-oldalról induló HTTP-videót (mixed content).
-- **iOS:** `NSAllowsLocalNetworking` (helyi és `.local` címek), `NSAllowsArbitraryLoadsInWebContent` (a WebView tölthesse a szerver HTTP-s API-ját, képeit és videóit),
-  valamint `NSLocalNetworkUsageDescription` a helyi hálózati engedélykéréshez.
+- **iOS:** `NSAllowsLocalNetworking` (helyi és `.local` címek) és `NSLocalNetworkUsageDescription` a helyi hálózati engedélykéréshez (`ios/project.yml`).
+  Távoli szerverhez HTTPS kell.
 - **Tizen:** `<access origin="*">` és `internet` jogosultság a `config.xml`-ben. **webOS:** a csomagolt webapp alapból bármilyen originre hívhat.
 
 Biztonság: az appok **Bearer tokennel** hívják az API-t (nem sütivel). A szerver csak ezekre az app-originekre engedélyez CORS-t, `Allow-Credentials` nélkül,
@@ -90,11 +90,11 @@ elemre, felhasználóra és eszközre kötött **stream-tokent** kapnak (`?st=`)
 A lejátszó a `MediaSource.isTypeSupported`/`canPlayType` eredményét egy platformonkénti táblázattal egészíti ki (`shared/src/player/caps.ts`).
 A TV-k natív lejátszója sokszor üres választ ad olyan formátumra, amit közvetlenül le tud játszani (MKV, HEVC, AC-3/E-AC-3), és így a direct play minél
 gyakrabban működik. HDR10-et csak akkor jelez, ha a platform igazolja (Tizen: `webapis.avinfo.isHdrTvSupport()`, máshol `(dynamic-range: high)`).
-HLS: Tizen, webOS és iOS natívan a `<video>`-ban, Androidon hls.js. A feliratokat az app maga rajzolja ki a szerver WebVTT-jéből, mert a `<track>` a régi TV-ken megbízhatatlan.
+HLS: Tizen és webOS natívan a `<video>`-ban, Androidon hls.js, iOS-en AVPlayer (v0.3). A feliratokat az app maga rajzolja ki a szerver WebVTT-jéből, mert a `<track>` a régi TV-ken megbízhatatlan.
 
 ## Tudatosan későbbre hagyva (v2)
 
 - **Offline letöltés a telefonra:** a szerver már készít átkódolt letöltéseket (`/api/downloads`). A tárolás natív fájlba (Capacitor Filesystem) és az offline
   lejátszás a következő kör; a lejátszó URL-alapú, így egy helyi fájl-URL-re cserélhető.
 - Watch party az appokból (a WebSocket jelenleg sütis hitelesítésű).
-- Chromecast / AirPlay vezérlés.
+- Chromecast vezérlés. (AirPlay és kép a képben az iOS app v0.3-as körében.)

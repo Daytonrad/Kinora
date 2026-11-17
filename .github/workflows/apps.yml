@@ -80,16 +80,19 @@ jobs:
           name: kinora-android
           path: apps/android/dist/*.apk
 
-  # iOS: proves the Xcode project compiles (simulator, unsigned). Installing on a phone
-  # needs the owner's Apple ID in Xcode – see apps/README.md.
+  # iOS: native SwiftUI app. KinoraKit unit tests + an unsigned simulator build.
+  # Signing for a real device needs a DEVELOPMENT_TEAM in Config/Local.xcconfig – see apps/ios/README.md.
   ios:
     runs-on: macos-15
+    defaults:
+      run:
+        working-directory: apps/ios
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: apps/package-lock.json
-      - run: npm ci
-      - run: node ios/build.mjs --simulator
+      - run: brew install xcodegen
+      - run: swift test --package-path KinoraKit
+      - run: xcodegen
+      - run: >
+          xcodebuild -project Kinora.xcodeproj -scheme Kinora
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build CODE_SIGNING_ALLOWED=NO build

@@ -1,14 +1,19 @@
 {
   "name": "kinora-apps",
   "private": true,
-  "description": "Kinora client apps: shared UI + Android, iOS, Samsung Tizen, LG webOS packaging",
-  "workspaces": ["shared", "android", "ios", "tizen", "webos", "branding"],
+  "description": "Kinora client apps: shared UI + Android, Samsung Tizen, LG webOS packaging (iOS is native SwiftUI in ios/)",
+  "workspaces": [
+    "shared",
+    "android",
+    "tizen",
+    "webos",
+    "branding"
+  ],
   "scripts": {
     "build:shared": "npm run build -w shared",
     "build:android": "npm run build -w android",
     "build:tizen": "npm run build -w tizen",
     "build:webos": "npm run build -w webos",
-    "build:ios": "npm run build -w ios",
     "brand": "npm run brand -w branding --",
     "test": "npm run test -w shared"
   }
