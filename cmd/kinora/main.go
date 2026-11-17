@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -47,6 +48,9 @@ func main() {
 	flag.StringVar(&cfg.CacheDir, "cache", env("KINORA_CACHE", ""), "cache directory: transcodes, downloads, subtitles (KINORA_CACHE, default <data>/cache)")
 	flag.StringVar(&cfg.WebDir, "web", env("KINORA_WEB_DIR", ""), "serve the web client from this directory instead of the embedded copy (KINORA_WEB_DIR)")
 	flag.StringVar(&cfg.MediaRoot, "media-root", env("KINORA_MEDIA_ROOT", ""), "start folder of the admin folder picker (KINORA_MEDIA_ROOT)")
+	flag.StringVar(&cfg.CORSOrigins, "cors-origins", env("KINORA_CORS_ORIGINS", ""), "extra app origins allowed for token CORS, comma separated (KINORA_CORS_ORIGINS)")
+	discPort, _ := strconv.Atoi(env("KINORA_DISCOVERY_PORT", strconv.Itoa(server.DefaultDiscoveryPort)))
+	flag.IntVar(&cfg.DiscoveryPort, "discovery-port", discPort, "UDP port for LAN server discovery, 0 = off (KINORA_DISCOVERY_PORT)")
 	flag.Parse()
 	if cfg.CacheDir == "" {
 		cfg.CacheDir = filepath.Join(cfg.DataDir, "cache")
@@ -147,6 +151,7 @@ func run(cfg server.Config, log *slog.Logger) error {
 	srv := server.New(cfg, st, log, server.Deps{Ctx: ctx, Scanner: sc, ImgDir: imgDir, Media: mgr, Encoders: enc,
 		Subs: media.NewSubtitles(cfg.CacheDir), Downloads: dl, Party: hub, Meta: fetcher})
 	go srv.Background(ctx)
+	go srv.RunDiscovery(ctx)
 	go sc.Run(ctx)
 
 	httpSrv := &http.Server{

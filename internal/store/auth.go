@@ -246,48 +246,19 @@ func (s *Store) DeleteUser(id int64) error {
 // SessionTTL is the sliding session lifetime.
 const SessionTTL = 30 * 24 * time.Hour
 
-// CreateSession returns a new opaque token (only its hash is stored).
+// CreateSession returns a new opaque token (only its hash is stored) for a web session.
 func (s *Store) CreateSession(userID int64) (string, error) {
-	tok := RandomToken(32)
-	_, err := s.DB.Exec(`INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,?)`,
-		hashToken(tok), userID, time.Now().Add(SessionTTL).Unix())
+	tok, _, err := s.CreateDeviceSession(userID, DeviceInfo{Platform: "web"}, 0, 0)
 	return tok, err
 }
 
 // Session resolves a token to user and (optional) selected profile.
-// Expiry slides forward, but the row is rewritten at most once a day.
 func (s *Store) Session(tok string) (*User, *Profile, error) {
-	if tok == "" {
-		return nil, nil, ErrNotFound
-	}
-	h := hashToken(tok)
-	var uid int64
-	var pid sql.NullInt64
-	var exp int64
-	err := s.DB.QueryRow(`SELECT user_id, profile_id, expires_at FROM sessions WHERE token=?`, h).Scan(&uid, &pid, &exp)
-	if err != nil {
-		return nil, nil, ErrNotFound
-	}
-	t := time.Now()
-	if exp < t.Unix() {
-		s.DB.Exec(`DELETE FROM sessions WHERE token=?`, h)
-		return nil, nil, ErrNotFound
-	}
-	if newExp := t.Add(SessionTTL).Unix(); newExp-exp > 24*3600 {
-		s.DB.Exec(`UPDATE sessions SET expires_at=? WHERE token=?`, newExp, h)
-	}
-	u, err := s.UserByID(uid)
+	ss, err := s.SessionFull(tok, "")
 	if err != nil {
 		return nil, nil, err
 	}
-	var p *Profile
-	if pid.Valid {
-		p, _ = s.Profile(pid.Int64)
-		if p != nil && p.UserID != uid {
-			p = nil
-		}
-	}
-	return u, p, nil
+	return ss.User, ss.Profile, nil
 }
 
 // SetSessionProfile selects (or clears, with 0) the active profile of a session.

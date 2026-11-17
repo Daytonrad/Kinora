@@ -221,6 +221,20 @@ CREATE TABLE settings(
   value TEXT NOT NULL
 );
 `,
+	// 2: device registry on sessions (native apps, TVs), profile lock for Quick Connect kids devices
+	`
+ALTER TABLE sessions ADD COLUMN device_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE sessions ADD COLUMN device_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE sessions ADD COLUMN platform TEXT NOT NULL DEFAULT 'web';
+ALTER TABLE sessions ADD COLUMN app_version TEXT NOT NULL DEFAULT '';
+ALTER TABLE sessions ADD COLUMN ip TEXT NOT NULL DEFAULT '';
+ALTER TABLE sessions ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sessions ADD COLUMN last_seen INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sessions ADD COLUMN profile_lock INTEGER REFERENCES profiles(id) ON DELETE CASCADE;
+UPDATE sessions SET device_id=lower(hex(randomblob(8))) WHERE device_id='';
+CREATE UNIQUE INDEX sessions_device ON sessions(device_id);
+CREATE INDEX sessions_user ON sessions(user_id);
+`,
 }
 
 func (s *Store) migrate() error {
@@ -273,6 +287,9 @@ var SettingDefaults = map[string]string{
 	"encoder":           "auto",
 	"public_url":        "",
 	"scan_interval_min": "15",
+	"quickconnect_enabled": "1",
+	"discovery_enabled":    "1",
+	"brand_accent":         "",
 }
 
 // SetOverride forces a setting from the environment (shown as locked in the admin UI).

@@ -71,6 +71,15 @@ const T = {
   connectLede: 'Ezeken a címeken érhető el a szerver. Telefonról olvasd be a QR-kódot.', noPublic: 'Nincs megadva nyilvános URL (Beállítások).',
   matchSearch: 'Keresés a TMDB-ben', matchApply: 'Ezt választom', tmdbId: 'vagy TMDB azonosító',
   netErr: 'Nem érem el a szervert. Ellenőrizd a kapcsolatot.',
+  // devices & quick connect
+  connectDevice: 'Eszköz csatlakoztatása', qcLede: 'Írd be a tévén vagy telefonon látható 6 jegyű kódot.', qcCode: '6 jegyű kód', next: 'Tovább',
+  qcWants: (n, p) => `${n || 'Ismeretlen eszköz'} (${p}) szeretne belépni a fiókodba.`, qcProfile: 'Melyik profillal lépjen be?', qcAnyProfile: 'Profilválasztó az eszközön',
+  qcPinNote: 'A PIN-nel védett profil PIN-jét az új eszközön kell megadni.', qcKidsNote: 'A gyerekprofillal belépett eszköz nem válthat más profilra.',
+  approve: 'Jóváhagyás', deny: 'Elutasítás', qcApproved: 'Kész! Az eszköz pár másodpercen belül belép.', qcDenied: 'Elutasítva.', qcKids: 'Gyerekprofilból nem lehet eszközt csatlakoztatni.',
+  myDevices: 'Bejelentkezett eszközök', thisDevice: 'ez az eszköz', signOutDevice: 'Kiléptetés', signOutOthers: 'Kiléptetés mindenhonnan (ezen kívül)',
+  signedOutN: n => `${n} eszköz kiléptetve.`, lastActive: 'Utoljára aktív', aDevices: 'Eszközök',
+  platforms: { web: 'Böngésző', android: 'Android', androidtv: 'Android TV', ios: 'iOS', tizen: 'Samsung TV', webos: 'LG TV' },
+  qcEnabled: 'Belépés kóddal (Quick Connect)', discEnabled: 'Szerverkeresés a helyi hálózaton (UDP 7359)', on: 'Bekapcsolva', off: 'Kikapcsolva',
   ago: s => { const m = Math.round(s / 60); if (m < 1) return 'most'; if (m < 60) return `${m} perce`; const h = Math.round(m / 60); if (h < 48) return `${h} órája`; return `${Math.round(h / 24)} napja`; },
 };
 
@@ -197,6 +206,14 @@ function parseHash() {
   return { parts: path.split('/').filter(Boolean), q: new URLSearchParams(qs || '') };
 }
 
+// a deep link (e.g. #/quickconnect?code=…) survives the login and profile screens
+function rememberAfter(hash) { try { sessionStorage.setItem('kinora.after', hash); } catch { /* storage blocked */ } }
+function takeAfter() {
+  let v = null;
+  try { v = sessionStorage.getItem('kinora.after'); sessionStorage.removeItem('kinora.after'); } catch { /* storage blocked */ }
+  return v;
+}
+
 async function loadMe() {
   try { state.me = await GET('/api/me', { noRedirect: true, quiet: true }); }
   catch { state.me = null; }
@@ -213,8 +230,13 @@ async function route() {
   if (p0 === 'setup') return go('#/login');
   if (p0 === 'join' && p1) return viewJoin(p1);
   if (!state.me) await loadMe();
-  if (!state.me) { if (p0 !== 'login') return go('#/login'); return viewLogin(); }
+  if (!state.me) {
+    if (p0 !== 'login') { if (p0 === 'quickconnect') rememberAfter(location.hash); return go('#/login'); }
+    return viewLogin();
+  }
   if (p0 === 'login') return go('#/profiles');
+  if (p0 === 'quickconnect' && state.me.profile) return viewQuickConnect(q.get('code') || '');
+  if (p0 === 'quickconnect') rememberAfter(location.hash);
   if (p0 === 'profiles' || !state.me.profile) return viewProfiles(p1 === 'edit');
   document.title = T.appName;
   try {
@@ -287,6 +309,7 @@ function shell(active, ...content) {
     h('button', { role: 'menuitem', onclick: () => POST('/api/profiles/leave').then(() => { state.me.profile = null; go('#/profiles'); }) }, T.switchProfile),
     h('a', { role: 'menuitem', href: '#/party' }, T.joinParty),
     h('a', { role: 'menuitem', href: '#/account' }, T.account),
+    !p.is_kids && !me.profile_locked && h('a', { role: 'menuitem', href: '#/quickconnect' }, T.connectDevice),
     h('hr'),
     h('button', { role: 'menuitem', onclick: () => POST('/api/logout').then(() => { state.me = null; go('#/login'); }) }, T.logout));
   const avatarBtn = h('button.avatar', { style: { background: p.color }, 'aria-label': p.name, 'aria-haspopup': 'menu', onclick: e => { e.stopPropagation(); menuPop.classList.toggle('hidden'); } }, p.name.slice(0, 1).toUpperCase());
@@ -400,7 +423,7 @@ async function viewProfiles(editMode) {
 }
 
 async function selectProfile(p) {
-  const done = async () => { await loadMe(); state.facets = null; go('#/home'); };
+  const done = async () => { await loadMe(); state.facets = null; go(takeAfter() || '#/home'); };
   if (!p.has_pin) { await POST(`/api/profiles/${p.id}/select`, {}); return done(); }
   const pin = h('input.pin-input', { type: 'password', inputmode: 'numeric', maxlength: 8, autocomplete: 'off', 'aria-label': T.pinLabel });
   const m = modal(T.pinTitle(p.name), h('form', { onsubmit: async e => {
@@ -992,7 +1015,59 @@ async function viewAccount() {
   main.append(h('div.page-head', null, h('h1', null, T.account)),
     h('div.panel', { class: 'narrow' }, h('h2', null, 'Jelszócsere'), field('Jelenlegi jelszó', cur), field('Új jelszó', nw),
       h('button.btn.primary', { onclick: async () => { await POST('/api/me/password', { current: cur.value, new: nw.value }); cur.value = nw.value = ''; toast(T.saved); } }, T.save)),
+    devicesPanel(),
     h('p.muted', null, `${state.me.user.username} · ${state.me.server_name} · ${T.version} ${state.me.version}`));
+}
+
+function deviceRow(d, onChange, showUser) {
+  return h('div.entry', null, h('div', null,
+    h('div', null, h('strong', null, d.name || T.platforms[d.platform] || d.platform), d.current && h('span.muted', null, ' · ' + T.thisDevice)),
+    h('p.muted.small', null, [showUser && d.username, T.platforms[d.platform] || d.platform, d.app_version && 'v' + d.app_version, d.ip,
+      T.lastActive + ': ' + T.ago(Date.now() / 1000 - d.last_seen)].filter(Boolean).join(' · ')),
+    !d.current && h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/devices/' + d.id); toast(T.deleted); onChange(); } }, T.signOutDevice)));
+}
+
+function devicesPanel() {
+  const box = h('div.panel', { class: 'narrow' });
+  const load = async () => {
+    const r = await GET('/api/devices');
+    put(box, h('h2', null, T.myDevices), r.devices.map(d => deviceRow(d, load)),
+      r.devices.length > 1 && h('button.btn', { onclick: async () => { const x = await api('DELETE', '/api/devices'); toast(T.signedOutN(x.removed)); load(); } }, T.signOutOthers));
+  };
+  load();
+  return box;
+}
+
+// ===================================================================== quick connect (approve a TV / phone)
+async function viewQuickConnect(code) {
+  const main = shell('account');
+  const me = state.me;
+  if (me.profile.is_kids || me.profile_locked) { main.append(h('div.center', { class: 'tall' }, h('p.lede', null, T.qcKids))); return; }
+  const box = h('div.auth');
+  main.append(h('div.center', { class: 'tall' }, box));
+  const inp = h('input.pin-input', { type: 'text', inputmode: 'numeric', maxlength: 7, autocomplete: 'off', 'aria-label': T.qcCode, value: code });
+  const ask = () => { put(box, h('form', { onsubmit: async e => { e.preventDefault(); await lookup(inp.value); } },
+    h('h1', null, T.connectDevice), h('p.lede', null, T.qcLede), inp, h('button.btn.primary.big', { type: 'submit', class: 'wide mt3' }, T.next))); inp.focus(); };
+  async function lookup(c) {
+    let info;
+    try { info = await POST('/api/quickconnect/lookup', { code: c }); } catch { return ask(); }
+    const radios = [[0, T.qcAnyProfile, null], ...me.profiles.map(p => [p.id, p.name, p])].map(([id, label, p]) =>
+      h('label.check', null, h('input', { type: 'radio', name: 'qcp', value: id, checked: p ? p.id === me.profile.id : false }), ' ', label,
+        p && p.is_kids ? ' (' + T.kids + ')' : '', p && p.has_pin ? ' – PIN' : ''));
+    put(box, h('h1', null, T.connectDevice), h('p.lede', null, T.qcWants(info.device_name, T.platforms[info.platform] || info.platform)),
+      h('div.code', null, info.code),
+      h('fieldset', { class: 'mt3' }, h('legend', null, T.qcProfile), radios),
+      h('p.muted.small', null, T.qcPinNote, ' ', T.qcKidsNote),
+      h('div.row-gap', { class: 'mt3' },
+        h('button.btn.primary.big', { onclick: async () => {
+          const pid = +(box.querySelector('input[name=qcp]:checked')?.value || 0);
+          await POST('/api/quickconnect/approve', { code: info.code, profile_id: pid });
+          put(box, h('h1', null, T.connectDevice), h('p.lede', null, T.qcApproved), h('a.btn', { href: '#/home' }, T.home));
+        } }, T.approve),
+        h('button.btn', { onclick: async () => { await POST('/api/quickconnect/approve', { code: info.code, action: 'deny' }); toast(T.qcDenied); ask(); } }, T.deny)));
+    box.querySelector('button.primary')?.focus();
+  }
+  if (code && code.replace(/[^0-9]/g, '').length === 6) await lookup(code); else ask();
 }
 
 // ===================================================================== party join
@@ -1498,11 +1573,11 @@ function partyClient(code, player, stage, p) {
 async function viewAdmin(tab) {
   if (!state.me.user.is_admin) return go('#/home');
   const main = shell('admin');
-  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['settings', T.aSettings]];
+  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['settings', T.aSettings]];
   const body = h('div');
   main.append(h('div.page-head', null, h('h1', null, T.admin)), h('div.admin', null,
     h('nav.admin-nav', { 'aria-label': T.admin }, tabs.map(([k, l]) => h('a' + (k === tab ? '.on' : ''), { href: '#/admin/' + k }, l))), body));
-  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, settings: adminSettings }[tab];
+  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, settings: adminSettings }[tab];
   if (fn) await fn(body);
 }
 
@@ -1683,9 +1758,16 @@ async function adminConnect(body) {
       h('pre.code', null, 'location / {\n  proxy_pass http://127.0.0.1:8096;\n  proxy_http_version 1.1;\n  proxy_set_header Upgrade $http_upgrade;\n  proxy_set_header Connection "upgrade";\n  proxy_set_header Host $host;\n  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n  proxy_set_header X-Forwarded-Proto $scheme;\n  proxy_buffering off;\n  client_max_body_size 0;\n}')));
 }
 
+async function adminDevices(body) {
+  const r = await GET('/api/admin/devices');
+  put(body, h('div.panel', null, h('h2', null, T.aDevices), r.devices.map(d => deviceRow(d, () => adminDevices(body), true))));
+}
+
 async function adminSettings(body) {
   const s = await GET('/api/admin/settings');
+  const onoff = [['1', T.on], ['0', T.off]];
   put(body, 
-    h('div.panel', null, h('h2', null, T.aSettings), settingsForm(s.values, s.env, [['server_name', T.serverName], ['public_url', T.publicUrl, 'url'], ['scan_interval_min', T.scanInterval, 'number']], () => { state.status = null; })),
+    h('div.panel', null, h('h2', null, T.aSettings), settingsForm(s.values, s.env, [['server_name', T.serverName], ['public_url', T.publicUrl, 'url'], ['scan_interval_min', T.scanInterval, 'number'],
+      ['quickconnect_enabled', T.qcEnabled, 'select', onoff], ['discovery_enabled', T.discEnabled, 'select', onoff]], () => { state.status = null; })),
     h('div.panel', null, h('h2', null, 'Mentés'), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
 }

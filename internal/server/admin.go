@@ -149,7 +149,8 @@ func (s *Server) handleInviteDelete(w http.ResponseWriter, r *http.Request, c *r
 
 // ------------------------------------------------------------------ settings
 
-var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder"}
+var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder",
+	"quickconnect_enabled", "discovery_enabled", "brand_accent"}
 
 // SettingEnv maps settings to the environment variables that can force them.
 var SettingEnv = map[string]string{
@@ -159,6 +160,9 @@ var SettingEnv = map[string]string{
 	"tmdb_key":          "KINORA_TMDB_KEY",
 	"metadata_lang":     "KINORA_METADATA_LANG",
 	"encoder":           "KINORA_ENCODER",
+	"quickconnect_enabled": "KINORA_QUICKCONNECT",
+	"discovery_enabled":    "KINORA_DISCOVERY",
+	"brand_accent":         "KINORA_ACCENT",
 }
 
 const maskChar = "•"
@@ -221,6 +225,16 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 				return
 			}
 			v = strings.TrimRight(v, "/")
+		case "quickconnect_enabled", "discovery_enabled":
+			if v != "0" && v != "1" {
+				writeErr(w, http.StatusBadRequest, "a kapcsoló értéke 0 vagy 1 lehet")
+				return
+			}
+		case "brand_accent":
+			if v != "" && !reHexColor.MatchString(v) {
+				writeErr(w, http.StatusBadRequest, "az akcentszín #rrggbb formátumú legyen")
+				return
+			}
 		case "server_name":
 			if v == "" {
 				writeErr(w, http.StatusBadRequest, "a szerver neve nem lehet üres")

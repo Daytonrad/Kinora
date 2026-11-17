@@ -38,6 +38,10 @@ type Config struct {
 	CacheDir  string
 	WebDir    string // serve the web client from disk (development)
 	MediaRoot string // default start folder of the admin folder picker
+	// CORSOrigins lists extra app origins allowed for Bearer-token CORS (comma separated)
+	CORSOrigins string
+	// DiscoveryPort is the UDP port of LAN server discovery (0 = off)
+	DiscoveryPort int
 }
 
 // Server is the HTTP application.
@@ -48,6 +52,11 @@ type Server struct {
 	started time.Time
 	mux     *http.ServeMux
 	limiter *rateLimiter
+	qc      *quickConnect
+
+	streamKeyOnce sync.Once
+	streamKey     []byte
+	extraOrigins  map[string]bool
 
 	Deps
 	bgCtx context.Context
@@ -68,7 +77,8 @@ type Deps struct {
 
 // New builds the server and its routes.
 func New(cfg Config, st *store.Store, log *slog.Logger, deps Deps) *Server {
-	s := &Server{cfg: cfg, st: st, log: log, started: time.Now(), mux: http.NewServeMux(), limiter: newRateLimiter(), Deps: deps, bgCtx: deps.Ctx}
+	s := &Server{cfg: cfg, st: st, log: log, started: time.Now(), mux: http.NewServeMux(), limiter: newRateLimiter(), Deps: deps, bgCtx: deps.Ctx,
+		qc: newQuickConnect(), extraOrigins: parseOrigins(cfg.CORSOrigins)}
 	if s.bgCtx == nil {
 		s.bgCtx = context.Background()
 	}
@@ -78,21 +88,32 @@ func New(cfg Config, st *store.Store, log *slog.Logger, deps Deps) *Server {
 
 // Handler returns the root handler with global middleware applied.
 func (s *Server) Handler() http.Handler {
-	return s.securityHeaders(s.logRequests(s.mux))
+	return s.securityHeaders(s.logRequests(s.cors(s.mux)))
 }
 
 // ------------------------------------------------------------------ context
 
 type reqCtx struct {
-	User    *store.User
-	Profile *store.Profile
-	Token   string
+	User        *store.User
+	Profile     *store.Profile
+	Token       string
+	DeviceID    string
+	ProfileLock int64 // >0: session pinned to this profile (Quick Connect kids device)
+	// set when the request was authorised by a ?st= stream token instead of a session
+	ViaStreamToken bool
+	StreamItem     int64 // item the stream token is scoped to (0 = artwork only)
 }
+
+// tokenAllows reports whether a stream-token request may touch itemID.
+func (c *reqCtx) tokenAllows(itemID int64) bool { return !c.ViaStreamToken || c.StreamItem == itemID }
 
 type handler func(w http.ResponseWriter, r *http.Request, c *reqCtx)
 
 const cookieName = "kinora_session"
 
+// tokenFrom returns the session token: the Bearer header, or the cookie for
+// same-origin web requests. Cross-origin app requests never use the cookie
+// (the CORS middleware strips it), so cookie auth cannot ride along with CORS.
 func tokenFrom(r *http.Request) string {
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 		return strings.TrimSpace(h[7:])
@@ -103,25 +124,30 @@ func tokenFrom(r *http.Request) string {
 	return ""
 }
 
+func (s *Server) resolve(r *http.Request) (*reqCtx, error) {
+	tok := tokenFrom(r)
+	ss, err := s.st.SessionFull(tok, clientIP(r))
+	if err != nil {
+		return &reqCtx{Token: tok}, err
+	}
+	return &reqCtx{User: ss.User, Profile: ss.Profile, Token: tok, DeviceID: ss.DeviceID, ProfileLock: ss.ProfileLock}, nil
+}
+
 func (s *Server) public(h handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		c := &reqCtx{Token: tokenFrom(r)}
-		if c.Token != "" {
-			c.User, c.Profile, _ = s.st.Session(c.Token)
-		}
+		c, _ := s.resolve(r)
 		h(w, r, c)
 	}
 }
 
 func (s *Server) authed(h handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tok := tokenFrom(r)
-		u, p, err := s.st.Session(tok)
+		c, err := s.resolve(r)
 		if err != nil {
 			writeErr(w, http.StatusUnauthorized, "bejelentkezés szükséges")
 			return
 		}
-		h(w, r, &reqCtx{User: u, Profile: p, Token: tok})
+		h(w, r, c)
 	}
 }
 
@@ -137,7 +163,7 @@ func (s *Server) withProfile(h handler) http.HandlerFunc {
 
 func (s *Server) admin(h handler) http.HandlerFunc {
 	return s.authed(func(w http.ResponseWriter, r *http.Request, c *reqCtx) {
-		if !c.User.IsAdmin {
+		if !c.User.IsAdmin || c.ProfileLock > 0 {
 			writeErr(w, http.StatusForbidden, "ehhez adminisztrátori jog kell")
 			return
 		}
@@ -356,6 +382,7 @@ func (s *Server) Background(ctx context.Context) {
 			return
 		case <-t.C:
 			s.st.PurgeSessions()
+			s.qc.purge()
 		}
 	}
 }

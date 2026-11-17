@@ -157,13 +157,15 @@ json 'j["mode"]' < "$TMP/remux.json" | grep -qx remux && pass "mkv h264/aac → 
 api POST "/api/items/$SPACE/playback" "{$CAPS,\"start\":10}" > "$TMP/tc.json"
 json 'j["mode"]' < "$TMP/tc.json" | grep -qx transcode && pass "mkv hevc/ac3 → transcode ($(json 'j["encoder"]' < "$TMP/tc.json"))" || fail "transcode: $(cat "$TMP/tc.json")"
 json '"; ".join(j["reasons"])' < "$TMP/tc.json" | grep -q "hevc" && pass "reasons: $(json '"; ".join(j["reasons"])' < "$TMP/tc.json")" || fail "no reasons"
-URL="$(json 'j["url"]' < "$TMP/tc.json")"
+TOKURL="$(json 'j["url"]' < "$TMP/tc.json")"
+URL="${TOKURL%%\?*}"   # the API adds ?st=<stream token> for header-less players
 curl -fsS -b "$JAR" "$BASE$URL" > "$TMP/pl.m3u8" && grep -q seg00000.ts "$TMP/pl.m3u8" && pass "HLS playlist has segments" || fail "playlist: $(cat "$TMP/pl.m3u8")"
 sleep 2
 SEGURL="${URL%index.m3u8}seg00000.ts"
 curl -fsS -b "$JAR" -o "$TMP/seg.ts" "$BASE$SEGURL"
 codecs="$(ffprobe -v error -show_entries stream=codec_name -of csv=p=0 "$TMP/seg.ts" 2>/dev/null | tr -d '\r' | grep -v '^$' | sort -u | tr '\n' ',')"
 [ "$codecs" = "aac,h264," ] && pass "HLS segment decodes as h264+aac" || fail "segment codecs: $codecs"
+curl -fsS "$BASE$TOKURL" | grep -q 'seg00000.ts?st=' && pass "stream token: playlist without cookie, segments carry the token" || fail "stream token playlist"
 curl -sS -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE${URL%index.m3u8}..%2F..%2Fkinora.db" | grep -qx 400 && pass "HLS path traversal rejected" || fail "traversal not rejected"
 SUBIDX="$(api GET "/api/items/$BIG" | json "[s['type_index'] for s in j['item']['streams'] if s['type']=='subtitle' and s['lang']=='hun'][0]")"
 curl -fsS -b "$JAR" "$BASE/api/items/$BIG/subtitles/$SUBIDX" > "$TMP/sub.vtt"
