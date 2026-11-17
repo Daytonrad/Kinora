@@ -1,0 +1,9 @@
+// Shared build settings of the Kinora iOS app (committed).
+// Personal signing lives in Local.xcconfig (git-ignored); see Local.example.xcconfig.
+
+KINORA_BUNDLE_ID = io.github.scotylucas.kinora
+DEVELOPMENT_TEAM =
+MARKETING_VERSION = 0.4.0
+CURRENT_PROJECT_VERSION = 1
+
+#include? "Local.xcconfig"
