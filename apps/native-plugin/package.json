@@ -1,0 +1,14 @@
+{
+  "name": "kinora-native",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kinora native helpers for iOS (Capacitor SPM plugin): device info, LAN server search, keep-awake. Android ships the same plugin inside apps/android.",
+  "main": "index.js",
+  "files": ["Package.swift", "ios/", "index.js"],
+  "capacitor": {
+    "ios": { "src": "ios" }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "8.6.0"
+  }
+}
