@@ -648,3 +648,23 @@ func TestDiscovery(t *testing.T) {
 func jsonUnmarshal(b []byte, v any) { json.Unmarshal(b, v) }
 
 func jsonDecode(r io.Reader, v any) { json.NewDecoder(r).Decode(v) }
+
+func TestSearchGroupsEpisodesOfOneSeries(t *testing.T) {
+	c, _ := newTestServer(t)
+	selectFirstProfile(t, c)
+	var flat, grouped []store.Item
+	c.do("GET", "/api/search?q=Pilot", nil, &flat)
+	c.do("GET", "/api/search?q=Pilot&group=1", nil, &grouped)
+	eps := 0
+	for _, it := range flat {
+		if it.Kind == "episode" {
+			eps++
+		}
+	}
+	if eps < 2 {
+		t.Fatalf("expected several Pilot episodes ungrouped: %d", eps)
+	}
+	if len(grouped) != 1 || grouped[0].Kind != "series" || grouped[0].Title != "Test Show" {
+		t.Fatalf("grouped: %+v", grouped)
+	}
+}

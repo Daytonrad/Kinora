@@ -152,7 +152,7 @@ route('search', async (_p, q) => {
     history.replaceState(null, '', '#/search' + (v ? '?q=' + encodeURIComponent(v) : ''));
     if (v.length < 2) { put(results, h('p.muted', null, T.searchHint)); return; }
     const my = ++seq;
-    const r = await api().get<Item[]>('/api/search?q=' + encodeURIComponent(v));
+    const r = await api().get<Item[]>('/api/search?group=1&q=' + encodeURIComponent(v)); // one card per series
     if (my !== seq) return;
     put(results, r.length ? r.map(it => card(it, 'poster')) : h('p.muted', null, T.searchEmpty));
   };

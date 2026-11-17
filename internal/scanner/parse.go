@@ -141,6 +141,24 @@ func ParseFile(rel, libKind string) Parsed {
 	return parseMovie(dirs, base)
 }
 
+// EpisodeInMoviesLibrary parses a file of a movies library as an episode when its name
+// carries an explicit S01E02. The scanner uses it only when at least two files belong to
+// the same series, so a single oddly named film stays a film.
+func EpisodeInMoviesLibrary(rel string) (Parsed, bool) {
+	rel = strings.TrimPrefix(path.Clean(strings.ReplaceAll(rel, `\`, "/")), "/")
+	dir, file := path.Split(rel)
+	dir = strings.TrimSuffix(dir, "/")
+	base := strings.TrimSuffix(file, path.Ext(file))
+	if !reSxxEyy.MatchString(base) {
+		return Parsed{}, false
+	}
+	var dirs []string
+	if dir != "" {
+		dirs = strings.Split(dir, "/")
+	}
+	return parseEpisode(dirs, base, false)
+}
+
 func parseMovie(dirs []string, base string) Parsed {
 	title, year := CleanName(base)
 	if len(dirs) > 0 {

@@ -89,6 +89,13 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 			hero = full
 		}
 	}
+	// rows of titles (not "Folytatás"/"Következő rész", where the episode itself matters):
+	// several episodes of one series become one series card
+	for i := range rows {
+		if rows[i].ID != "continue" && rows[i].ID != "nextup" {
+			rows[i].Items = s.groupEpisodes(p, rows[i].Items)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"hero": hero, "rows": rows})
 }
 
@@ -311,6 +318,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, c *reqCtx)
 	if err != nil {
 		s.internalErr(w, r, err)
 		return
+	}
+	if r.URL.Query().Get("group") == "1" { // clients showing cards: one card per series
+		items = s.groupEpisodes(c.Profile, items)
 	}
 	writeJSON(w, http.StatusOK, items)
 }

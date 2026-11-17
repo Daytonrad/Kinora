@@ -327,6 +327,25 @@ func (sc *Scanner) scan(ctx context.Context, libID int64) error {
 		f.listing = l
 		f.solo = videosPerDir[f.dir] == 1
 		f.parsed = ParseFile(f.rel, lib.Kind)
+	}
+	// a series added as a movies library: two or more S01E02-named files of the same
+	// series become series → season → episodes instead of separate "films"
+	if lib.Kind == "movies" {
+		alt := map[*fileEntry]Parsed{}
+		perSeries := map[string]int{}
+		for _, f := range files {
+			if p, ok := EpisodeInMoviesLibrary(f.rel); ok {
+				alt[f] = p
+				perSeries[p.SeriesKey]++
+			}
+		}
+		for f, p := range alt {
+			if perSeries[p.SeriesKey] >= 2 {
+				f.parsed = p
+			}
+		}
+	}
+	for _, f := range files {
 		f.sig = fileSig(f)
 	}
 
@@ -371,7 +390,7 @@ func (sc *Scanner) scan(ctx context.Context, libID int64) error {
 	unchanged := 0
 	for _, f := range files {
 		k := f.known
-		if k == nil || k.Path != f.abs || k.Size != f.size || k.Mtime != f.mtime || k.Sig != f.sig || k.Missing {
+		if k == nil || k.Path != f.abs || k.Size != f.size || k.Mtime != f.mtime || k.Sig != f.sig || k.Missing || k.Kind != f.parsed.Kind {
 			changed = append(changed, f)
 		} else {
 			unchanged++

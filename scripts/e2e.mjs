@@ -257,7 +257,20 @@ try {
   await page.mouse.move(600, 400);
   await shot(page, '19-party-host');
   await shot(pageB, '20-party-guest');
+  // the guest leaves with the dedicated button and lands on home; back does not bounce into the party
+  await pageB.click('.party-leave');
+  await pageB.waitForFunction(() => location.hash === '#/home', null, { timeout: 8000 }).then(() => ok('"Kilépés a watch partyból" → home')).catch(() => bad('party leave did not go home'));
+  await pageB.goBack().catch(() => {});
+  await pageB.waitForTimeout(1500);
+  const stuck = await pageB.evaluate(() => location.hash.indexOf('party=') >= 0);
+  stuck ? bad('back bounced into the party again') : ok('back after leaving does not re-enter the party');
   await ctxB.close();
+
+  step('search groups episodes of one series');
+  await page.goto(`${BASE}/#/search?q=Pilot`);
+  await page.waitForSelector('.card', { timeout: 10000 });
+  const cards = await page.$$eval('.card', els => els.length);
+  cards === 1 ? ok('three "Pilot" episodes → one series card') : bad('search cards: ' + cards);
 
   step('phone layout');
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, storageState: await ctxA.storageState(), isMobile: true, hasTouch: true });

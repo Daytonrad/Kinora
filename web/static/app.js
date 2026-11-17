@@ -52,7 +52,7 @@ const T = {
   encoder: 'Encoder', nextEp: 'Következő rész', nextIn: n => `Indul ${n} mp múlva`, playNow: 'Indítás most', dismiss: 'Mégse',
   playErr: 'A lejátszás nem sikerült', retry: 'Újra', forceTranscode: 'Próbáld átkódolva', loading: 'Betöltés…', unknownLang: 'ismeretlen',
   // party
-  party: 'Watch party', partyCode: 'Kód', partyLink: 'Meghívó link', partyMembers: 'Nézők', partyEveryone: 'Mindenki irányíthat', partyChatPh: 'Üzenet…',
+  party: 'Watch party', partyLeave: 'Kilépés a watch partyból', partyCode: 'Kód', partyLink: 'Meghívó link', partyMembers: 'Nézők', partyEveryone: 'Mindenki irányíthat', partyChatPh: 'Üzenet…',
   partySend: 'Küldés', partyWaiting: names => `Várakozás: ${names.join(', ')}…`, partyJoinTitle: 'Csatlakozás watch partyhoz', partyCodeLabel: '6 karakteres kód',
   partyNotFound: 'Nincs ilyen watch party. Ellenőrizd a kódot.', partyLost: 'A kapcsolat megszakadt, újracsatlakozás…', host: 'házigazda', buffering: 'tölt…',
   // admin
@@ -629,7 +629,7 @@ function fillHero(sec, it, reason) {
 async function viewSearch(q) {
   const main = shell('search');
   main.append(h('div.page-head', null, h('h1', null, T.searchTitle(q))));
-  const items = await GET('/api/search?q=' + encodeURIComponent(q));
+  const items = await GET('/api/search?group=1&q=' + encodeURIComponent(q)); // one card per series
   main.append(items.length ? h('div.grid', null, items.map(it => card(it, 'poster'))) : h('p.empty', null, T.searchEmpty));
   setTimeout(() => { const s = $('.search-box input'); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 0);
 }
@@ -1117,7 +1117,7 @@ async function viewQuickConnect(code) {
 // ===================================================================== party join
 async function viewPartyJoin(code) {
   if (code) {
-    try { const info = await GET('/api/party/' + encodeURIComponent(code), { quiet: true }); return go(`#/play/${info.item_id}?party=${info.code}`); }
+    try { const info = await GET('/api/party/' + encodeURIComponent(code), { quiet: true }); location.replace(`#/play/${info.item_id}?party=${info.code}`); return; }
     catch (e) { if (e.status !== 401 && e.status !== 428) toast(e.message || T.partyNotFound, true); }
   }
   const main = shell('party');
@@ -1545,6 +1545,7 @@ async function viewPlayer(id, q) {
     if (exiting) return;
     exiting = true;
     await report();
+    if (partyCode) { location.replace('#/home'); return; } // leaving a party lands on home, and back does not rejoin
     if (history.length > 1) history.back(); else go('#/item/' + id);
   }
 
@@ -1573,7 +1574,8 @@ async function viewPlayer(id, q) {
   subEl.textContent = item.kind === 'episode' ? `${T.ep(item.season_num, item.episode_num)} · ${item.title}` : [item.year, item.content_rating].filter(Boolean).join(' · ');
   document.title = item.title + ' – ' + T.appName;
   const resumeAt = q.has('t') ? +q.get('t') : (item.user_data.position || 0);
-  if (partyCode) party = partyClient(partyCode, player, stage, { video, pos, seekTo, getItemId: () => id, onItem: nid => { exiting = true; go(`#/play/${nid}?party=${partyCode}`); } });
+  if (partyCode) party = partyClient(partyCode, player, stage, { video, pos, seekTo, getItemId: () => id, leave: () => exit(),
+    onItem: nid => { exiting = true; location.replace(`#/play/${nid}?party=${partyCode}`); } });
   await start(partyCode ? 0 : resumeAt, { paused: !!partyCode });
   if (info) {
     chooseInitialSubtitle(); applySubtitle(); chapterMarks();
@@ -1592,6 +1594,7 @@ function partyClient(code, player, stage, p) {
   const link = location.origin + '/#/party/' + code;
   const reacts = h('div.reacts');
   panel.append(
+    h('button.btn.danger.party-leave', { onclick: () => p.leave() }, icon('back'), T.partyLeave),
     h('header', null, h('div.row-gap', { class: 'spread' }, h('div', null, h('div.code', { 'aria-label': T.party + ' ' + code }, code)),
       h('button.btn', { onclick: () => modal(T.partyLink, h('div', null, qrImg(link), h('p.mono', { class: 'mt3 break-all' }, link)), close => [h('button.btn', { onclick: () => copyText(link) }, T.copy), h('button.btn.primary', { onclick: close }, T.close)]) }, T.partyLink)),
       h('label.check.hidden', { class: 'mt3 mb0' }, everyone, T.partyEveryone), status),
