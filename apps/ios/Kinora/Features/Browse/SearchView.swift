@@ -7,7 +7,7 @@ struct SearchView: View {
     @State private var results: [Item]?
     @State private var error: String?
 
-    private let columns = [GridItem(.adaptive(minimum: 104, maximum: 150), spacing: 14, alignment: .top)]
+    @Environment(\.metrics) private var metrics
 
     var body: some View {
         ScrollView {
@@ -15,13 +15,14 @@ struct SearchView: View {
                 if results.isEmpty {
                     ContentUnavailableView.search(text: query).padding(.top, 60)
                 } else {
-                    LazyVGrid(columns: columns, spacing: 20) {
+                    LazyVGrid(columns: metrics.posterGrid, spacing: metrics.regular ? 28 : 20) {
                         ForEach(results) { item in
-                            NavigationLink(value: item) { PosterCard(item: item, width: nil) }
+                            NavigationLink(value: item) { PosterCard(item: item, fillsColumn: true) }
                                 .buttonStyle(.plain)
                         }
                     }
-                    .padding(16)
+                    .padding(.horizontal, metrics.regular ? metrics.gutter : 16)
+                    .padding(.vertical, 16)
                 }
             } else if let error {
                 LoadingState(error: error) { Task { await search(query) } }

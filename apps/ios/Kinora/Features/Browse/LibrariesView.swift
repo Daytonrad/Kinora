@@ -67,19 +67,20 @@ struct LibraryView: View {
     @State private var loadingMore = false
     @State private var error: String?
 
-    private let columns = [GridItem(.adaptive(minimum: 104, maximum: 150), spacing: 14, alignment: .top)]
+    @Environment(\.metrics) private var metrics
 
     var body: some View {
         ScrollView {
             if loaded {
-                LazyVGrid(columns: columns, spacing: 20) {
+                LazyVGrid(columns: metrics.posterGrid, spacing: metrics.regular ? 28 : 20) {
                     ForEach(items) { item in
-                        NavigationLink(value: item) { PosterCard(item: item, width: nil) }
+                        NavigationLink(value: item) { PosterCard(item: item, fillsColumn: true) }
                             .buttonStyle(.plain)
                             .onAppear { if item.id == items.last?.id { Task { await loadMore() } } }
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, metrics.regular ? metrics.gutter : 16)
+                .padding(.vertical, 16)
                 if loadingMore { ProgressView().padding() }
                 if items.isEmpty {
                     ContentUnavailableView("Üres könyvtár", systemImage: "film.stack").padding(.top, 60)

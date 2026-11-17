@@ -93,12 +93,51 @@ private enum Placeholder {
     }
 }
 
+// MARK: - layout metrics
+
+/// Sizes that follow the width: a phone (compact) or an iPad (regular). In iPad Split View
+/// or Slide Over the width turns compact, and the phone sizes come back on their own.
+struct Metrics: Equatable {
+    var regular: Bool
+
+    /// Poster card width in the horizontal rows.
+    var poster: CGFloat { regular ? 168 : 120 }
+    /// 16:9 card width in the horizontal rows.
+    var wide: CGFloat { regular ? 320 : 240 }
+    /// Side margin of the pages.
+    var gutter: CGFloat { regular ? 32 : 20 }
+    /// Gap between cards.
+    var spacing: CGFloat { regular ? 20 : 14 }
+    /// Section title size.
+    var sectionTitle: CGFloat { regular ? 28 : 22 }
+    /// Poster grid of the library and search pages.
+    var posterGrid: [GridItem] {
+        [GridItem(.adaptive(minimum: regular ? 150 : 104, maximum: regular ? 210 : 150), spacing: spacing, alignment: .top)]
+    }
+    /// Wide hero artwork: on an iPad a 16:10 picture would fill the whole screen.
+    func heroRatio(_ phone: CGFloat) -> CGFloat { regular ? max(phone, 2.2) : phone }
+    /// Longest comfortable line of running text.
+    var readableWidth: CGFloat { 760 }
+}
+
+extension EnvironmentValues {
+    var metrics: Metrics {
+        #if os(iOS)
+        Metrics(regular: horizontalSizeClass == .regular)
+        #else
+        Metrics(regular: true)
+        #endif
+    }
+}
+
 // MARK: - cards
 
 /// 2:3 poster with title and a second line (year or episode).
 struct PosterCard: View {
     var item: Item
-    var width: CGFloat? = 120
+    /// In a grid the column sets the width; in a row the card has its own.
+    var fillsColumn = false
+    @Environment(\.metrics) private var metrics
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -107,10 +146,11 @@ struct PosterCard: View {
                 .overlay(alignment: .bottom) { ProgressStripe(item: item) }
                 .overlay(alignment: .topTrailing) { WatchedBadge(item: item) }
                 .clipShape(.rect(cornerRadius: 8))
+                .pointerLift(cornerRadius: 8)
             Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(1)
             Text(Format.subtitle(item)).font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
         }
-        .frame(width: width)
+        .frame(width: fillsColumn ? nil : metrics.poster)
         .accessibilityElement(children: .combine)
     }
 }
@@ -118,7 +158,7 @@ struct PosterCard: View {
 /// 16:9 card for continue-watching style rows and episodes.
 struct WideCard: View {
     var item: Item
-    var width: CGFloat = 240
+    @Environment(\.metrics) private var metrics
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -127,20 +167,33 @@ struct WideCard: View {
                 .overlay(alignment: .bottom) { ProgressStripe(item: item) }
                 .overlay(alignment: .topTrailing) { WatchedBadge(item: item) }
                 .clipShape(.rect(cornerRadius: 8))
+                .pointerLift(cornerRadius: 8)
             Text(item.kind == .episode ? (item.seriesTitle ?? item.title) : item.title)
                 .font(.subheadline.weight(.semibold)).lineLimit(1)
             Text(item.kind == .episode ? [item.episodeLabel, item.title].compactMap { $0 }.joined(separator: " · ") : Format.subtitle(item))
                 .font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
         }
-        .frame(width: width)
+        .frame(width: metrics.wide)
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension View {
+    /// iPad trackpad or mouse: the artwork lifts under the pointer, like the system's own cards.
+    func pointerLift(cornerRadius: CGFloat) -> some View {
+        #if os(iOS)
+        contentShape(.hoverEffect, .rect(cornerRadius: cornerRadius)).hoverEffect(.lift)
+        #else
+        self
+        #endif
     }
 }
 
 struct ProgressStripe: View {
     var item: Item
     var body: some View {
-        if let p = item.progress {
+        if let raw = item.progress {
+            let p = min(max(raw, 0), 1)
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Rectangle().fill(.black.opacity(0.55))
@@ -247,6 +300,7 @@ struct LoadingState: View {
 /// Profile switch / server / logout, in every tab's toolbar.
 struct AccountMenu: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmLogout = false
 
     var body: some View {
         Menu {
@@ -259,7 +313,7 @@ struct AccountMenu: View {
             }
             Button("Másik szerver", systemImage: "server.rack") { model.showServers() }
             Button("Kijelentkezés", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
-                Task { await model.logout() }
+                confirmLogout = true
             }
         } label: {
             if let p = model.me?.profile {
@@ -269,6 +323,10 @@ struct AccountMenu: View {
             }
         }
         .accessibilityLabel("Fiók")
+        .accessibilityValue(model.me?.profile?.name ?? "")
+        .confirmationDialog("Biztosan kijelentkezel?", isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button("Kijelentkezés", role: .destructive) { Task { await model.logout() } }
+        }
     }
 }
 

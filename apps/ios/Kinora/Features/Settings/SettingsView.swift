@@ -21,6 +21,7 @@ struct SettingsView: View {
     @State private var newAddress = ""
     @State private var addressBusy = false
     @State private var confirmLogout = false
+    @State private var confirmRemoveOthers = false
     @State private var notice: String?
     @FocusState private var focused: LangField?
 
@@ -79,6 +80,11 @@ struct SettingsView: View {
             }
             .confirmationDialog("Biztosan kijelentkezel?", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Kijelentkezés", role: .destructive) { Task { await model.logout() } }
+            }
+            .confirmationDialog("Kiléptetsz minden más eszközt?", isPresented: $confirmRemoveOthers, titleVisibility: .visible) {
+                Button("Kiléptetés mindenhonnan", role: .destructive) { removeOthers() }
+            } message: {
+                Text("Ezen a telefonon bejelentkezve maradsz; a többi eszközön újra be kell lépni.")
             }
         }
         .tint(Theme.amber)
@@ -231,7 +237,8 @@ struct SettingsView: View {
                         }
                 }
                 if canEdit && devices.count > 1 {
-                    Button("Kiléptetés mindenhonnan (ezen kívül)", role: .destructive) { removeOthers() }
+                    Button("Kiléptetés mindenhonnan (ezen kívül)", role: .destructive) { confirmRemoveOthers = true }
+                        .foregroundStyle(Theme.danger)
                 }
             } else if let devicesError {
                 ErrorText(message: devicesError)
@@ -277,7 +284,7 @@ struct SettingsView: View {
                 if let notice { Text(notice).font(.callout).foregroundStyle(Theme.muted) }
             }
             Button { model.showServers() } label: {
-                Label("Szerverváltás", systemImage: "server.rack")
+                Label("Másik szerver", systemImage: "server.rack")
             }
             Button(role: .destructive) { confirmLogout = true } label: {
                 Label("Kijelentkezés", systemImage: "rectangle.portrait.and.arrow.right")

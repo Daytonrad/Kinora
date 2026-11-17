@@ -72,7 +72,7 @@ struct TVRowStyle: ButtonStyle {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .foregroundStyle(focused ? Theme.amberInk : Theme.plasterBright)
                 .background(focused ? Theme.amber : Theme.panel, in: .rect(cornerRadius: 16))
-                .scaleEffect(focused ? 1.03 : 1)
+                .scaleEffect(focused ? (configuration.isPressed ? 0.99 : 1.03) : 1)
                 .shadow(color: .black.opacity(focused ? 0.5 : 0), radius: 16, y: 8)
                 .animation(.easeOut(duration: 0.15), value: focused)
                 .environment(\.tvCardFocused, focused)
@@ -118,6 +118,9 @@ struct TVErrorText: View {
     var body: some View {
         if let message {
             Text(message).font(.callout).foregroundStyle(Theme.danger)
+                .fixedSize(horizontal: false, vertical: true)
+                .onAppear { AccessibilityNotification.Announcement(message).post() }
+                .onChange(of: message) { _, m in AccessibilityNotification.Announcement(m).post() }
         }
     }
 }

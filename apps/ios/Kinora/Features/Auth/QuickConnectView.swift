@@ -39,13 +39,14 @@ struct QuickConnectView: View {
                 }
             } else if failed {
                 ErrorText(message: message)
+                Button("Újra") { attempt += 1 }.buttonStyle(PrimaryButtonStyle())
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(40)
             }
 
             Button { model.go(.login) } label: { Label("Belépés jelszóval", systemImage: "person") }
                 .buttonStyle(SecondaryButtonStyle())
-            Button("Másik szerver") { model.showServers() }
+            OtherServerButton()
         }
         .task(id: attempt) { await run() }
     }

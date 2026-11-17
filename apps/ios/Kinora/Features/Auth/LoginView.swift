@@ -27,6 +27,7 @@ struct LoginView: View {
                     .focused($field, equals: .username)
                     .onSubmit { field = .password }
                     .kinoraField()
+                    .accessibilityLabel("Felhasználónév")
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Jelszó").font(.subheadline).foregroundStyle(Theme.muted)
@@ -36,6 +37,7 @@ struct LoginView: View {
                     .focused($field, equals: .password)
                     .onSubmit(login)
                     .kinoraField()
+                    .accessibilityLabel("Jelszó")
             }
 
             ErrorText(message: error ?? model.notice)
@@ -44,7 +46,7 @@ struct LoginView: View {
                 if busy { ProgressView().tint(Theme.amberInk) } else { Text("Belépés") }
             }
             .buttonStyle(PrimaryButtonStyle())
-            .disabled(busy || username.isEmpty || password.isEmpty)
+            .disabled(busy || username.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty)
 
             if model.status?.quickconnectEnabled != false {
                 Button { model.notice = nil; model.go(.quickConnect) } label: {
@@ -53,8 +55,7 @@ struct LoginView: View {
                 .buttonStyle(SecondaryButtonStyle())
             }
 
-            Button("Másik szerver") { model.showServers() }
-                .padding(.top, 4)
+            OtherServerButton()
         }
         .onAppear {
             username = model.server?.username ?? ""
@@ -63,7 +64,7 @@ struct LoginView: View {
     }
 
     private func login() {
-        guard !busy, !username.isEmpty, !password.isEmpty else { return }
+        guard !busy, !username.trimmingCharacters(in: .whitespaces).isEmpty, !password.isEmpty else { return }
         error = nil
         model.notice = nil
         busy = true

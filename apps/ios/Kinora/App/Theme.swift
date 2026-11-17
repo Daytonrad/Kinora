@@ -39,6 +39,7 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
+            .padding(.horizontal, 16)
             .frame(maxWidth: .infinity, minHeight: 50)
             .foregroundStyle(Theme.amberInk)
             .background(Theme.amber.opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.4), in: .rect(cornerRadius: 10))
@@ -47,11 +48,14 @@ struct PrimaryButtonStyle: ButtonStyle {
 
 /// Outlined secondary button.
 struct SecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
+            .padding(.horizontal, 16)
             .frame(maxWidth: .infinity, minHeight: 50)
-            .foregroundStyle(Theme.plasterBright)
+            .foregroundStyle(Theme.plasterBright.opacity(enabled ? 1 : 0.45))
             .background(Theme.panel.opacity(configuration.isPressed ? 0.6 : 1), in: .rect(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.rule))
     }

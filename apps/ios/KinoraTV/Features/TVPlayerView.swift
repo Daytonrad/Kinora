@@ -20,6 +20,8 @@ struct TVPlayerView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var seekFlash: Double?
     @State private var flashTask: Task<Void, Never>?
+    /// With VoiceOver the controls stay up: a hidden control can't be reached.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     var body: some View {
         ZStack {
@@ -131,7 +133,7 @@ struct TVPlayerView: View {
                 Text("Következő rész" + (player.nextCountdown.map { " · \($0) mp" } ?? ""))
                     .font(.callout.weight(.semibold)).foregroundStyle(Theme.amber)
                 HStack(spacing: 20) {
-                    Button("Bezárás") { player.dismissNext(); focus = .timeline }
+                    Button("Mégse") { player.dismissNext(); focus = .timeline }
                         .buttonStyle(TVPillStyle())
                         .focused($focus, equals: .dismissNext)
                     Button { player.playNext() } label: {
@@ -191,7 +193,8 @@ struct TVPlayerView: View {
                 Menu {
                     ForEach(Array(player.chapters.enumerated()), id: \.offset) { i, c in
                         Button { player.seek(to: c.start) } label: {
-                            check("\(c.title ?? "\(i + 1). fejezet") · \(Self.clock(c.start))", c == player.currentChapter)
+                            let name = c.title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(i + 1). fejezet"
+                            check("\(name) · \(Self.clock(c.start))", c == player.currentChapter)
                         }
                     }
                 } label: { Label("Fejezetek", systemImage: "list.bullet") }
@@ -228,6 +231,7 @@ struct TVPlayerView: View {
     private func errorPanel(_ message: String) -> some View {
         VStack(spacing: 30) {
             Image(systemName: "exclamationmark.triangle").font(.system(size: 70)).foregroundStyle(Theme.amber)
+            Text("Nem sikerült lejátszani").font(Theme.display(48, weight: .bold))
             Text(message).font(.title3).multilineTextAlignment(.center).frame(maxWidth: 1100)
             if let reasons = player.info?.reasons, !reasons.isEmpty {
                 Text(reasons.joined(separator: " · ")).font(.callout).foregroundStyle(Theme.muted)
@@ -288,7 +292,7 @@ struct TVPlayerView: View {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled, player.isPlaying, focus == .timeline || focus == .skip else { return }
+            guard !Task.isCancelled, player.isPlaying, !voiceOver, focus == .timeline || focus == .skip else { return }
             hide()
         }
     }
@@ -309,7 +313,7 @@ struct TVPlayerView: View {
         switch kind {
         case .recap: "Összefoglaló átugrása"
         case .credits: "Stáblista átugrása"
-        default: "Intro átugrása"
+        default: "Intró átugrása"
         }
     }
 }
@@ -349,6 +353,10 @@ private struct TVTimeline: View {
             .foregroundStyle(Theme.plaster)
         }
         .animation(.easeOut(duration: 0.15), value: focused)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Lejátszási pozíció")
+        .accessibilityValue("\(TVPlayerView.clock(player.position)), hátra \(TVPlayerView.clock(d - player.position))")
+        .accessibilityHint("Balra vagy jobbra 10 másodpercet ugrik.")
     }
 }
 

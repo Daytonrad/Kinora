@@ -236,6 +236,10 @@ struct TVDetailView: View {
     @State private var error: String?
     @State private var season: Int?
     @State private var episodes: [Int: [Item]] = [:]
+    @State private var episodesError: String?
+    /// A failed favorite or watched toggle.
+    @State private var actionError: String?
+    @FocusState private var playFocused: Bool
 
     private var current: Item { detail?.item ?? item }
 
@@ -252,7 +256,7 @@ struct TVDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 50) {
                     header
-                    if let error { TVErrorText(message: error).padding(.horizontal, 80) }
+                    if let message = error ?? actionError { TVErrorText(message: message).padding(.horizontal, 80) }
                     if current.kind == .series || current.kind == .season { seasonsSection }
                     if let similar = detail?.similar, !similar.isEmpty {
                         TVShelf(title: "Hasonlók", items: similar)
@@ -297,12 +301,13 @@ struct TVDetailView: View {
                 }
                 .buttonStyle(TVPillStyle(prominent: true))
                 .disabled(playTarget == nil)
+                .focused($playFocused)
                 if let t = playTarget, t.progress != nil {
                     Button { model.play(t, from: 0) } label: { Label("Elölről", systemImage: "arrow.counterclockwise") }
                         .buttonStyle(TVPillStyle())
                 }
                 Button { Task { await setPlayed(!userData.played) } } label: {
-                    Label(userData.played ? "Megnézve" : "Megnézettnek jelöl",
+                    Label(userData.played ? "Megnézve" : "Megnézettnek jelölés",
                           systemImage: userData.played ? "checkmark.circle.fill" : "checkmark.circle")
                 }
                 .buttonStyle(TVPillStyle())
@@ -340,7 +345,19 @@ struct TVDetailView: View {
             .focusSection()
         }
         if let season, let list = episodes[season] {
-            TVShelf(title: "Részek", items: list, landscape: true, playsDirectly: true)
+            if list.isEmpty {
+                Text("Ebben az évadban nincs rész.").foregroundStyle(Theme.muted).padding(.horizontal, 80)
+            } else {
+                TVShelf(title: "Részek", items: list, landscape: true, playsDirectly: true)
+            }
+        } else if let episodesError {
+            HStack(spacing: 30) {
+                TVErrorText(message: episodesError)
+                Button { Task { await loadEpisodes() } } label: { Label("Újra", systemImage: "arrow.clockwise") }
+                    .buttonStyle(TVPillStyle())
+            }
+            .padding(.horizontal, 80)
+            .focusSection()
         } else if season != nil {
             ProgressView().padding(.horizontal, 80)
         }
@@ -350,7 +367,14 @@ struct TVDetailView: View {
         error = nil
         do {
             let d = try await model.api { [id = item.id] in try await $0.item(id) }
+            let first = detail == nil
             detail = d
+            // A series has nothing to play until its detail arrives, so the focus started
+            // elsewhere (on "mark as watched"): hand it to the play button once it can take it.
+            if first, current.kind == .series || current.kind == .season, playTarget != nil {
+                try? await Task.sleep(for: .milliseconds(50))
+                playFocused = true
+            }
             userData = d.item.userData ?? UserData()
             if current.kind == .season {
                 season = d.item.id
@@ -368,15 +392,28 @@ struct TVDetailView: View {
 
     private func loadEpisodes() async {
         guard let season, episodes[season] == nil else { return }
-        if let list = try? await model.api({ try await $0.children(of: season) }) { episodes[season] = list }
+        episodesError = nil
+        do { episodes[season] = try await model.api { try await $0.children(of: season) } }
+        catch is CancellationError {}
+        catch { if self.season == season { episodesError = error.localizedDescription } }
     }
 
     private func setFavorite(_ on: Bool) async {
-        if let u = try? await model.api({ [id = current.id] in try await $0.setFavorite(id, on) }) { userData = u }
+        actionError = nil
+        do { userData = try await model.api { [id = current.id] in try await $0.setFavorite(id, on) } }
+        catch is CancellationError {}
+        catch { actionError = "Nem sikerült menteni: " + error.localizedDescription }
     }
 
     private func setPlayed(_ on: Bool) async {
-        guard let u = try? await model.api({ [id = current.id] in try await $0.setPlayed(id, on) }) else { return }
+        actionError = nil
+        let u: UserData
+        do { u = try await model.api { [id = current.id] in try await $0.setPlayed(id, on) } }
+        catch is CancellationError { return }
+        catch {
+            actionError = "Nem sikerült menteni: " + error.localizedDescription
+            return
+        }
         userData = u
         if current.kind == .series || current.kind == .season { await load() }
     }
@@ -391,7 +428,11 @@ struct TVLibrariesTab: View {
 
     var body: some View {
         ScrollView {
-            if let libraries {
+            if let libraries, libraries.isEmpty {
+                ContentUnavailableView("Nincs könyvtár", systemImage: "square.grid.2x2",
+                                       description: Text("Az adminisztrátor a webes felületen adhat hozzá könyvtárat."))
+                    .padding(.top, 120)
+            } else if let libraries {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 50), count: 3), spacing: 50) {
                     ForEach(libraries) { lib in
                         NavigationLink(value: lib) {
@@ -427,7 +468,7 @@ struct TVLibrariesTab: View {
         error = nil
         do { libraries = try await model.api { try await $0.libraries() } }
         catch is CancellationError {}
-        catch { self.error = error.localizedDescription }
+        catch { if libraries == nil { self.error = error.localizedDescription } }
     }
 }
 
@@ -436,7 +477,8 @@ struct TVLibraryGrid: View {
     var library: Library
     @State private var items: [Item] = []
     @State private var total = 0
-    @State private var sort: ItemSort = .title
+    /// The same remembered sort as on the iPhone.
+    @AppStorage("kinora.librarySort") private var sort: ItemSort = .title
     @State private var loaded = false
     @State private var loadingMore = false
     @State private var error: String?
@@ -460,6 +502,10 @@ struct TVLibraryGrid: View {
                                 .onAppear { if item.id == items.last?.id { Task { await more() } } }
                         }
                     }
+                    if loadingMore { ProgressView().frame(maxWidth: .infinity) }
+                    if items.isEmpty {
+                        ContentUnavailableView("Üres könyvtár", systemImage: "film.stack").padding(.top, 80)
+                    }
                 } else {
                     LoadingState(error: error) { Task { await load() } }
                 }
@@ -481,7 +527,7 @@ struct TVLibraryGrid: View {
             loaded = true
         } catch is CancellationError {
         } catch {
-            self.error = error.localizedDescription
+            if !loaded { self.error = error.localizedDescription }
         }
     }
 
@@ -504,11 +550,15 @@ struct TVSearchTab: View {
     @State private var query = ""
     @State private var results: [Item] = []
     @State private var searching = false
+    @State private var error: String?
 
     var body: some View {
         ScrollView {
-            if results.isEmpty {
-                Text(query.count < 2 ? "Írj be legalább két betűt." : (searching ? "Keresés…" : "Nincs találat."))
+            if let error, results.isEmpty {
+                LoadingState(error: error) { Task { await search() } }
+            } else if results.isEmpty {
+                Text(query.trimmingCharacters(in: .whitespaces).count < 2
+                     ? "Írj be legalább két betűt." : (searching ? "Keresés…" : "Nincs találat."))
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 60)
@@ -526,12 +576,21 @@ struct TVSearchTab: View {
 
     private func search() async {
         let q = query.trimmingCharacters(in: .whitespaces)
-        guard q.count >= 2 else { results = []; return }
+        guard q.count >= 2 else { results = []; error = nil; return }
         searching = true
         defer { searching = false }
         try? await Task.sleep(for: .milliseconds(350))
         guard !Task.isCancelled else { return }
-        if let r = try? await model.api({ try await $0.search(q) }), !Task.isCancelled { results = r }
+        do {
+            let r = try await model.api { try await $0.search(q) }
+            guard !Task.isCancelled else { return }
+            results = r
+            error = nil
+        } catch is CancellationError {
+        } catch {
+            results = []
+            self.error = error.localizedDescription
+        }
     }
 }
 

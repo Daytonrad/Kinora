@@ -11,6 +11,8 @@ struct PlayerView: View {
     /// Double-tap seeking: which side and how far, shown briefly.
     @State private var seekFlash: SeekFlash?
     @State private var flashTask: Task<Void, Never>?
+    /// With VoiceOver the controls stay up: a hidden control can't be found by swiping.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     var body: some View {
         ZStack {
@@ -44,6 +46,7 @@ struct PlayerView: View {
                 PromptsView(player: player)
             }
         }
+        .background { keyboardShortcuts }
         .foregroundStyle(.white)
         .statusBarHidden(!chrome)
         .persistentSystemOverlays(chrome ? .automatic : .hidden)
@@ -57,12 +60,32 @@ struct PlayerView: View {
         .onChange(of: player.menuOpen) { _, open in
             if open { hideTask?.cancel() } else { scheduleHide() }
         }
+        .onChange(of: voiceOver) { _, on in if on { show() } else { scheduleHide() } }
         .onChange(of: player.isPlaying) { _, playing in
             if playing { scheduleHide() } else { show() }
         }
     }
 
     // MARK: - controls
+
+    /// Hardware keyboard (iPad Magic Keyboard and the like): space plays or pauses, the arrows
+    /// seek 10 s, Esc closes. Invisible buttons, so they work while the controls are hidden;
+    /// holding ⌘ lists them.
+    private var keyboardShortcuts: some View {
+        Group {
+            Button("Lejátszás / szünet") { player.togglePlay() }
+                .keyboardShortcut(.space, modifiers: [])
+            Button("Vissza 10 másodpercet") { seekWithFlash(forward: false) }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+            Button("Előre 10 másodpercet") { seekWithFlash(forward: true) }
+                .keyboardShortcut(.rightArrow, modifiers: [])
+            Button("Bezárás") { player.close() }
+                .keyboardShortcut(.cancelAction)
+        }
+        .opacity(0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
 
     private var controls: some View {
         VStack(spacing: 0) {
@@ -156,7 +179,12 @@ struct PlayerView: View {
             withAnimation { player.fill.toggle() }
             return
         }
-        let forward = third > 2 / 3
+        seekWithFlash(forward: third > 2 / 3)
+    }
+
+    /// ±10 s with the flash on the side; seeks in a row add up.
+    private func seekWithFlash(forward: Bool) {
+        guard player.error == nil else { return }
         player.seek(by: forward ? 10 : -10)
         let total = (seekFlash?.forward == forward ? seekFlash?.seconds ?? 0 : 0) + 10
         withAnimation(.easeOut(duration: 0.15)) { seekFlash = SeekFlash(forward: forward, seconds: total) }
@@ -184,7 +212,7 @@ struct PlayerView: View {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(for: .seconds(3.5))
-            guard !Task.isCancelled, player.isPlaying, !scrubbing, !player.menuOpen else { return }
+            guard !Task.isCancelled, player.isPlaying, !scrubbing, !player.menuOpen, !voiceOver else { return }
             withAnimation(.easeInOut(duration: 0.3)) { chrome = false }
         }
     }
@@ -201,7 +229,7 @@ struct PlayerView: View {
         switch kind {
         case .recap: "Összefoglaló átugrása"
         case .credits: "Stáblista átugrása"
-        default: "Intro átugrása"
+        default: "Intró átugrása"
         }
     }
 }
@@ -272,7 +300,8 @@ private struct Scrubber: View {
                     Text(t).lineLimit(1)
                 }
                 Spacer()
-                Text("-" + PlayerView.clock(max(0, player.duration - pos)))
+                Text("−" + PlayerView.clock(max(0, player.duration - pos)))
+                    .accessibilityLabel("Hátralévő idő: \(PlayerView.clock(max(0, player.duration - pos)))")
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(.white.opacity(0.8))

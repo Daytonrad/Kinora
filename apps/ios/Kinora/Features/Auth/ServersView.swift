@@ -17,7 +17,8 @@ struct ServersView: View {
             BrandMark()
             Text("Szerver hozzáadása")
                 .font(Theme.display(40, weight: .bold))
-            Text("Add meg a Kinora-szerver címét. Elég az IP-cím, pl. 192.168.1.10 – a port alapból 8096. Otthonon kívülről a nyilvános címet (pl. https://kinora.pelda.hu).")
+            // Verbatim: the example address must not turn into a tappable link.
+            Text(verbatim: "Add meg a Kinora-szerver címét. Elég az IP-cím, pl. 192.168.1.10 – a port alapból 8096. Otthonon kívülről a nyilvános címet (pl. https://kinora.pelda.hu).")
                 .foregroundStyle(Theme.plaster)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -31,22 +32,15 @@ struct ServersView: View {
                     .focused($focused)
                     .onSubmit { connect(address) }
                     .kinoraField()
+                    .accessibilityLabel("Szerver címe")
             }
 
             ErrorText(message: error ?? model.notice)
 
-            HStack(spacing: 12) {
-                Button { connect(address) } label: {
-                    if busy { ProgressView().tint(Theme.amberInk) } else { Text("Csatlakozás") }
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(busy || address.trimmingCharacters(in: .whitespaces).isEmpty)
-
-                Button { scan() } label: {
-                    Label(scanning ? "Keresés…" : "Szerver keresése", systemImage: "wifi")
-                }
-                .buttonStyle(SecondaryButtonStyle())
-                .disabled(scanning)
+            // Side by side when they fit; stacked on a narrow phone or with large text.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { connectButton; scanButton.fixedSize() }
+                VStack(spacing: 12) { connectButton; scanButton }
             }
 
             if scanning || !found.isEmpty || scannedOnce {
@@ -75,6 +69,9 @@ struct ServersView: View {
                             Button("Elfelejtés", systemImage: "trash", role: .destructive) { model.forget(s) }
                         }
                     }
+                    Text("Egy mentett szerver elfelejtéséhez tartsd lenyomva a sorát.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.muted)
                 }
             }
 
@@ -84,6 +81,23 @@ struct ServersView: View {
                 .padding(.top, 12)
         }
         .onDisappear { model.notice = nil }
+    }
+
+    private var connectButton: some View {
+        Button { connect(address) } label: {
+            if busy { ProgressView().tint(Theme.amberInk) } else { Text("Csatlakozás") }
+        }
+        .buttonStyle(PrimaryButtonStyle())
+        .disabled(busy || address.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
+
+    private var scanButton: some View {
+        Button { scan() } label: {
+            Label(scanning ? "Keresés…" : "Szerver keresése", systemImage: "wifi")
+                .lineLimit(1)
+        }
+        .buttonStyle(SecondaryButtonStyle())
+        .disabled(scanning)
     }
 
     private func section<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {

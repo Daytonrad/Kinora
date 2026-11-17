@@ -79,47 +79,6 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: A Kinora a helyi hálózaton keresi és éri el a médiaszerveredet.
-        KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
-    # The App Group carries the saved servers and the login token to the Top Shelf extension.
-    entitlements:
-      path: KinoraTV/KinoraTV.entitlements
-      properties:
-        com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
-  # Top Shelf of the Apple TV home screen: Continue watching and new titles above the apps
-  # while the Kinora icon has the focus.
-  KinoraTopShelf:
-    type: app-extension
-    platform: tvOS
-    sources:
-      - path: KinoraTopShelf
-    dependencies:
-      - package: KinoraKit
-      - sdk: TVServices.framework
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(KINORA_BUNDLE_ID).topshelf
-        PRODUCT_NAME: KinoraTopShelf
-        TARGETED_DEVICE_FAMILY: "3"
-        CODE_SIGN_STYLE: Automatic
-        SKIP_INSTALL: YES
-        APPLICATION_EXTENSION_API_ONLY: YES
-    entitlements:
-      path: KinoraTopShelf/KinoraTopShelf.entitlements
-      properties:
-        com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
-    info:
-      path: KinoraTopShelf/Info.plist
-      properties:
-        CFBundleDisplayName: Kinora
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        CFBundleDevelopmentRegion: hu
-        KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.tv-top-shelf
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
   KinoraWidgets:
     type: app-extension
     platform: iOS
@@ -233,6 +192,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: hu
         KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
+        UIRequiredDeviceCapabilities: [arm64]
         NSExtension:
           NSExtensionPointIdentifier: com.apple.tv-top-shelf
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider

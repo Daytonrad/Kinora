@@ -27,8 +27,7 @@ struct ProfilesView: View {
                     ProgressView()
                 }
                 ErrorText(message: error)
-                Button("Másik szerver") { model.showServers() }
-                    .padding(.top, 8)
+                OtherServerButton()
             }
             .frame(maxWidth: 700)
             .padding(24)

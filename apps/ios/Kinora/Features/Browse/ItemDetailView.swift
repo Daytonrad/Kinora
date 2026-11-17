@@ -5,6 +5,7 @@ import KinoraKit
 struct ItemDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.verticalSizeClass) private var vSize
+    @Environment(\.metrics) private var metrics
     /// What the previous screen knew; shown at once while the full detail loads.
     var item: Item
 
@@ -16,7 +17,14 @@ struct ItemDetailView: View {
     @State private var overviewExpanded = false
     @State private var fetchingSeason: Int?
     @State private var askSeasonQuality = false
-    @State private var seasonNotice: String?
+    @State private var episodesError: String?
+    /// A short message after an action: a season download, a failed toggle.
+    @State private var notice: Notice?
+
+    private struct Notice {
+        var title: String
+        var message: String
+    }
 
     private var current: Item { detail?.item ?? item }
 
@@ -46,10 +54,10 @@ struct ItemDetailView: View {
         } message: {
             Text("Az évad még nem letöltött részei sorban kerülnek az eszközre.")
         }
-        .alert("Évad letöltése", isPresented: Binding(get: { seasonNotice != nil }, set: { if !$0 { seasonNotice = nil } })) {
+        .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(seasonNotice ?? "")
+            Text(notice?.message ?? "")
         }
         .kinoraScreen()
         .navigationTitle(current.title)
@@ -61,7 +69,7 @@ struct ItemDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             ArtworkView(item: current, kind: current.kind == .episode ? .thumb : .backdrop)
-                .heroFrame(16 / 9, compactHeight: vSize == .compact)
+                .heroFrame(metrics.heroRatio(16 / 9), compactHeight: vSize == .compact)
                 .overlay {
                     LinearGradient(colors: [.clear, Theme.black], startPoint: .center, endPoint: .bottom)
                 }
@@ -69,7 +77,7 @@ struct ItemDetailView: View {
             HStack(alignment: .bottom, spacing: 16) {
                 if current.kind != .episode {
                     ArtworkView(item: current, kind: .poster)
-                        .frame(width: 104, height: 156)
+                        .frame(width: metrics.regular ? 168 : 104, height: metrics.regular ? 252 : 156)
                         .clipShape(.rect(cornerRadius: 8))
                         .shadow(radius: 10)
                 }
@@ -81,7 +89,7 @@ struct ItemDetailView: View {
                         Text(label).font(.caption.weight(.semibold)).foregroundStyle(Theme.muted)
                     }
                     Text(current.title)
-                        .font(Theme.display(32, weight: .bold))
+                        .font(Theme.display(metrics.regular ? 48 : 32, weight: .bold))
                         .lineLimit(3)
                         .minimumScaleFactor(0.7)
                     let meta = Format.meta(current)
@@ -91,8 +99,8 @@ struct ItemDetailView: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, current.kind == .episode ? 0 : -60)
+            .padding(.horizontal, metrics.gutter)
+            .padding(.top, current.kind == .episode ? 0 : (metrics.regular ? -110 : -60))
         }
     }
 
@@ -131,13 +139,19 @@ struct ItemDetailView: View {
                         Text("még \(left)").font(.caption).foregroundStyle(Theme.muted)
                     }
                     Spacer()
-                    Button("Lejátszás elölről", systemImage: "arrow.counterclockwise") { model.play(t, from: 0) }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.plaster)
+                    Button { model.play(t, from: 0) } label: {
+                        Label("Lejátszás elölről", systemImage: "arrow.counterclockwise")
+                            .padding(.vertical, 12)
+                            .contentShape(.rect)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.plaster)
                 }
             }
         }
-        .padding(.horizontal, 20)
+        // On an iPad the play button and the toggles stay together, not stretched across the screen.
+        .frame(maxWidth: metrics.regular ? 600 : nil, alignment: .leading)
+        .padding(.horizontal, metrics.gutter)
     }
 
     private var playLabel: String {
@@ -149,11 +163,30 @@ struct ItemDetailView: View {
 
     @ViewBuilder private var overview: some View {
         if let o = current.overview, !o.isEmpty {
-            Text(o)
-                .foregroundStyle(Theme.plaster)
-                .lineLimit(overviewExpanded ? nil : 4)
-                .onTapGesture { withAnimation { overviewExpanded.toggle() } }
-                .padding(.horizontal, 20)
+            // Short texts fit in four lines anyway: no "more" for them.
+            let long = o.count > 240 || o.split(separator: "\n").count > 4
+            Button {
+                withAnimation { overviewExpanded.toggle() }
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(o)
+                        .foregroundStyle(Theme.plaster)
+                        .lineLimit(overviewExpanded ? nil : 4)
+                        .multilineTextAlignment(.leading)
+                    if long {
+                        Text(overviewExpanded ? "Kevesebb" : "Bővebben")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.amber)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(!long)
+            .accessibilityRemoveTraits(long ? [] : .isButton)
+            .frame(maxWidth: metrics.readableWidth, alignment: .leading)
+            .padding(.horizontal, metrics.gutter)
         }
     }
 
@@ -162,7 +195,7 @@ struct ItemDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             if current.kind == .series {
                 HStack {
-                    Text("Évadok").font(Theme.display(22, weight: .bold))
+                    Text("Évadok").font(Theme.display(metrics.sectionTitle, weight: .bold))
                     Spacer()
                     if seasons.count > 1 {
                         Picker("Évad", selection: $season) {
@@ -174,7 +207,7 @@ struct ItemDetailView: View {
                     }
                 }
             } else {
-                Text("Részek").font(Theme.display(22, weight: .bold))
+                Text("Részek").font(Theme.display(metrics.sectionTitle, weight: .bold))
             }
 
             if let season, let list = episodes[season] {
@@ -182,40 +215,56 @@ struct ItemDetailView: View {
                     Text("Ebben az évadban nincs rész.").foregroundStyle(Theme.muted)
                 } else if !missing(list).isEmpty {
                     Button {
-                        if let room = DownloadStore.shared.roomError() { seasonNotice = room } else { askSeasonQuality = true }
+                        if let room = DownloadStore.shared.roomError() {
+                            notice = Notice(title: "Évad letöltése", message: room)
+                        } else {
+                            askSeasonQuality = true
+                        }
                     } label: {
                         Label("Évad letöltése (\(missing(list).count) rész)", systemImage: "arrow.down.circle")
                             .font(.subheadline.weight(.semibold))
                     }
                     .tint(Theme.amber)
                 }
-                ForEach(list) { ep in
-                    NavigationLink(value: ep) { EpisodeRow(item: ep, isNext: ep.id == detail?.playNext?.id) }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Lejátszás", systemImage: "play.fill") { model.play(ep) }
-                            Button("Letöltés: 720p", systemImage: "arrow.down.circle") {
-                                Task { try? await model.api { try await DownloadStore.shared.start(ep, quality: "720p", client: $0) } }
+                // Two columns on an iPad, one on a phone.
+                LazyVGrid(columns: episodeColumns, alignment: .leading, spacing: metrics.regular ? 22 : 14) {
+                    ForEach(list) { ep in
+                        NavigationLink(value: ep) { EpisodeRow(item: ep, isNext: ep.id == detail?.playNext?.id) }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Lejátszás", systemImage: "play.fill") { model.play(ep) }
+                                if !missing([ep]).isEmpty {
+                                    Button("Letöltés (720p)", systemImage: "arrow.down.circle") { download(ep) }
+                                }
                             }
-                        }
+                    }
+                }
+            } else if let episodesError {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(episodesError).foregroundStyle(Theme.plaster)
+                    Button("Újra") { Task { await loadEpisodes() } }.buttonStyle(.bordered)
                 }
             } else if detail != nil, !(current.kind == .series && seasons.isEmpty) {
                 ProgressView().frame(maxWidth: .infinity).padding()
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, metrics.gutter)
+    }
+
+    private var episodeColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 28, alignment: .top), count: metrics.regular ? 2 : 1)
     }
 
     private func similarSection(_ items: [Item]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Hasonlók").font(Theme.display(22, weight: .bold)).padding(.horizontal, 20)
+            Text("Hasonlók").font(Theme.display(metrics.sectionTitle, weight: .bold)).padding(.horizontal, metrics.gutter)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 14) {
+                LazyHStack(alignment: .top, spacing: metrics.spacing) {
                     ForEach(items) { it in
                         NavigationLink(value: it) { PosterCard(item: it) }.buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, metrics.gutter)
             }
         }
     }
@@ -256,18 +305,33 @@ struct ItemDetailView: View {
             do {
                 let n = try await model.api { try await DownloadStore.shared.startAll(todo, quality: quality, client: $0) }
                 if n < todo.count {
-                    seasonNotice = "\(n) rész letöltése indult el a \(todo.count)-ból. "
-                        + (DownloadStore.shared.roomError() ?? "A többit később próbáld újra.")
+                    notice = Notice(title: "Évad letöltése",
+                                    message: "\(todo.count) részből \(n) letöltése indult el. "
+                                        + (DownloadStore.shared.roomError() ?? "A többit később próbáld újra."))
                 }
             } catch {
-                seasonNotice = error.localizedDescription
+                notice = Notice(title: "Évad letöltése", message: error.localizedDescription)
             }
         }
     }
 
     private func loadEpisodes() async {
         guard let season, episodes[season] == nil, fetchingSeason != season else { return }
-        if let list = try? await fetchEpisodes(season) { episodes[season] = list }
+        episodesError = nil
+        do { episodes[season] = try await fetchEpisodes(season) }
+        catch is CancellationError {}
+        catch { if self.season == season { episodesError = error.localizedDescription } }
+    }
+
+    private func download(_ ep: Item) {
+        if let room = DownloadStore.shared.roomError() {
+            notice = Notice(title: "Nem sikerült a letöltés", message: room)
+            return
+        }
+        Task {
+            do { try await model.api { try await DownloadStore.shared.start(ep, quality: "720p", client: $0) } }
+            catch { notice = Notice(title: "Nem sikerült a letöltés", message: error.localizedDescription) }
+        }
     }
 
     private func fetchEpisodes(_ id: Int) async throws -> [Item] {
@@ -277,11 +341,19 @@ struct ItemDetailView: View {
     }
 
     private func setFavorite(_ on: Bool) async {
-        if let u = try? await model.api({ [id = current.id] in try await $0.setFavorite(id, on) }) { userData = u }
+        do { userData = try await model.api { [id = current.id] in try await $0.setFavorite(id, on) } }
+        catch is CancellationError {}
+        catch { notice = Notice(title: "Nem sikerült menteni", message: error.localizedDescription) }
     }
 
     private func setPlayed(_ on: Bool) async {
-        guard let u = try? await model.api({ [id = current.id] in try await $0.setPlayed(id, on) }) else { return }
+        let u: UserData
+        do { u = try await model.api { [id = current.id] in try await $0.setPlayed(id, on) } }
+        catch is CancellationError { return }
+        catch {
+            notice = Notice(title: "Nem sikerült menteni", message: error.localizedDescription)
+            return
+        }
         userData = u
         // Marking a series or season changes its episodes and the next one up.
         if current.kind == .series || current.kind == .season { await load() }
@@ -316,14 +388,16 @@ private struct IconToggle: View {
 private struct EpisodeRow: View {
     var item: Item
     var isNext: Bool
+    @Environment(\.metrics) private var metrics
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: metrics.regular ? 16 : 12) {
             ArtworkView(item: item, kind: .thumb)
-                .frame(width: 136, height: 76.5)
+                .frame(width: metrics.regular ? 192 : 136, height: metrics.regular ? 108 : 76.5)
                 .overlay(alignment: .bottom) { ProgressStripe(item: item) }
                 .overlay(alignment: .topTrailing) { WatchedBadge(item: item) }
                 .clipShape(.rect(cornerRadius: 6))
+                .pointerLift(cornerRadius: 6)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if let n = item.episodeNum { Text("\(n).").foregroundStyle(Theme.muted) }

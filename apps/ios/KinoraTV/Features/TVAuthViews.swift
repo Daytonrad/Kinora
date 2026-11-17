@@ -64,6 +64,8 @@ struct TVServersView: View {
                                 Button("Elfelejtés", systemImage: "trash", role: .destructive) { model.forget(s) }
                             }
                         }
+                        Text("Egy mentett szerver elfelejtéséhez tartsd lenyomva a sorát.")
+                            .font(.callout).foregroundStyle(Theme.muted)
                     }
                     HStack {
                         TVHeading(text: "Ezen a hálózaton")
@@ -79,7 +81,7 @@ struct TVServersView: View {
                         Text("Nem találtam szervert a helyi hálózaton.").foregroundStyle(Theme.muted)
                     }
                     TVHeading(text: "Cím megadása").padding(.top, 10)
-                    TextField("pl. 192.168.1.20:8096 vagy kinora.example.com", text: $address)
+                    TextField("pl. 192.168.1.20:8096 vagy kinora.pelda.hu", text: $address)
                         .textContentType(.URL)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
@@ -167,7 +169,7 @@ struct TVLoginView: View {
         } content: {
             if model.status?.quickconnectEnabled != false {
                 Button { model.notice = nil; model.go(.quickConnect) } label: {
-                    Label("Belépés kóddal", systemImage: "qrcode")
+                    Label("Belépés kóddal", systemImage: "key")
                 }
                 .buttonStyle(TVPillStyle(prominent: true))
                 .padding(.bottom, 20)
@@ -183,7 +185,7 @@ struct TVLoginView: View {
             HStack(spacing: 24) {
                 Button(action: login) { Label("Belépés", systemImage: "person.fill.checkmark") }
                     .buttonStyle(TVPillStyle())
-                    .disabled(username.isEmpty || password.isEmpty || busy)
+                    .disabled(username.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty || busy)
                 Button("Másik szerver") { model.showServers() }
                     .buttonStyle(TVPillStyle())
                 if busy { ProgressView() }
@@ -193,7 +195,7 @@ struct TVLoginView: View {
     }
 
     private func login() {
-        guard !busy, !username.isEmpty, !password.isEmpty else { return }
+        guard !busy, !username.trimmingCharacters(in: .whitespaces).isEmpty, !password.isEmpty else { return }
         error = nil
         model.notice = nil
         busy = true
@@ -201,6 +203,8 @@ struct TVLoginView: View {
             defer { busy = false }
             do {
                 try await model.login(username: username.trimmingCharacters(in: .whitespaces), password: password)
+            } catch let e as KinoraError where e.status == 401 {
+                error = "Hibás felhasználónév vagy jelszó."
             } catch {
                 self.error = error.localizedDescription
             }
@@ -297,17 +301,20 @@ struct TVProfilesView: View {
     @Environment(AppModel.self) private var model
     @State private var pinFor: Profile?
     @State private var error: String?
+    @State private var busy = false
 
     var body: some View {
         VStack(spacing: 70) {
             BrandMark(size: 60)
-            Text("Ki nézi?").font(Theme.display(72, weight: .bold))
+            Text("Ki néz?").font(Theme.display(72, weight: .bold))
             if let profiles = model.me?.profiles {
-                HStack(spacing: 60) {
-                    ForEach(profiles) { p in
-                        Button { pick(p) } label: { TVProfileFace(profile: p) }
-                            .buttonStyle(TVCardStyle())
+                // Centered when they fit; a scrolling row when there are more than the screen is wide.
+                ViewThatFits(in: .horizontal) {
+                    profileRow(profiles)
+                    ScrollView(.horizontal) {
+                        profileRow(profiles).padding(.horizontal, 100)
                     }
+                    .scrollClipDisabled()
                 }
             } else {
                 ProgressView()
@@ -321,10 +328,24 @@ struct TVProfilesView: View {
         .sheet(item: $pinFor) { TVPinSheet(profile: $0) }
     }
 
+    private func profileRow(_ profiles: [Profile]) -> some View {
+        HStack(spacing: 60) {
+            ForEach(profiles) { p in
+                Button { pick(p) } label: { TVProfileFace(profile: p) }
+                    // No .disabled while busy: on tvOS that would throw the focus elsewhere.
+                    .buttonStyle(TVCardStyle())
+            }
+        }
+        .padding(.vertical, 40)
+    }
+
     private func pick(_ p: Profile) {
+        guard !busy else { return }
         if p.hasPin { pinFor = p; return }
         error = nil
+        busy = true
         Task {
+            defer { busy = false }
             do { try await model.guarded { try await model.selectProfile(p, pin: nil) } }
             catch { self.error = error.localizedDescription }
         }

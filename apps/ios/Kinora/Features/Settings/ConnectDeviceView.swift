@@ -25,10 +25,11 @@ struct ConnectDeviceView: View {
             } else if let request {
                 Section {
                     VStack(spacing: 10) {
-                        Text(request.code)
+                        Text(request.code.count == 6 ? request.code.prefix(3) + " " + request.code.suffix(3) : request.code)
                             .font(Theme.display(40))
                             .monospacedDigit()
                             .tracking(4)
+                            .accessibilityLabel(request.code.map(String.init).joined(separator: " "))
                         Text("\(request.deviceName.flatMap { $0.isEmpty ? nil : $0 } ?? "Ismeretlen eszköz") szeretne belépni a fiókodba.")
                             .multilineTextAlignment(.center)
                             .foregroundStyle(Theme.plaster)
@@ -51,7 +52,7 @@ struct ConnectDeviceView: View {
                 Section {
                     ErrorText(message: error)
                     Button { decide(approve: true) } label: {
-                        Text("Jóváhagyás").frame(maxWidth: .infinity)
+                        if busy { ProgressView().tint(Theme.amberInk) } else { Text("Jóváhagyás") }
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .listRowInsets(EdgeInsets())
@@ -71,16 +72,20 @@ struct ConnectDeviceView: View {
                         .monospacedDigit()
                         .multilineTextAlignment(.center)
                         .focused($codeFocused)
+                        .accessibilityLabel("Hatjegyű kód")
                         .onChange(of: code) { _, v in
                             let digits = String(v.filter(\.isNumber).prefix(6))
-                            if digits != v { code = digits }
+                            if digits != v { code = digits; return }
+                            // The number pad has no return key: the sixth digit looks the code up.
+                            error = nil
+                            if digits.count == 6, !busy { lookup() }
                         }
                     ErrorText(message: error)
                     Button {
                         lookup()
                     } label: {
                         HStack {
-                            if busy { ProgressView() }
+                            if busy && request == nil { ProgressView() }
                             Text("Tovább")
                         }
                         .frame(maxWidth: .infinity)

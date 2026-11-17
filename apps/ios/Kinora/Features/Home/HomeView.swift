@@ -37,6 +37,7 @@ struct HomeTab: View {
     @Environment(AppModel.self) private var model
     @State private var data: HomeData?
     @State private var error: String?
+    @Environment(\.metrics) private var metrics
 
     var body: some View {
         ScrollView {
@@ -73,7 +74,7 @@ struct HomeTab: View {
             Spacer()
             AccountMenu()
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, metrics.gutter)
         .padding(.vertical, 8)
         .background(Theme.black.opacity(0.92))
     }
@@ -94,26 +95,29 @@ struct HomeTab: View {
 private struct HeroCard: View {
     var item: Item
     @Environment(\.verticalSizeClass) private var vSize
+    @Environment(\.metrics) private var metrics
 
     var body: some View {
         NavigationLink(value: item) {
             ZStack(alignment: .bottomLeading) {
                 ArtworkView(item: item, kind: .backdrop)
-                    .heroFrame(16 / 10, compactHeight: vSize == .compact)
+                    .heroFrame(metrics.heroRatio(16 / 10), compactHeight: vSize == .compact)
                 LinearGradient(colors: [.clear, Theme.black.opacity(0.95)], startPoint: .center, endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(item.title)
-                        .font(Theme.display(34, weight: .bold))
+                        .font(Theme.display(metrics.regular ? 48 : 34, weight: .bold))
                         .lineLimit(2)
-                    Text(Format.meta(item)).font(.footnote).foregroundStyle(Theme.plaster)
+                    Text(Format.meta(item)).font(metrics.regular ? .subheadline : .footnote).foregroundStyle(Theme.plaster)
                     if let o = item.overview, !o.isEmpty {
-                        Text(o).font(.footnote).foregroundStyle(Theme.muted).lineLimit(2)
+                        Text(o).font(metrics.regular ? .subheadline : .footnote).foregroundStyle(Theme.muted).lineLimit(2)
                     }
                 }
-                .padding(20)
+                .frame(maxWidth: metrics.regular ? 640 : nil, alignment: .leading)
+                .padding(metrics.regular ? 32 : 20)
             }
             .clipShape(.rect(cornerRadius: 14))
-            .padding(.horizontal, 16)
+            .pointerLift(cornerRadius: 14)
+            .padding(.horizontal, metrics.regular ? metrics.gutter : 16)
         }
         .buttonStyle(.plain)
     }
@@ -121,16 +125,18 @@ private struct HeroCard: View {
 
 /// A titled horizontal row of cards.
 private struct Shelf: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.metrics) private var metrics
     var row: HomeRow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(row.title)
-                .font(Theme.display(22, weight: .bold))
-                .padding(.horizontal, 20)
+                .font(Theme.display(metrics.sectionTitle, weight: .bold))
+                .padding(.horizontal, metrics.gutter)
                 .accessibilityAddTraits(.isHeader)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 14) {
+                LazyHStack(alignment: .top, spacing: metrics.spacing) {
                     ForEach(row.items) { item in
                         NavigationLink(value: item) {
                             if row.style == .landscape { WideCard(item: item) } else { PosterCard(item: item) }
@@ -138,10 +144,15 @@ private struct Shelf: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             if let why = row.reasons?[String(item.id)] { Text(why) }
+                            if item.kind == .movie || item.kind == .episode {
+                                Button(item.progress != nil ? "Folytatás" : "Lejátszás", systemImage: "play.fill") {
+                                    model.play(item)
+                                }
+                            }
                         }
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, metrics.gutter)
             }
         }
     }

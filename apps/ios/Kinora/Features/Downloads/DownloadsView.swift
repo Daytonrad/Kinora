@@ -31,6 +31,10 @@ struct DownloadsView: View {
                                     .swipeActions {
                                         Button("Törlés", systemImage: "trash", role: .destructive) { store.delete(d.id) }
                                     }
+                                    .contextMenu {
+                                        Button("Lejátszás", systemImage: "play.fill") { model.play(d.item) }
+                                        Button("Törlés az eszközről", systemImage: "trash", role: .destructive) { store.delete(d.id) }
+                                    }
                             }
                         } header: {
                             Text("Az eszközön")
@@ -86,6 +90,11 @@ private struct ActiveRow: View {
     var phase: DownloadStore.Phase
     var cancel: () -> Void
 
+    private var failed: Bool {
+        if case .failed = phase { return true }
+        return false
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
@@ -107,7 +116,9 @@ private struct ActiveRow: View {
                 Image(systemName: "xmark.circle.fill").font(.title3).foregroundStyle(Theme.muted)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Letöltés megszakítása")
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(.rect)
+            .accessibilityLabel(failed ? "Eltávolítás a listából" : "Letöltés megszakítása")
         }
         .padding(.vertical, 4)
     }
