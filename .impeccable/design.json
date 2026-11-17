@@ -1,0 +1,537 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-17T00:00:00Z",
+  "title": "Design System: Kinora",
+  "extensions": {
+    "colorMeta": {
+      "foyer-black": {
+        "role": "neutral",
+        "displayName": "Foyer Black",
+        "canonical": "#141210",
+        "cssVar": "--g0",
+        "tonalRamp": [
+          "#0d0b0a",
+          "#141210",
+          "#1a1613",
+          "#221d19",
+          "#2b2520",
+          "#352e28",
+          "#4a4139",
+          "#5e544a"
+        ],
+        "note": "The scrim channel --scrim (20 18 16) is this colour as an RGB triplet, used at varying alpha for every legibility gradient and scrim plate."
+      },
+      "foyer-lacquer": {
+        "role": "neutral",
+        "displayName": "Foyer Lacquer",
+        "canonical": "#1a1613",
+        "cssVar": "--g1",
+        "tonalRamp": [
+          "#0d0b0a",
+          "#141210",
+          "#1a1613",
+          "#221d19",
+          "#2b2520",
+          "#352e28",
+          "#4a4139",
+          "#5e544a"
+        ]
+      },
+      "foyer-panel": {
+        "role": "neutral",
+        "displayName": "Foyer Panel",
+        "canonical": "#221d19",
+        "cssVar": "--g2",
+        "tonalRamp": [
+          "#0d0b0a",
+          "#141210",
+          "#1a1613",
+          "#221d19",
+          "#2b2520",
+          "#352e28",
+          "#4a4139",
+          "#5e544a"
+        ]
+      },
+      "foyer-raised": {
+        "role": "neutral",
+        "displayName": "Foyer Raised",
+        "canonical": "#2b2520",
+        "cssVar": "--g3",
+        "tonalRamp": [
+          "#0d0b0a",
+          "#141210",
+          "#1a1613",
+          "#221d19",
+          "#2b2520",
+          "#352e28",
+          "#4a4139",
+          "#5e544a"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#352e28",
+        "cssVar": "--rule",
+        "tonalRamp": [
+          "#0d0b0a",
+          "#141210",
+          "#1a1613",
+          "#221d19",
+          "#2b2520",
+          "#352e28",
+          "#4a4139",
+          "#5e544a"
+        ]
+      },
+      "rule-hi": {
+        "role": "neutral",
+        "displayName": "Rule High",
+        "canonical": "#4a4139",
+        "cssVar": "--rule-hi",
+        "tonalRamp": [
+          "#0d0b0a",
+          "#141210",
+          "#1a1613",
+          "#221d19",
+          "#2b2520",
+          "#352e28",
+          "#4a4139",
+          "#5e544a"
+        ]
+      },
+      "plaster-bright": {
+        "role": "neutral",
+        "displayName": "Plaster Bright",
+        "canonical": "#efe7da",
+        "cssVar": "--t0",
+        "tonalRamp": [
+          "#4a4139",
+          "#6a6056",
+          "#847a6f",
+          "#9d9387",
+          "#b6ac9e",
+          "#cfc5b6",
+          "#e0d7c9",
+          "#efe7da"
+        ]
+      },
+      "plaster": {
+        "role": "neutral",
+        "displayName": "Plaster",
+        "canonical": "#cfc5b6",
+        "cssVar": "--t1",
+        "tonalRamp": [
+          "#4a4139",
+          "#6a6056",
+          "#847a6f",
+          "#9d9387",
+          "#b6ac9e",
+          "#cfc5b6",
+          "#e0d7c9",
+          "#efe7da"
+        ]
+      },
+      "plaster-muted": {
+        "role": "neutral",
+        "displayName": "Plaster Muted",
+        "canonical": "#9d9387",
+        "cssVar": "--t2",
+        "tonalRamp": [
+          "#4a4139",
+          "#6a6056",
+          "#847a6f",
+          "#9d9387",
+          "#b6ac9e",
+          "#cfc5b6",
+          "#e0d7c9",
+          "#efe7da"
+        ]
+      },
+      "marquee-amber": {
+        "role": "primary",
+        "displayName": "Marquee Amber",
+        "canonical": "#f0b44c",
+        "cssVar": "--amber",
+        "tonalRamp": [
+          "#2b1c00",
+          "#4f3507",
+          "#7a5418",
+          "#a67a2e",
+          "#cc973c",
+          "#f0b44c",
+          "#f5cd86",
+          "#fae6c2"
+        ]
+      },
+      "amber-ink": {
+        "role": "on-primary",
+        "displayName": "Amber Ink",
+        "canonical": "#2b1c00",
+        "cssVar": "--amber-ink",
+        "tonalRamp": [
+          "#2b1c00",
+          "#4f3507",
+          "#7a5418",
+          "#a67a2e",
+          "#cc973c",
+          "#f0b44c",
+          "#f5cd86",
+          "#fae6c2"
+        ]
+      },
+      "amber-dim": {
+        "role": "primary",
+        "displayName": "Dim Amber",
+        "canonical": "#a67a2e",
+        "cssVar": "--amber-dim",
+        "tonalRamp": [
+          "#2b1c00",
+          "#4f3507",
+          "#7a5418",
+          "#a67a2e",
+          "#cc973c",
+          "#f0b44c",
+          "#f5cd86",
+          "#fae6c2"
+        ]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Danger",
+        "canonical": "#e8705f",
+        "cssVar": "--danger",
+        "tonalRamp": [
+          "#3a1c18",
+          "#68322b",
+          "#97493e",
+          "#c55f51",
+          "#e8705f",
+          "#ef9b8f",
+          "#f5bfb7",
+          "#fae2df"
+        ]
+      },
+      "ok": {
+        "role": "semantic",
+        "displayName": "OK",
+        "canonical": "#8fc27a",
+        "cssVar": "--ok",
+        "tonalRamp": [
+          "#24301e",
+          "#405737",
+          "#5d7e4f",
+          "#7aa568",
+          "#8fc27a",
+          "#b1d4a2",
+          "#cde4c3",
+          "#e9f3e4"
+        ]
+      },
+      "screen-black": {
+        "role": "neutral",
+        "displayName": "Screen Black",
+        "canonical": "#000000",
+        "cssVar": "--screen",
+        "tonalRamp": [
+          "#000000",
+          "#0d0b0a",
+          "#141210",
+          "#1a1613",
+          "#221d19",
+          "#2b2520",
+          "#352e28",
+          "#4a4139"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The facade title on home and detail; one per view.",
+        "cssVar": "--f7"
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page headings, profile chooser, auth wordmark.",
+        "cssVar": "--f6"
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Shelf, panel, modal and player headings; top-bar wordmark at 800.",
+        "cssVar": "--f4"
+      },
+      "subhead": {
+        "displayName": "Subhead",
+        "purpose": "Amber reason line, filter group heads, detail section heads.",
+        "cssVar": "--f3"
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default reading text, 64ch measure.",
+        "cssVar": "--f1"
+      },
+      "body-large": {
+        "displayName": "Body Large",
+        "purpose": "Synopsis and overview read at 3 m.",
+        "cssVar": "--f2"
+      },
+      "numeral": {
+        "displayName": "Numeral",
+        "purpose": "All small and medium numbers: badges, hero meta, detail facts, chip counts, admin ledger (13-26 px, tabular)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, hints, table headers, sub-captions.",
+        "cssVar": "--f0"
+      }
+    },
+    "shadows": [
+      {
+        "name": "focus-ring-offset",
+        "value": "0 0 0 var(--focus-w) var(--g0), 0 0 0 calc(var(--focus-w) * 2) var(--amber)",
+        "purpose": "The only box-shadow: two-ring offset focus on the lit poster case and the profile face. Not elevation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "t-out",
+        "value": "160ms",
+        "purpose": "State changes: borders, colours, hover, card lift; also the facade swap debounce."
+      },
+      {
+        "name": "t-in",
+        "value": "240ms",
+        "purpose": "Arrivals: hero backdrop crossfade, player chrome fade, progress bar width."
+      },
+      {
+        "name": "ease",
+        "value": "cubic-bezier(.2, .7, .2, 1)",
+        "purpose": "The single easing curve for all transitions."
+      },
+      {
+        "name": "lift",
+        "value": "scale(1.04)",
+        "purpose": "Focused / lit poster case and profile face."
+      },
+      {
+        "name": "t-spin",
+        "value": ".9s linear",
+        "purpose": "Player buffering spinner (doubled under reduced motion)."
+      },
+      {
+        "name": "t-react",
+        "value": "2.6s ease-out",
+        "purpose": "Watch-party reaction rise (1 ms under reduced motion)."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Removes transitions on cards, faces, hero, bars, buttons and chips; cancels the lift."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "760px",
+        "purpose": "Top-bar nav wraps to a scrolling line; detail poster hidden; episode rows restack."
+      },
+      {
+        "name": "tablet",
+        "value": "860px",
+        "purpose": "Library filters and admin nav collapse; two-column forms become one."
+      },
+      {
+        "name": "player-stack",
+        "value": "900px",
+        "purpose": "Party panel moves under the video; volume slider hidden."
+      },
+      {
+        "name": "tv",
+        "value": "1900px",
+        "purpose": "--tv-scale 1.18 on base text for TV browsers."
+      }
+    ],
+    "layout": {
+      "gutter": "clamp(16px, 4vw, 56px)",
+      "heroHeight": "min(70vh, 720px)",
+      "heroCopy": "680px",
+      "posterWidth": "clamp(124px, 13vw, 176px)",
+      "landscapeWidth": "clamp(228px, 24vw, 328px)",
+      "measure": "64ch",
+      "hit": "44px",
+      "frame": "2px",
+      "hair": "1px",
+      "focusWidth": "3px",
+      "focusOffset": "3px"
+    },
+    "fonts": [
+      {
+        "family": "Big Shoulders Display",
+        "weights": "100-900 variable",
+        "files": "web/static/fonts/big-shoulders-display-*-wght-normal.woff2",
+        "license": "SIL OFL"
+      },
+      {
+        "family": "Atkinson Hyperlegible",
+        "weights": "400, 700",
+        "files": "web/static/fonts/atkinson-hyperlegible-*.woff2",
+        "license": "SIL OFL"
+      }
+    ],
+    "avatarColors": [
+      "#c97c5d",
+      "#b5a27a",
+      "#8fa37a",
+      "#7fa6a0",
+      "#c2b4a3",
+      "#a3826b",
+      "#b07a7a",
+      "#8a9a8f"
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one live action per view: Play / Continue, sheet confirm.",
+      "html": "<button class=\"ds-btn-p\">Lejátszás</button>",
+      "css": ".ds-btn-p{display:inline-flex;align-items:center;min-height:var(--hit,44px);padding:0 var(--s4,16px);border-radius:var(--r1,2px);border:1px solid var(--amber,#f0b44c);background:var(--amber,#f0b44c);color:var(--amber-ink,#2b1c00);font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-size:15px;font-weight:700;cursor:pointer;transition:background 160ms cubic-bezier(.2,.7,.2,1),border-color 160ms cubic-bezier(.2,.7,.2,1)}.ds-btn-p:hover{background:var(--t0,#efe7da);border-color:var(--t0,#efe7da)}.ds-btn-p:focus-visible{outline:3px solid var(--amber,#f0b44c);outline-offset:3px}"
+    },
+    {
+      "name": "Hairline Button",
+      "kind": "button",
+      "refersTo": "button-hairline",
+      "description": "Default secondary action: Details, Cancel, toolbar actions.",
+      "html": "<button class=\"ds-btn-h\">Részletek</button>",
+      "css": ".ds-btn-h{display:inline-flex;align-items:center;min-height:var(--hit,44px);padding:0 var(--s4,16px);border-radius:var(--r1,2px);border:1px solid var(--rule-hi,#4a4139);background:transparent;color:var(--t0,#efe7da);font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-size:15px;font-weight:700;cursor:pointer;transition:border-color 160ms cubic-bezier(.2,.7,.2,1)}.ds-btn-h:hover{border-color:var(--t2,#9d9387)}.ds-btn-h:focus-visible{outline:3px solid var(--amber,#f0b44c);outline-offset:3px}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis action; gains a hairline on hover.",
+      "html": "<button class=\"ds-btn-g\">Elrejtés</button>",
+      "css": ".ds-btn-g{display:inline-flex;align-items:center;min-height:var(--hit,44px);padding:0 var(--s4,16px);border-radius:var(--r1,2px);border:1px solid transparent;background:transparent;color:var(--t1,#cfc5b6);font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-size:15px;font-weight:700;cursor:pointer;transition:border-color 160ms cubic-bezier(.2,.7,.2,1),color 160ms cubic-bezier(.2,.7,.2,1)}.ds-btn-g:hover{color:var(--t0,#efe7da);border-color:var(--rule-hi,#4a4139)}.ds-btn-g:focus-visible{outline:3px solid var(--amber,#f0b44c);outline-offset:3px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Lacquer field with a hairline; amber border, outline and caret on focus.",
+      "html": "<label class=\"ds-field\"><span>Név</span><input class=\"ds-input\" type=\"text\" placeholder=\"Keresés\"></label>",
+      "css": ".ds-field span{display:block;font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-size:13px;color:var(--t2,#9d9387);margin-bottom:4px}.ds-input{width:100%;min-height:var(--hit,44px);padding:8px 12px;border-radius:var(--r1,2px);border:1px solid var(--rule-hi,#4a4139);background:var(--g1,#1a1613);color:var(--t0,#efe7da);caret-color:var(--amber,#f0b44c);font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-size:15px}.ds-input::placeholder{color:var(--t2,#9d9387)}.ds-input:focus{border-color:var(--amber,#f0b44c);outline:3px solid var(--amber,#f0b44c);outline-offset:0}"
+    },
+    {
+      "name": "Facade Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Words on the wall: amber wordmark, plaster links, amber underline on the active route.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-logo\">KINORA</span><a class=\"on\" href=\"#\">Kezdőlap</a><a href=\"#\">Filmek</a><a href=\"#\">Sorozatok</a></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:16px;background:var(--g0,#141210);padding:0 16px}.ds-logo{font-family:var(--display,\"Big Shoulders Display\",sans-serif);font-size:26px;font-weight:800;letter-spacing:.04em;color:var(--amber,#f0b44c);margin-right:8px}.ds-nav a{display:inline-flex;align-items:center;min-height:var(--hit,44px);padding:0 4px;color:var(--t2,#9d9387);font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-weight:700;text-decoration:none;border-bottom:2px solid transparent}.ds-nav a:hover{color:var(--t0,#efe7da)}.ds-nav a.on{color:var(--t0,#efe7da);border-color:var(--amber,#f0b44c)}.ds-nav a:focus-visible{outline:3px solid var(--amber,#f0b44c);outline-offset:3px}"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Text with an underline; amber when selected; count in Atkinson tabular figures.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip on\">Dráma <span class=\"n\">12</span></button><button class=\"ds-chip\">Vígjáték <span class=\"n\">7</span></button></div>",
+      "css": ".ds-chips{display:flex;gap:4px;background:var(--g0,#141210)}.ds-chip{display:inline-flex;align-items:center;gap:8px;min-height:var(--hit,44px);padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--t1,#cfc5b6);font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-size:15px;cursor:pointer;transition:color 160ms cubic-bezier(.2,.7,.2,1),border-color 160ms cubic-bezier(.2,.7,.2,1)}.ds-chip:hover{color:var(--t0,#efe7da)}.ds-chip .n{color:var(--t2,#9d9387);font-size:13px;font-variant-numeric:tabular-nums}.ds-chip.on{color:var(--amber,#f0b44c);border-bottom-color:var(--amber,#f0b44c)}.ds-chip.on .n{color:var(--amber-dim,#a67a2e)}.ds-chip:focus-visible{outline:3px solid var(--amber,#f0b44c);outline-offset:3px}"
+    },
+    {
+      "name": "Poster Case",
+      "kind": "card",
+      "refersTo": "poster-case",
+      "description": "2:3 case with a 2 px Rule frame at rest; lit on focus with a 4% lift, amber frame and offset two-ring.",
+      "html": "<div class=\"ds-case\" tabindex=\"0\"><div class=\"ds-art\"><i class=\"ds-prog\"></i></div><div class=\"ds-cap\"><b>Az este filmje</b><span>2019 · 1 ó 52 p</span></div></div>",
+      "css": ".ds-case{width:160px;border-radius:var(--r2,6px);outline:none;cursor:pointer;transition:transform 160ms cubic-bezier(.2,.7,.2,1)}.ds-art{position:relative;aspect-ratio:2/3;border-radius:var(--r2,6px);overflow:hidden;background:var(--g2,#221d19);border:2px solid var(--rule,#352e28);transition:border-color 160ms cubic-bezier(.2,.7,.2,1)}.ds-prog{position:absolute;left:0;bottom:0;width:40%;height:4px;background:var(--amber,#f0b44c)}.ds-case:hover .ds-art{border-color:var(--amber,#f0b44c)}.ds-case:focus-visible{transform:scale(1.04)}.ds-case:focus-visible .ds-art{border-color:var(--amber,#f0b44c);box-shadow:0 0 0 3px var(--g0,#141210),0 0 0 6px var(--amber,#f0b44c)}.ds-cap{padding:8px 4px 0;font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-size:15px;line-height:1.3}.ds-cap b{display:block;color:var(--t0,#efe7da)}.ds-cap span{color:var(--t2,#9d9387);font-size:13px;font-variant-numeric:tabular-nums}@media (prefers-reduced-motion:reduce){.ds-case,.ds-art{transition:none}.ds-case:focus-visible{transform:none}}"
+    },
+    {
+      "name": "Programme Card",
+      "kind": "custom",
+      "refersTo": "poster-case",
+      "description": "No-artwork case printed like a cinema programme: uppercase container-sized title under a hairline, big year at the foot.",
+      "html": "<div class=\"ds-pc\"><div class=\"ds-ph\">A hosszú éjszaka<small>1987</small></div></div>",
+      "css": ".ds-pc{width:160px;aspect-ratio:2/3;border-radius:var(--r2,6px);overflow:hidden;border:2px solid var(--rule,#352e28);container-type:inline-size;position:relative;background:var(--g2,#221d19)}.ds-ph{position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;padding:16px 12px 12px;font-family:var(--display,\"Big Shoulders Display\",sans-serif);font-size:clamp(20px,16cqi,48px);font-weight:800;line-height:.92;text-transform:uppercase;color:var(--t0,#efe7da);border-top:1px solid var(--rule-hi,#4a4139);overflow-wrap:anywhere;hyphens:auto}.ds-ph small{margin-top:auto;padding-top:8px;border-top:1px solid var(--rule-hi,#4a4139);font-weight:600;font-size:clamp(20px,22cqi,48px);color:var(--t2,#9d9387);font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Booth Ledger",
+      "kind": "custom",
+      "description": "Admin figures: Atkinson 700 tabular numerals over muted labels, divided by a rule, never boxed.",
+      "html": "<div class=\"ds-ledger\"><div class=\"ds-stat\"><b>1214</b><span>film</span></div><div class=\"ds-stat\"><b>86</b><span>sorozat</span></div><div class=\"ds-stat\"><b>3</b><span>aktív átkódolás</span></div></div>",
+      "css": ".ds-ledger{display:flex;flex-wrap:wrap;gap:8px 48px;padding:24px 0;border-top:1px solid var(--rule,#352e28);background:var(--g0,#141210)}.ds-stat{display:flex;flex-direction:column}.ds-stat b{font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-size:26px;font-weight:700;line-height:1;color:var(--t0,#efe7da);font-variant-numeric:tabular-nums}.ds-stat span{font-family:var(--text,\"Atkinson Hyperlegible\",sans-serif);font-size:13px;color:var(--t2,#9d9387)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Lit Facade at Night",
+    "overview": "The Kinora web client is a cinema front after dark. The ground is lacquered foyer wall with a warm undertone, the posters sit in illuminated cases, and one amber bulb marks whatever is live right now: the case under the beam, the primary action, playback progress, the active place in the navigation. Everything else stays at rest in plaster tones. Imagery leads; the interface steps back until a decision is needed.\n\nOne token set carries two registers. The **foyer** (home, library, detail, player) lets backdrops and posters fill the frame, sets titles in a condensed signage face large enough to read from three metres, and moves with a remote. The **booth** (admin, editors, settings, forms) is the projection booth behind the facade: hairline rules instead of panels, tables, tabular figures, no decoration. Both are built from the same colors, scales and rules; the booth is simply the foyer with the lights on the work.\n\nDepth comes only from overlap: text sits on its own solid ground or behind the single legibility scrim over imagery. Nothing glows, nothing is boxed for the sake of boxing, and there are no decorative gradients. Missing artwork is a designed state: a printed programme card, not a grey placeholder.",
+    "keyCharacteristics": [
+      "Warm near-black ground in four steps, never blue, never pure black outside the player screen.",
+      "One accent, marquee amber, reserved for what is live.",
+      "Condensed display face for titles; hyperlegible text face for everything read, including small numerals.",
+      "Hairline rules divide; containers are rare and flat.",
+      "Remote-first: 44 px targets, a 3 px offset amber ring, arrow-key spatial navigation with the facade following focus.",
+      "Token-only styling: literals survive only where a token cannot (breakpoints, gradient angles, rotation, 100vh)."
+    ],
+    "rules": [
+      {
+        "name": "The One Bulb Rule",
+        "body": "Amber marks only what is live: focus and the lit case, the primary action, progress, the active nav item, the reason line. A resting poster case carries a hairline Rule frame (programme cards add a Rule High top rule), never amber.",
+        "section": "colors"
+      },
+      {
+        "name": "The Warm Ground Rule",
+        "body": "The ground is the four foyer steps. Pure black appears only behind the video; blue or purple tints appear nowhere.",
+        "section": "colors"
+      },
+      {
+        "name": "The Single Scrim Rule",
+        "body": "The only gradients are the legibility scrims over imagery (hero, detail backdrop, the top bar fade, player chrome), all built from the scrim channel (`20 18 16`) at varying alpha. Buttons, cards and surfaces are flat.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three-Metre Numeral Rule",
+        "body": "Numbers at small and medium sizes are set in Atkinson Hyperlegible 700 with tabular figures. Big Shoulders' \"1\" reads as a bar from the sofa, so the display face carries numerals only when they are large: the year at the foot of a programme card, and codes such as the party code and PIN entry.",
+        "section": "typography"
+      },
+      {
+        "name": "The Signage Rule",
+        "body": "The display face is for names and headings, never for running text, buttons or labels.",
+        "section": "typography"
+      },
+      {
+        "name": "The Token-Only Rule",
+        "body": "Every length, colour, duration and size comes from a `:root` token. The only literals allowed outside `:root` are media-query breakpoints, gradient angles, rotation degrees and `100vh`.",
+        "section": "layout"
+      },
+      {
+        "name": "The No-Glow Rule",
+        "body": "Nothing casts a shadow or a halo. Light is signalled by amber colour on edges, never by blur.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do reserve marquee amber for what is live: focus and the lit case, the one primary action, progress, the active nav item, the reason line.",
+      "Do set every small or medium number in Atkinson Hyperlegible 700 with tabular figures.",
+      "Do divide with 1 px Rule hairlines and let content sit on the ground; use a container only for floating layers (modals, menus, pop-overs, toasts).",
+      "Do give every interactive target at least 44 px (hit token) and the 3 px amber offset focus ring; lift focused cases by 4 %.",
+      "Do keep arrow-key / D-pad spatial navigation working on every new surface, with the facade following focus where there is one.",
+      "Do design the no-artwork state as a programme card, not a placeholder.",
+      "Do honour prefers-reduced-motion: no lift, no transitions, slowed spinner, instant reactions.",
+      "Do use the motion tokens: 160 ms out, 240 ms in, one shared ease curve.",
+      "Do pull every value from a `:root` token; script geometry reads tokens too."
+    ],
+    "donts": [
+      "Don't put amber on a resting poster case, a profile colour, or decoration.",
+      "Don't use blue, purple, or pure black outside the player screen.",
+      "Don't add drop shadows, glows, or gradient fills to buttons or surfaces; the scrim is the only gradient.",
+      "Don't nest a card inside a card or box booth content in outlined panels.",
+      "Don't set small numerals, buttons or running text in Big Shoulders Display.",
+      "Don't use emoji as icons; icons are inline 24-unit SVG strokes.",
+      "Don't use a radius other than 2 px or 6 px (circles only for small status marks).",
+      "Don't write inline pixel styles or literal colours outside `:root`."
+    ]
+  }
+}

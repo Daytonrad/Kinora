@@ -242,10 +242,23 @@ A webkliens összes szövege az `app.js` elején, a `T` objektumban van, így az
 Beépített relay/NAT-áttörés, natív Android/iOS/TV kliensek (a Bearer tokenes API már támogatja őket), intro-felismerés audio-ujjlenyomattal,
 trickplay előnézeti képek, zenei könyvtár, élő TV, hiányzó gyűjteményelemek TMDB-ből, Postgres, angol fordítás.
 
+## Dizájn
+
+A felület a „kivilágított mozihomlokzat” gondolatára épül: a poszterek megvilágított plakáttartókban ülnek, az egyetlen akcentszín (borostyán)
+csak annak jár, ami éppen „él” – a fókuszált kártya, a lejátszás, a haladás, az egyetlen elsődleges gomb. Két regiszter van ugyanazokból a
+tokenekből: az **előcsarnok** (böngészés: a kép vezet, a felület hátralép) és a **vetítőfülke** (admin, szerkesztők: hajszálvonalak, táblák, tabuláris számok).
+
+- Minden érték design token a `style.css` elején (`:root`): színskála, 4/8-as térköz-skála, betűméret-skála, két lekerekítés, 44 px-es érintési minimum, mozgás-időzítés.
+- Betűk saját kiszolgálásból (`web/static/fonts`, SIL OFL): **Big Shoulders Display** a címekhez és számokhoz, **Atkinson Hyperlegible** a szövegekhez – mindkettő tartalmazza az ő/ű-t.
+- Távirányító/billentyűzet: a nyilak térben mozgatják a fókuszt a sorok és rácsok között, a fókuszált plakáttartó kigyullad, és a kezdőlap homlokzata arra a filmre vált; Enter nyit, Esc visszalép.
+- Kép nélküli könyvtárnál a kártya tipográfiai címkártya (cím + év), nem üres doboz.
+- A régi felület képei összehasonlításhoz: `docs/screenshots/before/`.
+
 ## Képernyőképek
 
 | | |
 |---|---|
+| ![Fókusz a távirányítóval](docs/screenshots/05b-home-focus.png) | ![Könyvtár](docs/screenshots/06-library.png) |
 | ![Részletek](docs/screenshots/07-detail.png) | ![Miért kódol át?](docs/screenshots/10-player-transcode-why.png) |
 | ![Watch party](docs/screenshots/19-party-host.png) | ![Smart gyűjtemény](docs/screenshots/14-smart-editor.png) |
 | ![Encoder-önteszt](docs/screenshots/16-admin-transcode.png) | ![Telefon](docs/screenshots/21-phone-home.png) |
