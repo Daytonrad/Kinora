@@ -80,7 +80,11 @@ struct HomeTab: View {
 
     private func load() async {
         error = nil
-        do { data = try await model.api { try await $0.home() } }
+        do {
+            let d = try await model.api { try await $0.home() }
+            data = d
+            Spotlight.index((d.hero.map { [$0] } ?? []) + d.rows.flatMap(\.items))
+        }
         catch is CancellationError {}
         catch { if data == nil { self.error = error.localizedDescription } }
     }

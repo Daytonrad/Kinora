@@ -490,7 +490,10 @@ final class PlayerModel: NSObject {
         lastReport = .now
         let p = position, id = item.id, c = client
         guard p >= 1 || ended else { return }
-        Task { try? await c.reportProgress(id, position: p, ended: ended) }
+        Task {
+            await ProgressQueue.report(id, position: p, ended: ended, client: c)
+            if ended { DownloadStore.shared.watched(id) }
+        }
     }
 
     // MARK: - lock screen and Control Center

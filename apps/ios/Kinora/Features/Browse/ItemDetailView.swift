@@ -15,6 +15,8 @@ struct ItemDetailView: View {
     @State private var episodes: [Int: [Item]] = [:]
     @State private var overviewExpanded = false
     @State private var fetchingSeason: Int?
+    @State private var askSeasonQuality = false
+    @State private var seasonNotice: String?
 
     private var current: Item { detail?.item ?? item }
 
@@ -37,6 +39,18 @@ struct ItemDetailView: View {
         .task { await load() }
         .onChange(of: model.playbackGeneration) { Task { await load() } }
         .task(id: season) { await loadEpisodes() }
+        .confirmationDialog("Évad letöltése", isPresented: $askSeasonQuality, titleVisibility: .visible) {
+            ForEach(DownloadButton.qualities, id: \.0) { q in
+                Button(q.1) { downloadSeason(q.0) }
+            }
+        } message: {
+            Text("Az évad még nem letöltött részei sorban kerülnek az eszközre.")
+        }
+        .alert("Évad letöltése", isPresented: Binding(get: { seasonNotice != nil }, set: { if !$0 { seasonNotice = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(seasonNotice ?? "")
+        }
         .kinoraScreen()
         .navigationTitle(current.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -166,6 +180,14 @@ struct ItemDetailView: View {
             if let season, let list = episodes[season] {
                 if list.isEmpty {
                     Text("Ebben az évadban nincs rész.").foregroundStyle(Theme.muted)
+                } else if !missing(list).isEmpty {
+                    Button {
+                        if let room = DownloadStore.shared.roomError() { seasonNotice = room } else { askSeasonQuality = true }
+                    } label: {
+                        Label("Évad letöltése (\(missing(list).count) rész)", systemImage: "arrow.down.circle")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .tint(Theme.amber)
                 }
                 ForEach(list) { ep in
                     NavigationLink(value: ep) { EpisodeRow(item: ep, isNext: ep.id == detail?.playNext?.id) }
@@ -205,6 +227,7 @@ struct ItemDetailView: View {
         do {
             let d = try await model.api { [id = item.id] in try await $0.item(id) }
             detail = d
+            Spotlight.index([d.item] + (d.similar ?? []))
             userData = d.item.userData ?? UserData()
             if current.kind == .season {
                 season = d.item.id
@@ -217,6 +240,28 @@ struct ItemDetailView: View {
         } catch is CancellationError {
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    /// Episodes of the list that are neither saved nor downloading.
+    private func missing(_ list: [Item]) -> [Item] {
+        let store = DownloadStore.shared
+        return list.filter { store.download(for: $0.id) == nil && store.phases[$0.id] == nil }
+    }
+
+    private func downloadSeason(_ quality: String) {
+        guard let season, let list = episodes[season] else { return }
+        let todo = missing(list)
+        Task {
+            do {
+                let n = try await model.api { try await DownloadStore.shared.startAll(todo, quality: quality, client: $0) }
+                if n < todo.count {
+                    seasonNotice = "\(n) rész letöltése indult el a \(todo.count)-ból. "
+                        + (DownloadStore.shared.roomError() ?? "A többit később próbáld újra.")
+                }
+            } catch {
+                seasonNotice = error.localizedDescription
+            }
         }
     }
 

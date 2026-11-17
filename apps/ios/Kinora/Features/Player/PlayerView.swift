@@ -8,16 +8,26 @@ struct PlayerView: View {
     @State private var chrome = true
     @State private var scrubbing = false
     @State private var hideTask: Task<Void, Never>?
+    /// Double-tap seeking: which side and how far, shown briefly.
+    @State private var seekFlash: SeekFlash?
+    @State private var flashTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            PlayerSurface(layer: player.layer)
-                .ignoresSafeArea()
-                .contentShape(.rect)
-                .onTapGesture { toggleChrome() }
-                .onTapGesture(count: 2) { withAnimation { player.fill.toggle() } }
-                .accessibilityHidden(true)
+            GeometryReader { geo in
+                PlayerSurface(layer: player.layer)
+                    .contentShape(.rect)
+                    .gesture(
+                        SpatialTapGesture(count: 2)
+                            .onEnded { doubleTap(at: $0.location.x, width: geo.size.width) }
+                            .exclusively(before: TapGesture().onEnded { toggleChrome() })
+                    )
+            }
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
+
+            if let seekFlash { SeekFlashView(flash: seekFlash).allowsHitTesting(false) }
 
             if player.error == nil, player.loading || player.buffering {
                 ProgressView().controlSize(.large).tint(.white).allowsHitTesting(false)
@@ -134,6 +144,28 @@ struct PlayerView: View {
         if let cap { return SettingChoices.bitrates.first { $0.0 == cap }?.1 ?? "\(cap) kbps" }
         if let effective { return "Automatikus (mobilnet: \(effective / 1000) Mbps)" }
         return "Automatikus"
+    }
+
+    // MARK: - double tap
+
+    /// Left or right third: ±10 s (taps in a row add up); the middle switches fill and fit.
+    private func doubleTap(at x: CGFloat, width: CGFloat) {
+        guard width > 0, player.error == nil else { return }
+        let third = x / width
+        guard third < 1 / 3 || third > 2 / 3 else {
+            withAnimation { player.fill.toggle() }
+            return
+        }
+        let forward = third > 2 / 3
+        player.seek(by: forward ? 10 : -10)
+        let total = (seekFlash?.forward == forward ? seekFlash?.seconds ?? 0 : 0) + 10
+        withAnimation(.easeOut(duration: 0.15)) { seekFlash = SeekFlash(forward: forward, seconds: total) }
+        flashTask?.cancel()
+        flashTask = Task {
+            try? await Task.sleep(for: .seconds(0.8))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.25)) { seekFlash = nil }
+        }
     }
 
     // MARK: - chrome timing
@@ -522,4 +554,30 @@ private struct AirPlayButton: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
+}
+
+struct SeekFlash: Equatable {
+    var forward: Bool
+    var seconds: Int
+}
+
+/// "−20 mp" on the side that was double-tapped.
+private struct SeekFlashView: View {
+    var flash: SeekFlash
+
+    var body: some View {
+        HStack {
+            if flash.forward { Spacer() }
+            VStack(spacing: 6) {
+                Image(systemName: flash.forward ? "goforward" : "gobackward").font(.title)
+                Text("\(flash.forward ? "+" : "−")\(flash.seconds) mp").font(.subheadline.weight(.semibold).monospacedDigit())
+            }
+            .padding(22)
+            .background(.black.opacity(0.45), in: .circle)
+            .padding(.horizontal, 48)
+            if !flash.forward { Spacer() }
+        }
+        .transition(.opacity)
+        .accessibilityHidden(true)
+    }
 }

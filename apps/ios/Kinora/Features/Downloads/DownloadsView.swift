@@ -35,7 +35,7 @@ struct DownloadsView: View {
                         } header: {
                             Text("Az eszközön")
                         } footer: {
-                            Text("Összesen \(ByteCountFormatter.string(fromByteCount: store.usedBytes, countStyle: .file)). Törléshez húzd balra a sort.")
+                            Text("\(usage). Törléshez húzd balra a sort.")
                         }
                         .listRowBackground(Theme.panel)
                     }
@@ -46,6 +46,12 @@ struct DownloadsView: View {
         .kinoraScreen()
         .navigationTitle("Letöltések")
         .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountMenu() } }
+    }
+
+    private var usage: String {
+        let used = ByteCountFormatter.string(fromByteCount: store.usedBytes, countStyle: .file)
+        let limit = AppSettings.downloadLimitGB
+        return limit > 0 ? "\(used) / \(limit) GB" : "Összesen \(used)"
     }
 }
 
@@ -90,7 +96,9 @@ private struct ActiveRow: View {
                     Text("Előkészítés a szerveren · \(Int(p * 100))%").font(.caption).foregroundStyle(Theme.muted)
                 case .transferring(let p):
                     ProgressView(value: p).tint(Theme.amber)
-                    Text("Letöltés · \(Int(p * 100))%").font(.caption).foregroundStyle(Theme.muted)
+                    Text(p == 0 && AppSettings.downloadsWifiOnly && NetworkStatus.shared.isExpensive
+                         ? "Wi-Fi-re vár" : "Letöltés · \(Int(p * 100))%")
+                        .font(.caption).foregroundStyle(Theme.muted)
                 case .failed(let m):
                     Text(m).font(.caption).foregroundStyle(Theme.danger)
                 }
@@ -119,7 +127,9 @@ struct DownloadButton: View {
 
     var body: some View {
         Button {
-            if store.download(for: item.id) == nil, store.phases[item.id] == nil { asking = true }
+            if store.download(for: item.id) == nil, store.phases[item.id] == nil {
+                if let room = store.roomError() { error = room } else { asking = true }
+            }
             else { model.tab = .downloads }
         } label: {
             icon

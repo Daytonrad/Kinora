@@ -15,7 +15,9 @@ final class AppModel {
         case home
     }
 
-    private(set) var screen: Screen = .launching
+    private(set) var screen: Screen = .launching {
+        didSet { if screen == .home { syncOffline() } }
+    }
     private(set) var servers: [SavedServer] = []
     private(set) var server: SavedServer?
     private(set) var status: ServerStatus?
@@ -126,6 +128,7 @@ final class AppModel {
     }
 
     private func use(_ s: SavedServer) {
+        if let old = server, old.id != s.id { Spotlight.clear() }
         server = s
         let c = KinoraClient(server: s, token: store.token(for: s.id))
         let store = self.store
@@ -220,6 +223,7 @@ final class AppModel {
     func switchProfile() {
         settingsVisible = false
         player?.close()
+        Spotlight.clear()
         homePath = NavigationPath()
         tab = .home
         screen = .profiles
@@ -234,6 +238,7 @@ final class AppModel {
         await client?.setToken(nil)
         me = nil
         screen = .login
+        Spotlight.clear()
         reloadWidgets()
     }
 
@@ -306,6 +311,12 @@ final class AppModel {
     func api<T: Sendable>(_ work: (KinoraClient) async throws -> T) async throws -> T {
         guard let client else { throw KinoraError.network }
         return try await guarded { try await work(client) }
+    }
+
+    /// Sends progress saved while offline; on home, on foreground and when the network is back.
+    func syncOffline() {
+        guard screen == .home, let client else { return }
+        Task { await ProgressQueue.flush(client) }
     }
 
     // MARK: - widgets and links

@@ -25,6 +25,9 @@ struct SettingsView: View {
     @State private var backgroundAudio = AppSettings.backgroundAudio
     @State private var subtitleStyle = AppSettings.subtitleStyle
     @State private var cellularMax = AppSettings.cellularMaxBitrate
+    @State private var wifiOnly = AppSettings.downloadsWifiOnly
+    @State private var deleteWatched = AppSettings.deleteWatchedDownloads
+    @State private var downloadLimit = AppSettings.downloadLimitGB
     @State private var addingAddress = false
     @State private var newAddress = ""
     @State private var addressBusy = false
@@ -48,6 +51,7 @@ struct SettingsView: View {
                 if canEdit { playback }
                 app
                 subtitleSection
+                downloadsSection
                 devicesSection
                 serverSection
                 Section {
@@ -197,6 +201,26 @@ struct SettingsView: View {
             Text("Alkalmazás")
         } footer: {
             Text("Ha nem indul el a kép a képben, a hang akkor is szól tovább, amikor kilépsz az appból vagy lezárod a telefont.")
+        }
+        .listRowBackground(Theme.panel)
+    }
+
+    private var downloadsSection: some View {
+        Section {
+            Toggle("Csak Wi-Fi-n", isOn: $wifiOnly)
+                .onChange(of: wifiOnly) { _, on in AppSettings.downloadsWifiOnly = on }
+            Toggle("Megnézett letöltések törlése", isOn: $deleteWatched)
+                .onChange(of: deleteWatched) { _, on in AppSettings.deleteWatchedDownloads = on }
+            Picker("Tárhelykeret", selection: $downloadLimit) {
+                ForEach([0, 5, 10, 20, 50, 100], id: \.self) { gb in
+                    Text(gb == 0 ? "Nincs" : "\(gb) GB").tag(gb)
+                }
+            }
+            .onChange(of: downloadLimit) { _, gb in AppSettings.downloadLimitGB = gb }
+        } header: {
+            Text("Letöltések")
+        } footer: {
+            Text("Csak Wi-Fi-n: mobilneten a letöltés megvárja a Wi-Fi-t. A megnézett letöltés a végignézés után törlődik az eszközről. A keret elérése után új letöltés nem indul.")
         }
         .listRowBackground(Theme.panel)
     }

@@ -102,7 +102,20 @@ final class DownloadStore {
         if pending.values.contains(where: { phases[$0.item.id].isPreparing }) { poll() }
     }
 
+    /// Why a new download can't start: the space limit is reached or the device is almost full.
+    func roomError() -> String? {
+        let limit = Int64(AppSettings.downloadLimitGB) * 1_000_000_000
+        if limit > 0, usedBytes >= limit {
+            return "Elérted a letöltésekre beállított \(AppSettings.downloadLimitGB) GB-os keretet. Törölj valamit, vagy emeld a keretet a beállításokban."
+        }
+        let free = (try? dir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
+            .volumeAvailableCapacityForImportantUsage ?? .max
+        if free < 1_500_000_000 { return "Kevés a szabad hely az eszközön (1,5 GB alatt)." }
+        return nil
+    }
+
     func start(_ item: Item, quality: String, client: KinoraClient) async throws {
+        if let room = roomError() { throw DownloadError(message: room) }
         self.client = client
         let job = try await client.createDownload(item.id, quality: quality)
         var p = Pending(item: item, key: job.key, quality: quality)
@@ -116,6 +129,22 @@ final class DownloadStore {
         pending[item.id] = p
         persist()
         if job.isDone { transfer(p) } else { phases[item.id] = .preparing(job.progress ?? 0); poll() }
+    }
+
+    /// Queues every episode of a season that is not saved or on its way yet; returns how many started.
+    @discardableResult
+    func startAll(_ episodes: [Item], quality: String, client: KinoraClient) async throws -> Int {
+        var started = 0
+        for ep in episodes where download(for: ep.id) == nil && phases[ep.id] == nil {
+            do { try await start(ep, quality: quality, client: client); started += 1 }
+            catch where started > 0 { break }
+        }
+        return started
+    }
+
+    /// Watched to the end: removed when the user asked for that.
+    func watched(_ id: Int) {
+        if AppSettings.deleteWatchedDownloads { delete(id) }
     }
 
     func cancel(_ id: Int) {
@@ -180,7 +209,9 @@ final class DownloadStore {
             }
             pending[p.item.id]?.subtitles = subs
             persist()
-            let task = session.downloadTask(with: req)
+            var request = req
+            request.allowsCellularAccess = !AppSettings.downloadsWifiOnly
+            let task = session.downloadTask(with: request)
             task.taskDescription = String(p.item.id)
             task.resume()
         }
@@ -228,6 +259,11 @@ final class DownloadStore {
         try? JSONEncoder().encode(saved).write(to: indexURL, options: .atomic)
         try? JSONEncoder().encode(pending).write(to: pendingURL, options: .atomic)
     }
+}
+
+struct DownloadError: LocalizedError {
+    var message: String
+    var errorDescription: String? { message }
 }
 
 private extension Optional where Wrapped == DownloadStore.Phase {
