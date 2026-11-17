@@ -7,6 +7,7 @@
 // which `tizen package -t wgt -s <profile> -- kinora-unsigned.wgt` can sign later.
 import { run, has, buildShared, fresh, copy, sharedDist, version, log, zipDir, existsSync, join, readFileSync, writeFileSync, mkdirSync } from '../scripts/lib.mjs';
 import { copyFileSync, readdirSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,16 +21,40 @@ fresh(www);
 copy(sharedDist, www);
 // Samsung's webapis (product info, screensaver, AVInfo/HDR) are injected by the TV at $WEBAPIS.
 const idx = join(www, 'index.html');
-writeFileSync(idx, readFileSync(idx, 'utf8').replace('<script defer src="./app.js">', '<script src="$WEBAPIS/webapis/webapis.js"></script>\n  <script defer src="./app.js">'));
+const html = readFileSync(idx, 'utf8')
+  .replace('<script defer src="./app.js">', '<script src="$WEBAPIS/webapis/webapis.js"></script>\n  <script defer src="./app.js">')
+  .replace('</head>', '  <link rel="stylesheet" href="./app.css">\n</head>');
+writeFileSync(idx, html);
+// Deliver the TV's presentation as a regular stylesheet, independent of the JS bundle.
+const cssDir = join(here, '..', 'shared', 'src', 'styles');
+writeFileSync(join(www, 'app.css'), [
+  readFileSync(join(cssDir, 'tokens.gen.css'), 'utf8'),
+  readFileSync(join(cssDir, 'app.css'), 'utf8'),
+].join('\n'));
 writeFileSync(join(www, 'config.xml'), readFileSync(join(here, 'config.xml'), 'utf8').replace(/version="[^"]*"(\s+viewmodes)/, `version="${ver}"$1`));
 copyFileSync(join(here, 'icon.png'), join(www, 'icon.png'));
 mkdirSync(dist, { recursive: true });
 
+function usableTizenCli(candidate) {
+  // A stale/incomplete Tizen Studio folder can contain tizen.bat without the
+  // Java runtime or CLI libraries it needs. Treat that as "CLI unavailable"
+  // so the documented unsigned package fallback still works.
+  const r = spawnSync(candidate, ['version'], {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+    windowsHide: true,
+    timeout: 15000,
+  });
+  return !r.error && r.status === 0;
+}
+
 function tizenCli() {
-  if (has('tizen')) return 'tizen';
+  if (has('tizen') && usableTizenCli('tizen')) return 'tizen';
   const roots = [process.env.TIZEN_STUDIO, 'C:/tizen-studio', join(process.env.USERPROFILE || '', 'tizen-studio'), join(process.env.HOME || '', 'tizen-studio')].filter(Boolean);
   for (const r of roots) {
-    for (const p of [join(r, 'tools', 'ide', 'bin', 'tizen.bat'), join(r, 'tools', 'ide', 'bin', 'tizen')]) if (existsSync(p)) return p;
+    for (const p of [join(r, 'tools', 'ide', 'bin', 'tizen.bat'), join(r, 'tools', 'ide', 'bin', 'tizen')]) {
+      if (existsSync(p) && usableTizenCli(p)) return p;
+    }
   }
   return null;
 }
@@ -46,8 +71,16 @@ if (cli) {
   log('signed widget: ' + wgt);
 } else {
   wgt = join(dist, 'kinora-unsigned.wgt');
-  zipDir(www, wgt, ['config.xml']);
-  log('Tizen CLI not found → unsigned widget: ' + wgt);
+  try {
+    zipDir(www, wgt, ['config.xml']);
+  } catch (e) {
+    // Windows can keep the previous WGT open briefly (for example while it is
+    // being inspected). Preserve it and emit this build under a fresh name.
+    if (!e || e.code !== 'EBUSY') throw e;
+    wgt = join(dist, `kinora-unsigned-${Date.now()}.wgt`);
+    zipDir(www, wgt, ['config.xml']);
+  }
+  log('Tizen CLI unavailable → unsigned widget: ' + wgt);
   log('A TV-re telepítéshez aláírás kell (Tizen Studio + Samsung tanúsítvány) – lásd docs/TESZTELES_MA.md.');
 }
 
