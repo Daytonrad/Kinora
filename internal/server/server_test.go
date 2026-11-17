@@ -24,6 +24,31 @@ type client struct {
 	t    *testing.T
 	base string
 	hc   *http.Client
+	hdr  map[string]string // extra headers (Authorization, Origin) for app-style clients
+}
+
+// raw performs a request and returns the response (body read into the second value).
+func (c *client) raw(method, path string, body any) (*http.Response, []byte) {
+	c.t.Helper()
+	var r io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		r = bytes.NewReader(b)
+	}
+	req, _ := http.NewRequest(method, c.base+path, r)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range c.hdr {
+		req.Header.Set(k, v)
+	}
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp, b
 }
 
 func (c *client) do(method, path string, body any, out any) int {
@@ -35,6 +60,9 @@ func (c *client) do(method, path string, body any, out any) int {
 	}
 	req, _ := http.NewRequest(method, c.base+path, r)
 	req.Header.Set("Content-Type", "application/json")
+	for k, v := range c.hdr {
+		req.Header.Set(k, v)
+	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		c.t.Fatal(err)
@@ -49,6 +77,13 @@ func (c *client) do(method, path string, body any, out any) int {
 
 // newTestServer scans the generated test library and returns a logged-in admin client.
 func newTestServer(t *testing.T) (*client, *store.Store) {
+	t.Helper()
+	c, st, _ := newTestServerFull(t)
+	return c, st
+}
+
+// newTestServerFull also returns the *Server (for white-box checks).
+func newTestServerFull(t *testing.T) (*client, *store.Store, *Server) {
 	t.Helper()
 	mediaDir, _ := filepath.Abs("../../testmedia")
 	if _, err := os.Stat(filepath.Join(mediaDir, ".complete")); err != nil {
@@ -80,7 +115,7 @@ func newTestServer(t *testing.T) (*client, *store.Store) {
 			t.Fatal(err)
 		}
 	}
-	return c, st
+	return c, st, srv
 }
 
 func TestKidsProfileCannotSeeRFilm(t *testing.T) {

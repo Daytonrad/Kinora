@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Home media servers are usually reached over plain HTTP on a LAN address
+  (http://192.168.1.10:8096) that cannot be listed in advance: domain-config only
+  matches hostnames/IPs known at build time. Cleartext is therefore allowed for every
+  host; HTTPS servers (reverse proxy, Cloudflare Tunnel) keep full certificate checks
+  with the system trust store. See apps/README.md, "Miért kell a cleartext?".
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

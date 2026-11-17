@@ -17,7 +17,19 @@ func (s *Server) handleImage(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 		writeErr(w, http.StatusNotFound, "ismeretlen képtípus")
 		return
 	}
-	if c.Profile != nil && !s.st.ItemVisible(id, c.Profile) {
+	if c.ViaStreamToken && c.StreamItem != 0 && c.StreamItem != id {
+		writeErr(w, http.StatusForbidden, "a token nem erre az elemre szól")
+		return
+	}
+	filter := c.Profile
+	if filter == nil && c.ProfileLock > 0 {
+		filter, _ = s.st.Profile(c.ProfileLock)
+		if filter == nil {
+			writeErr(w, http.StatusNotFound, "nem található")
+			return
+		}
+	}
+	if filter != nil && !s.st.ItemVisible(id, filter) {
 		writeErr(w, http.StatusNotFound, "nem található")
 		return
 	}

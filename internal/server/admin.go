@@ -149,7 +149,8 @@ func (s *Server) handleInviteDelete(w http.ResponseWriter, r *http.Request, c *r
 
 // ------------------------------------------------------------------ settings
 
-var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder"}
+var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder",
+	"quickconnect_enabled", "discovery_enabled", "brand_accent", "intro_detection", "intro_window_min"}
 
 // SettingEnv maps settings to the environment variables that can force them.
 var SettingEnv = map[string]string{
@@ -159,6 +160,11 @@ var SettingEnv = map[string]string{
 	"tmdb_key":          "KINORA_TMDB_KEY",
 	"metadata_lang":     "KINORA_METADATA_LANG",
 	"encoder":           "KINORA_ENCODER",
+	"quickconnect_enabled": "KINORA_QUICKCONNECT",
+	"discovery_enabled":    "KINORA_DISCOVERY",
+	"brand_accent":         "KINORA_ACCENT",
+	"intro_detection":      "KINORA_INTRO_DETECTION",
+	"intro_window_min":     "KINORA_INTRO_WINDOW_MIN",
 }
 
 const maskChar = "•"
@@ -221,6 +227,22 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 				return
 			}
 			v = strings.TrimRight(v, "/")
+		case "intro_window_min":
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 2 || n > 30 {
+				writeErr(w, http.StatusBadRequest, "az intró keresési ablaka 2–30 perc lehet")
+				return
+			}
+		case "quickconnect_enabled", "discovery_enabled", "intro_detection":
+			if v != "0" && v != "1" {
+				writeErr(w, http.StatusBadRequest, "a kapcsoló értéke 0 vagy 1 lehet")
+				return
+			}
+		case "brand_accent":
+			if v != "" && !reHexColor.MatchString(v) {
+				writeErr(w, http.StatusBadRequest, "az akcentszín #rrggbb formátumú legyen")
+				return
+			}
 		case "server_name":
 			if v == "" {
 				writeErr(w, http.StatusBadRequest, "a szerver neve nem lehet üres")
@@ -312,6 +334,9 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request, c *reqCtx)
 	p := r.URL.Query().Get("path")
 	if p == "" {
 		p = s.cfg.MediaRoot
+		if (p == "" || !fileExists(p)) && installMode() != "docker" {
+			p = "/" // native install: the whole file system, shortcuts lead to /home, /mnt, /media, /srv
+		}
 		if p == "" || !fileExists(p) {
 			p, _ = os.UserHomeDir()
 		}
@@ -339,7 +364,18 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request, c *reqCtx)
 	if parent == p {
 		parent = ""
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"path": p, "parent": parent, "dirs": dirs, "sep": string(filepath.Separator)})
+	// folders the service user cannot enter are shown locked, so the admin knows before adding them
+	locked := []string{}
+	for _, d := range dirs {
+		if f, err := os.Open(filepath.Join(p, d)); err != nil {
+			locked = append(locked, d)
+		} else {
+			f.Close()
+		}
+	}
+	mode := installMode()
+	writeJSON(w, http.StatusOK, map[string]any{"path": p, "parent": parent, "dirs": dirs, "locked": locked, "sep": string(filepath.Separator),
+		"mode": mode, "shortcuts": browseShortcuts(mode, s.cfg.MediaRoot), "host_path": hostPath(mode, p)})
 }
 
 func isDir(p string) bool { st, err := os.Stat(p); return err == nil && st.IsDir() }

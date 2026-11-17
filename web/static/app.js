@@ -31,7 +31,7 @@ const T = {
   fixMatch: 'Találat javítása', similar: 'Hasonló', seasons: 'Évadok', episodes: 'Epizódok', season: n => n === 0 ? 'Különkiadások' : `${n}. évad`,
   ep: (s, e) => `S${String(s).padStart(2, '0')}E${String(e).padStart(2, '0')}`, min: m => `${m} perc`, hm: (h, m) => h ? `${h} ó ${m} p` : `${m} perc`,
   genres: 'Műfajok', file: 'Fájl', video: 'Videó', audio: 'Hang', subtitles: 'Felirat',
-  all: 'Összes', more: 'Összes', moreActions: 'Műveletek',
+  all: 'Összes', more: 'Összes', moreActions: 'Műveletek', moreBtn: 'Továbbiak', details: 'Részletek', data: 'Adatok',
   libEmpty: 'Ebben a könyvtárban még nincs semmi. Ha most adtad hozzá, a szkennelés pár perc.', noResults: 'Nincs találat ezekkel a szűrőkkel.',
   filters: 'Szűrők', sort: 'Rendezés', asc: 'Növekvő', desc: 'Csökkenő', yearFrom: 'Évtől', yearTo: 'Évig', minRating: 'Min. értékelés',
   watched: 'Megnézve', unwatched: 'Nem nézett', any: 'Mind', onlyFav: 'Csak kedvencek', clear: 'Szűrők törlése', saveSmart: 'Mentés smart gyűjteményként',
@@ -71,6 +71,29 @@ const T = {
   connectLede: 'Ezeken a címeken érhető el a szerver. Telefonról olvasd be a QR-kódot.', noPublic: 'Nincs megadva nyilvános URL (Beállítások).',
   matchSearch: 'Keresés a TMDB-ben', matchApply: 'Ezt választom', tmdbId: 'vagy TMDB azonosító',
   netErr: 'Nem érem el a szervert. Ellenőrizd a kapcsolatot.',
+  // devices & quick connect
+  connectDevice: 'Eszköz csatlakoztatása', qcLede: 'Írd be a tévén vagy telefonon látható 6 jegyű kódot.', qcCode: '6 jegyű kód', next: 'Tovább',
+  qcWants: (n, p) => `${n || 'Ismeretlen eszköz'} (${p}) szeretne belépni a fiókodba.`, qcProfile: 'Melyik profillal lépjen be?', qcAnyProfile: 'Profilválasztó az eszközön',
+  qcPinNote: 'A PIN-nel védett profil PIN-jét az új eszközön kell megadni.', qcKidsNote: 'A gyerekprofillal belépett eszköz nem válthat más profilra.',
+  approve: 'Jóváhagyás', deny: 'Elutasítás', qcApproved: 'Kész! Az eszköz pár másodpercen belül belép.', qcDenied: 'Elutasítva.', qcKids: 'Gyerekprofilból nem lehet eszközt csatlakoztatni.',
+  myDevices: 'Bejelentkezett eszközök', thisDevice: 'ez az eszköz', signOutDevice: 'Kiléptetés', signOutOthers: 'Kiléptetés mindenhonnan (ezen kívül)',
+  signedOutN: n => `${n} eszköz kiléptetve.`, lastActive: 'Utoljára aktív', aDevices: 'Eszközök',
+  platforms: { web: 'Böngésző', android: 'Android', androidtv: 'Android TV', ios: 'iOS', tizen: 'Samsung TV', webos: 'LG TV' },
+  // folders & permissions
+  permCheck: 'Jogosultság ellenőrzése', permOk: 'Olvasható – rendben.', permFix: 'Javítás (futtasd a szerveren):', permGroup: 'Vagy csoporton keresztül:',
+  locked: 'nincs jog', hostPath: p => `A hoston: ${p}`, shortcuts: 'Gyorsugrás',
+  mediaHintNative: 'Bármelyik mappa választható, amit a Kinora szolgáltatás felhasználója olvashat; a lakat jelzi, ahová nincs joga.',
+  mediaHintDocker: 'Dockerben a /media alatt vannak a csatolt mappák; a docker-compose.host.yml-lel a /host alatt a teljes gép is.',
+  // skip intro / credits
+  skipIntro: 'Intró átugrása', skipRecap: 'Előzmények átugrása', skipCredits: 'Stáblista átugrása', skippedIntro: 'Intró átugorva',
+  skipMode: 'Intró és stáblista', skipModes: { manual: 'Átugrás gombbal', auto: 'Automatikus átugrás', off: 'Kikapcsolva' },
+  markIntroStart: 'Intró eleje itt', markIntroEnd: 'Intró vége itt', markCredits: 'Stáblista kezdete itt', clearIntro: 'Kézi intró-jelölés törlése',
+  markStartFirst: 'Előbb jelöld meg az intró elejét.', markSaved: 'Jelölés mentve.',
+  propagateAsk: 'Alkalmazod az évad többi részére is, ahol ugyanez a főcím szól?', propagated: n => `${n} további résznél beállítva.`,
+  aSegments: 'Intró-felismerés', segAnalyze: 'Intró-felismerés futtatása', segQueued: n => `Sorba állítva: ${n} évad.`,
+  segBackend: 'Ujjlenyomat-készítő', segQueue: 'Várakozó évadok', segRunning: 'Most fut', segStats: (e, a, i, c, m) => `${a}/${e} rész elemezve · intró: ${i} · stáblista: ${c} · kézi jelölés: ${m}`,
+  segDetection: 'Intró- és stáblista-felismerés', segWindow: 'Intró keresése az első N percben (2–30)',
+  qcEnabled: 'Belépés kóddal (Quick Connect)', discEnabled: 'Szerverkeresés a helyi hálózaton (UDP 7359)', on: 'Bekapcsolva', off: 'Kikapcsolva',
   ago: s => { const m = Math.round(s / 60); if (m < 1) return 'most'; if (m < 60) return `${m} perce`; const h = Math.round(m / 60); if (h < 48) return `${h} órája`; return `${Math.round(h / 24)} napja`; },
 };
 
@@ -79,6 +102,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const app = () => document.getElementById('app');
 
 /** h('div.class', {attr|onEvent}, ...children) – tiny DOM builder (text is always escaped). */
+const tok = n => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n)) || 0;
 function h(tag, props, ...kids) {
   const [t, ...cls] = tag.split('.');
   const e = document.createElement(t || 'div');
@@ -96,9 +120,11 @@ function h(tag, props, ...kids) {
   add(e, kids);
   return e;
 }
+/** put(el, ...kids) – replaceChildren that drops false/null/undefined/'' (no raw "false" on screen). */
+function put(el, ...kids) { el.textContent = ""; return add(el, kids); }
 function add(e, kids) {
   for (const k of kids.flat(Infinity)) {
-    if (k == null || k === false) continue;
+    if (k == null || k === false || k === '') continue;
     e.append(k instanceof Node ? k : document.createTextNode(String(k)));
   }
   return e;
@@ -129,8 +155,11 @@ function icon(name, fill) {
   return svg;
 }
 function toast(msg, err) {
-  const t = h('div.toast' + (err ? '.err' : ''), null, msg);
-  document.getElementById('toasts').append(t);
+  const box = document.getElementById('toasts');
+  for (const old of [...box.children]) if (old.textContent === msg) old.remove();
+  while (box.children.length >= 3) box.firstChild.remove();
+  const t = h('div.toast' + (err ? '.err' : ''), { role: err ? 'alert' : 'status' }, msg);
+  box.append(t);
   setTimeout(() => t.remove(), err ? 6000 : 3200);
 }
 const fmtTime = s => {
@@ -191,6 +220,14 @@ function parseHash() {
   return { parts: path.split('/').filter(Boolean), q: new URLSearchParams(qs || '') };
 }
 
+// a deep link (e.g. #/quickconnect?code=…) survives the login and profile screens
+function rememberAfter(hash) { try { sessionStorage.setItem('kinora.after', hash); } catch { /* storage blocked */ } }
+function takeAfter() {
+  let v = null;
+  try { v = sessionStorage.getItem('kinora.after'); sessionStorage.removeItem('kinora.after'); } catch { /* storage blocked */ }
+  return v;
+}
+
 async function loadMe() {
   try { state.me = await GET('/api/me', { noRedirect: true, quiet: true }); }
   catch { state.me = null; }
@@ -207,8 +244,13 @@ async function route() {
   if (p0 === 'setup') return go('#/login');
   if (p0 === 'join' && p1) return viewJoin(p1);
   if (!state.me) await loadMe();
-  if (!state.me) { if (p0 !== 'login') return go('#/login'); return viewLogin(); }
+  if (!state.me) {
+    if (p0 !== 'login') { if (p0 === 'quickconnect') rememberAfter(location.hash); return go('#/login'); }
+    return viewLogin();
+  }
   if (p0 === 'login') return go('#/profiles');
+  if (p0 === 'quickconnect' && state.me.profile) return viewQuickConnect(q.get('code') || '');
+  if (p0 === 'quickconnect') rememberAfter(location.hash);
   if (p0 === 'profiles' || !state.me.profile) return viewProfiles(p1 === 'edit');
   document.title = T.appName;
   try {
@@ -229,6 +271,39 @@ async function route() {
     if (!(e instanceof HTTPError)) console.error(e);
   }
 }
+// D-pad / arrow-key navigation: move focus to the nearest focusable element in that direction.
+function spatialNav(e) {
+  const dir = { ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'u', ArrowDown: 'd' }[e.key];
+  if (!dir || e.altKey || e.ctrlKey || e.metaKey) return;
+  const a = document.activeElement;
+  if (a && a.matches('input, textarea, select, [contenteditable], .timeline, video')) return;
+  if (document.querySelector('.player') && !document.querySelector('.modal-back')) return; // the player owns its keys
+  const scope = document.querySelector('.modal-back .modal') || document.querySelector('.menu-pop.floating') || document;
+  const focusables = [...scope.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter(el => el !== a && !el.disabled && el.offsetParent !== null && !el.closest('.hidden'));
+  if (!a || a === document.body || !scope.contains(a)) {
+    const first = scope.querySelector('.card, .who-item') || focusables[0];
+    if (first) { e.preventDefault(); first.focus(); }
+    return;
+  }
+  const r = a.getBoundingClientRect();
+  const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+  let best = null, bs = Infinity;
+  for (const el of focusables) {
+    const b = el.getBoundingClientRect();
+    if (!b.width && !b.height) continue;
+    const dx = (b.left + b.right) / 2 - cx, dy = (b.top + b.bottom) / 2 - cy;
+    let main, cross;
+    if (dir === 'l') { if (b.right > r.left + 1) continue; main = -dx; cross = Math.abs(dy); }
+    else if (dir === 'r') { if (b.left < r.right - 1) continue; main = dx; cross = Math.abs(dy); }
+    else if (dir === 'u') { if (b.bottom > r.top + 1) continue; main = -dy; cross = Math.abs(dx); }
+    else { if (b.top < r.bottom - 1) continue; main = dy; cross = Math.abs(dx); }
+    const score = main + cross * 2.5;
+    if (score < bs) { bs = score; best = el; }
+  }
+  if (best) { e.preventDefault(); best.focus(); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+}
+document.addEventListener('keydown', spatialNav);
 window.addEventListener('hashchange', route);
 window.addEventListener('DOMContentLoaded', route);
 
@@ -236,7 +311,7 @@ window.addEventListener('DOMContentLoaded', route);
 function shell(active, ...content) {
   const me = state.me, p = me.profile;
   const root = app();
-  root.replaceChildren();
+  put(root);
   const libsNav = h('span');
   const searchInput = h('input', { type: 'search', placeholder: T.searchPh, 'aria-label': T.searchPh, value: active === 'search' ? (parseHash().q.get('q') || '') : '' });
   searchInput.addEventListener('input', debounce(() => {
@@ -248,6 +323,7 @@ function shell(active, ...content) {
     h('button', { role: 'menuitem', onclick: () => POST('/api/profiles/leave').then(() => { state.me.profile = null; go('#/profiles'); }) }, T.switchProfile),
     h('a', { role: 'menuitem', href: '#/party' }, T.joinParty),
     h('a', { role: 'menuitem', href: '#/account' }, T.account),
+    !p.is_kids && !me.profile_locked && h('a', { role: 'menuitem', href: '#/quickconnect' }, T.connectDevice),
     h('hr'),
     h('button', { role: 'menuitem', onclick: () => POST('/api/logout').then(() => { state.me = null; go('#/login'); }) }, T.logout));
   const avatarBtn = h('button.avatar', { style: { background: p.color }, 'aria-label': p.name, 'aria-haspopup': 'menu', onclick: e => { e.stopPropagation(); menuPop.classList.toggle('hidden'); } }, p.name.slice(0, 1).toUpperCase());
@@ -293,10 +369,10 @@ function confirmBox(text) {
 
 // ===================================================================== auth views
 function authPage(title, lede, form) {
-  app().replaceChildren(h('div.center', null, h('div.auth', null, h('span.logo', null, T.appName), h('h1', null, title), h('p.lede', null, lede), form)));
+  put(app(), h('div.center', null, h('div.auth', null, h('span.logo', null, T.appName), h('h1', null, title), h('p.lede', null, lede), form)));
   setTimeout(() => form.querySelector('input')?.focus(), 30);
 }
-function field(label, input, hint) { return h('label.field', null, h('span', null, label), input, hint && h('div.hint', { style: { marginTop: '4px' } }, hint)); }
+function field(label, input, hint) { return h('label.field', null, h('span', null, label), input, hint && h('div.hint', { class: 'mt1' }, hint)); }
 
 function viewSetup() {
   const name = h('input', { type: 'text', value: 'Kinora', autocomplete: 'off' });
@@ -309,7 +385,7 @@ function viewSetup() {
     await POST('/api/setup', { server_name: name.value, username: user.value, password: pw.value });
     state.status = null; await loadMe(); go('#/profiles');
   } }, field(T.serverName, name), field(T.username, user), field(T.password, pw), field(T.password2, pw2),
-  h('button.btn.primary.big', { type: 'submit', style: { width: '100%' } }, T.createAdmin));
+  h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.createAdmin));
   authPage(T.setupTitle, T.setupLede, form);
 }
 
@@ -320,7 +396,7 @@ function viewLogin() {
     e.preventDefault();
     await POST('/api/login', { username: user.value, password: pw.value }, { noRedirect: true });
     await loadMe(); go('#/profiles');
-  } }, field(T.username, user), field(T.password, pw), h('button.btn.primary.big', { type: 'submit', style: { width: '100%' } }, T.login));
+  } }, field(T.username, user), field(T.password, pw), h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.login));
   authPage(T.loginTitle, (state.status.server_name || T.appName) + ' – ' + T.loginLede, form);
 }
 
@@ -336,12 +412,12 @@ async function viewJoin(code) {
     if (pw.value !== pw2.value) return toast(T.pwMismatch, true);
     await POST('/api/join', { code, username: user.value, password: pw.value }, { noRedirect: true });
     await loadMe(); go('#/profiles');
-  } }, field(T.username, user), field(T.password, pw), field(T.password2, pw2), h('button.btn.primary.big', { type: 'submit', style: { width: '100%' } }, T.join));
+  } }, field(T.username, user), field(T.password, pw), field(T.password2, pw2), h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.join));
   authPage(T.joinTitle, T.joinLede(info.server_name), form);
 }
 
 // ===================================================================== profiles
-const COLORS = ['#e5534b', '#f0b44c', '#4cc38a', '#3e9bd6', '#9b7ae0', '#e0709b', '#2fb5a9', '#c8833a'];
+const COLORS = ['#c97c5d', '#b5a27a', '#8fa37a', '#7fa6a0', '#c2b4a3', '#a3826b', '#b07a7a', '#8a9a8f'];
 
 async function viewProfiles(editMode) {
   await loadMe();
@@ -354,14 +430,14 @@ async function viewProfiles(editMode) {
   }
   const kidsNow = me.profile && me.profile.is_kids;
   if (me.profiles.length < 8 && !kidsNow) grid.append(h('button.who-item', { onclick: () => profileEditor(null) }, h('div.face.add', null, icon('plus')), h('span', null, T.addProfile)));
-  app().replaceChildren(h('div.center', null, h('div.who', null,
+  put(app(), h('div.center', null, h('div.who', null,
     h('h1', null, editMode ? T.editProfiles : T.whoWatches), grid,
-    h('div', { style: { marginTop: '40px' } }, !kidsNow && h('a.btn.ghost', { href: editMode ? '#/profiles' : '#/profiles/edit' }, editMode ? T.done : T.editProfiles)))));
+    h('div', { class: 'mt6' }, !kidsNow && h('a.btn.ghost', { href: editMode ? '#/profiles' : '#/profiles/edit' }, editMode ? T.done : T.editProfiles)))));
   grid.querySelector('button')?.focus();
 }
 
 async function selectProfile(p) {
-  const done = async () => { await loadMe(); state.facets = null; go('#/home'); };
+  const done = async () => { await loadMe(); state.facets = null; go(takeAfter() || '#/home'); };
   if (!p.has_pin) { await POST(`/api/profiles/${p.id}/select`, {}); return done(); }
   const pin = h('input.pin-input', { type: 'password', inputmode: 'numeric', maxlength: 8, autocomplete: 'off', 'aria-label': T.pinLabel });
   const m = modal(T.pinTitle(p.name), h('form', { onsubmit: async e => {
@@ -385,20 +461,21 @@ function profileEditor(p) {
   const auds = h('input', { type: 'text', value: p.audio_langs });
   const mode = h('select', null, Object.entries(T.subModes).map(([k, v]) => h('option', { value: k, selected: p.sub_mode === k }, v)));
   const auto = h('input', { type: 'checkbox', checked: p.autoplay_next });
+  const skipSel = h('select', null, Object.entries(T.skipModes).map(([k, v]) => h('option', { value: k, selected: (p.skip_intro || 'manual') === k }, v)));
   const br = h('select', null, T.bitrateOpts.map(([v, l]) => h('option', { value: v, selected: p.max_bitrate === v }, l)));
   const body = h('div', null, field(T.profileName, name), h('label.field', null, h('span', null, T.color), sw), field(T.pin, pin),
     p.has_pin && h('label.check', null, removePin, T.removePin),
     h('label.check', null, kids, T.isKids), field(T.maxRating, lvl),
     h('div.grid2', null, field(T.subLangs, subs, T.langHint), field(T.audioLangs, auds, T.langHint)),
-    h('div.grid2', null, field(T.subMode, mode), field(T.maxBitrate, br)), h('label.check', null, auto, T.autoplayNext));
+    h('div.grid2', null, field(T.subMode, mode), field(T.maxBitrate, br)), field(T.skipMode, skipSel), h('label.check', null, auto, T.autoplayNext));
   modal(isNew ? T.addProfile : p.name, body, close => [
-    !isNew && state.me.profiles.length > 1 && h('button.btn.danger', { style: { marginRight: 'auto' }, onclick: async () => {
+    !isNew && state.me.profiles.length > 1 && h('button.btn.danger', { class: 'push', onclick: async () => {
       if (!(await confirmBox(T.confirmDelete(p.name)))) return;
       await api('DELETE', '/api/profiles/' + p.id); close(); viewProfiles(true);
     } }, T.delete),
     h('button.btn', { onclick: close }, T.cancel),
     h('button.btn.primary', { onclick: async () => {
-      const body = { name: name.value, color, is_kids: kids.checked, max_rating_level: +lvl.value, sub_langs: subs.value, audio_langs: auds.value, sub_mode: mode.value, autoplay_next: auto.checked, max_bitrate: +br.value };
+      const body = { name: name.value, color, is_kids: kids.checked, max_rating_level: +lvl.value, sub_langs: subs.value, audio_langs: auds.value, sub_mode: mode.value, autoplay_next: auto.checked, max_bitrate: +br.value, skip_intro: skipSel.value };
       if (pin.value) body.pin = pin.value; else if (removePin.checked) body.pin = '';
       if (isNew) await POST('/api/profiles', body); else await api('PATCH', '/api/profiles/' + p.id, body);
       close(); toast(T.saved); viewProfiles(!isNew);
@@ -413,9 +490,9 @@ function itemSub(it) {
 }
 function artImg(it, kind, alt) {
   const wrap = h('div.art');
-  const ph = h('div.ph', null, it.kind === 'episode' && it.series_title ? it.series_title : it.title);
+  const ph = h('div.ph', null, it.kind === 'episode' && it.series_title ? it.series_title : it.title, it.year && it.kind !== 'episode' ? h('small', null, it.year) : null);
   const img = h('img', { src: imgURL(it, kind), alt: alt || '', loading: 'lazy', decoding: 'async' });
-  img.addEventListener('error', () => img.replaceWith(ph));
+  img.addEventListener('error', () => { img.replaceWith(ph); wrap.classList.add('noart'); });
   wrap.append(img);
   return wrap;
 }
@@ -428,6 +505,7 @@ function card(it, style = 'poster', opts = {}) {
   const href = '#/item/' + it.id;
   const el = h('div.card.' + style, { tabindex: 0, role: 'link', 'aria-label': it.title, onclick: e => { if (!e.target.closest('.more')) location.hash = opts.playOnClick ? '#/play/' + it.id : href; }, onkeydown: e => { if (e.key === 'Enter') location.hash = opts.playOnClick ? '#/play/' + it.id : href; } },
     art, h('div.cap', null, h('b', null, it.title), h('span', null, itemSub(it)), opts.reason && h('span.why', null, opts.reason)));
+  el._item = it; el._reason = opts.reason || '';
   if (opts.menu) {
     const btn = h('button.more', { 'aria-label': T.moreActions, onclick: e => { e.stopPropagation(); opts.menu(it, btn); } }, icon('more', true));
     el.append(btn);
@@ -438,7 +516,7 @@ function popMenu(anchor, entries) {
   document.querySelectorAll('.menu-pop.floating').forEach(m => m.remove());
   const r = anchor.getBoundingClientRect();
   const close = () => { pop.remove(); document.removeEventListener('mousedown', off); };
-  const pop = h('div.menu-pop.floating', { role: 'menu', style: { position: 'fixed', top: (r.bottom + 6) + 'px', left: Math.min(r.left, innerWidth - 240) + 'px', right: 'auto' } },
+  const pop = h('div.menu-pop.floating', { role: 'menu', style: { position: 'fixed', top: (r.bottom + tok('--s2')) + 'px', left: Math.min(r.left, innerWidth - tok('--col-side')) + 'px', right: 'auto' } },
     entries.filter(Boolean).map(([label, fn]) => h('button', { role: 'menuitem', onclick: () => { close(); fn(); } }, label)));
   document.body.append(pop);
   const off = e => { if (!pop.contains(e.target)) close(); };
@@ -465,32 +543,58 @@ async function viewHome() {
   ]);
   if (!data.rows.length) {
     const admin = state.me.user.is_admin;
-    main.append(h('div.empty', { style: { paddingTop: '120px' } }, h('h1', null, T.homeEmptyTitle), h('p', null, admin ? T.homeEmptyAdmin : T.homeEmptyUser),
+    main.append(h('div.empty', { class: 'pt9' }, h('h1', null, T.homeEmptyTitle), h('p', null, admin ? T.homeEmptyAdmin : T.homeEmptyUser),
       admin && h('a.btn.primary', { href: '#/admin/libraries' }, T.addLibrary)));
     return;
   }
-  if (data.hero) main.append(heroBlock(data.hero, data.rows));
+  let hero = null;
+  if (data.hero) { hero = heroBlock(data.hero, data.rows); main.append(hero); }
   for (const row of data.rows) {
     const landscape = row.style === 'landscape';
     main.append(shelf(row.title, row.items, row.style, { more: row.more, reasons: row.reasons, playOnClick: landscape, menu: hideMenu(row.hide_as) }));
+  }
+  // the beam follows focus: a poster case lit by the remote becomes tonight's feature on the facade
+  if (hero) {
+    let t;
+    main.addEventListener('focusin', e => {
+      const c = e.target.closest('.card');
+      if (!c || !c._item || !main.contains(c)) return;
+      clearTimeout(t);
+      t = setTimeout(() => fillHero(hero, c._item, c._reason), tok('--t-out'));
+    });
+    onCleanup(() => clearTimeout(t));
   }
 }
 function heroBlock(it, rows) {
   let reason = '';
   for (const r of rows) if (r.reasons && r.reasons[it.id]) { reason = r.reasons[it.id]; break; }
-  const bg = h('div.hero-img');
+  const sec = h('section.hero', null, h('div.hero-img'), h('div.hero-body'));
+  sec._shown = 0;
+  fillHero(sec, it, reason);
+  return sec;
+}
+/** fillHero paints one title onto the facade (the initial hero, and whichever case the remote lights up). */
+function fillHero(sec, it, reason) {
+  if (sec._shown === it.id) return;
+  sec._shown = it.id;
+  const bg = sec.querySelector('.hero-img');
   const img = new Image();
-  img.onload = () => { bg.style.backgroundImage = `url("${img.src}")`; };
-  img.src = imgURL(it, 'backdrop');
+  bg.classList.add('swap');
+  img.onload = () => { if (sec._shown !== it.id) return; bg.style.backgroundImage = 'url("' + img.src + '")'; bg.classList.remove('swap'); };
+  img.onerror = () => { if (sec._shown !== it.id) return; bg.style.backgroundImage = 'none'; bg.classList.remove('swap'); };
+  img.src = imgURL(it, it.kind === 'episode' ? 'thumb' : 'backdrop');
   const ud = it.user_data || {};
-  return h('section.hero', null, bg, h('div.hero-body', null,
+  const title = it.kind === 'episode' && it.series_title ? it.series_title : it.title;
+  const sub = it.kind === 'episode' ? T.ep(it.season_num, it.episode_num) + ' · ' + it.title : '';
+  reason = reason || '';
+  put(sec.querySelector('.hero-body'),
     reason && h('div.reason', null, reason[0].toUpperCase() + reason.slice(1)),
-    h('h1', null, it.title),
-    h('div.meta', null, it.year && h('span', null, it.year), it.content_rating && h('span.badge', null, it.content_rating), it.runtime_sec > 0 && it.kind === 'movie' && h('span', null, fmtRuntime(it.runtime_sec)), it.genres && h('span.muted', null, it.genres.slice(0, 3).join(', '))),
+    h('h1', null, title),
+    h('div.meta', null, sub && h('span', null, sub), it.year && h('span', null, it.year), it.content_rating && h('span.badge', null, it.content_rating), it.runtime_sec > 0 && it.kind !== 'series' && h('span', null, fmtRuntime(it.runtime_sec)), it.genres && it.genres.length && h('span.muted', null, it.genres.slice(0, 3).join(', '))),
     it.overview && h('p', null, it.overview),
     h('div.actions', null,
-      h('button.btn.primary.big', { onclick: () => it.kind === 'movie' ? go('#/play/' + it.id) : go('#/item/' + it.id) }, icon('play'), ud.position > 0 ? T.resume(fmtTime(ud.position)) : T.play),
-      h('a.btn.big', { href: '#/item/' + it.id }, icon('info'), 'Részletek'))));
+      h('button.btn.primary.big', { onclick: () => it.kind === 'series' ? go('#/item/' + it.id) : go('#/play/' + it.id) }, icon('play'), ud.position > 0 ? T.resume(fmtTime(ud.position)) : T.play),
+      h('a.btn.big', { href: '#/item/' + it.id }, icon('info'), T.details)));
 }
 
 // ===================================================================== search
@@ -515,7 +619,7 @@ async function viewLibrary(libId, q) {
     played: q.get('played') || '', favorite: q.get('favorite') === 'true', sort: q.get('sort') || 'title', order: q.get('order') || (q.get('sort') === 'added' ? 'desc' : 'asc'), q: q.get('q') || '' };
   const grid = h('div.grid');
   const countEl = h('span.muted');
-  const sentinel = h('div', { style: { height: '1px' } });
+  const sentinel = h('div', { class: 'sentinel' });
   let offset = 0, total = 0, loading = false, gen = 0;
 
   const params = () => {
@@ -527,7 +631,7 @@ async function viewLibrary(libId, q) {
   };
   const load = async reset => {
     if (loading && !reset) return;
-    if (reset) { offset = 0; grid.replaceChildren(); gen++; }
+    if (reset) { offset = 0; put(grid); gen++; }
     const my = gen;
     if (!reset && offset >= total) return;
     loading = true;
@@ -558,13 +662,13 @@ async function viewLibrary(libId, q) {
     [['', T.any], ['false', T.unwatched], ['true', T.watched]].map(([v, l]) => h('option', { value: v, selected: sel.played === v }, l)));
   const fav = h('input', { type: 'checkbox', checked: sel.favorite, onchange: e => { sel.favorite = e.target.checked; refresh(); } });
   const filters = h('aside.filters', { 'aria-label': T.filters },
-    f.genres.length > 0 && [h('h3', null, T.genres), chipList(f.genres, sel.genre)],
-    f.tags.length > 0 && [h('h3', null, T.tags), chipList(f.tags, sel.tag)],
-    h('h3', null, 'Év'), h('div.grid2', null, inp('year_from', T.yearFrom), inp('year_to', T.yearTo)),
-    h('h3', null, T.minRating), inp('min_rating', 'pl. 7'),
-    h('h3', null, T.watched), playedSel,
-    h('label.check', { style: { marginTop: '12px' } }, fav, T.onlyFav),
-    h('div', { style: { marginTop: '18px', display: 'grid', gap: '8px' } },
+    f.genres.length > 0 && [h('h2', null, T.genres), chipList(f.genres, sel.genre)],
+    f.tags.length > 0 && [h('h2', null, T.tags), chipList(f.tags, sel.tag)],
+    h('h2', null, 'Év'), h('div.grid2', null, inp('year_from', T.yearFrom), inp('year_to', T.yearTo)),
+    h('h2', null, T.minRating), inp('min_rating', 'pl. 7'),
+    h('h2', null, T.watched), playedSel,
+    h('label.check', { class: 'mt3' }, fav, T.onlyFav),
+    h('div', { class: 'stack mt4' },
       h('a.btn.ghost', { href: '#/library/' + libId }, T.clear),
       !state.me.profile.is_kids && h('button.btn', { onclick: saveAsSmart }, T.saveSmart)));
   const sortSel = h('select', { 'aria-label': T.sort, onchange: e => { sel.sort = e.target.value; refresh(); } }, f.sorts.map(s => h('option', { value: s.value, selected: s.value === sel.sort }, s.label)));
@@ -619,11 +723,11 @@ async function viewItem(id) {
     it.year && h('span.badge', null, it.year), it.content_rating && h('span.badge', null, it.content_rating),
     it.runtime_sec > 0 && it.kind !== 'series' && h('span.badge', null, fmtRuntime(it.runtime_sec)),
     it.height > 0 && h('span.badge', null, resLabel(it.width, it.height)), it.hdr && h('span.badge.hot', null, it.hdr),
-    it.video_codec && h('span.badge', null, it.video_codec.toUpperCase()), it.community_rating && h('span.badge', null, '★ ' + it.community_rating.toFixed(1).replace('.', ',')));
+    it.video_codec && h('span.badge', null, it.video_codec.toUpperCase()), it.community_rating && h('span.badge', null, icon('star'), it.community_rating.toFixed(1).replace('.', ',')));
 
-  const playedBtn = h('button.btn' + (ud.played ? '.on' : ''), { 'aria-pressed': ud.played ? 'true' : 'false', title: ud.played ? T.markUnplayed : T.markPlayed, onclick: async () => {
+  const playedBtn = h('button.btn.icon' + (ud.played ? '.on' : ''), { 'aria-pressed': ud.played ? 'true' : 'false', title: ud.played ? T.markUnplayed : T.markPlayed, 'aria-label': ud.played ? T.markUnplayed : T.markPlayed, onclick: async () => {
     await POST(`/api/items/${it.id}/played`, { played: !ud.played }); viewItem(id);
-  } }, icon('check'), ud.played ? T.watched : T.markPlayed);
+  } }, icon('check'));
   const favBtn = h('button.btn.icon' + (ud.favorite ? '.on' : ''), { 'aria-pressed': ud.favorite ? 'true' : 'false', title: T.favorite, 'aria-label': T.favorite, onclick: async () => {
     ud.favorite = !ud.favorite; await POST(`/api/items/${it.id}/favorite`, { favorite: ud.favorite });
     favBtn.classList.toggle('on', ud.favorite); favBtn.setAttribute('aria-pressed', ud.favorite);
@@ -637,13 +741,15 @@ async function viewItem(id) {
   const hideBtn = h('button.btn.icon', { title: ud.hidden ? T.unhide : T.hide, 'aria-label': ud.hidden ? T.unhide : T.hide, onclick: async () => {
     await POST(`/api/items/${it.id}/hide`, { hidden: !ud.hidden }); toast(ud.hidden ? T.saved : T.hiddenToast); viewItem(id);
   } }, icon(ud.hidden ? 'eye' : 'eyeOff'));
-  const collBtn = !kidsP && h('button.btn', { onclick: e => addToCollectionMenu(it, e.currentTarget) }, icon('plus'), T.addToCollection);
-  const partyBtn = (it.kind === 'movie' || it.kind === 'episode' || playTarget) && h('button.btn', { onclick: async () => {
-    const r = await POST('/api/party', { item_id: (playTarget || it).id, everyone: false });
-    go(`#/play/${(playTarget || it).id}?party=${r.code}`);
-  } }, icon('people'), T.startParty);
-
-  const dlBox = (it.kind === 'movie' || it.kind === 'episode') && downloadWidget(it);
+  const canParty = it.kind === 'movie' || it.kind === 'episode' || !!playTarget;
+  const canDl = it.kind === 'movie' || it.kind === 'episode';
+  const moreBtn = h('button.btn', { 'aria-haspopup': 'menu', onclick: e => popMenu(e.currentTarget, [
+    !kidsP && [T.addToCollection, () => addToCollectionMenu(it, moreBtn)],
+    canParty && [T.startParty, async () => { const r = await POST('/api/party', { item_id: (playTarget || it).id, everyone: false }); go(`#/play/${(playTarget || it).id}?party=${r.code}`); }],
+    canDl && [T.download + '…', () => modal(T.download, h('div', null, h('p.muted', null, T.dlKept), downloadWidget(it)), close => [h('button.btn', { onclick: close }, T.close)])],
+    state.me.user.is_admin && (it.kind === 'movie' || it.kind === 'series') && [T.fixMatch, () => fixMatchDialog(it)],
+    state.me.user.is_admin && (it.kind === 'series' || it.kind === 'season') && [T.segAnalyze, async () => { const r = await POST('/api/admin/segments/analyze', { item_id: it.id }); toast(T.segQueued(r.seasons)); }],
+  ]) }, icon('more', true), T.moreBtn);
   const tagBox = !kidsP && tagEditor(it);
   const sideInfo = h('dl.side-info', null,
     it.genres && [h('dt', null, T.genres), h('dd', null, it.genres.join(', '))],
@@ -651,7 +757,7 @@ async function viewItem(id) {
     audios.length > 0 && [h('dt', null, T.audio), h('dd', null, audios.map(a => `${(a.lang || T.unknownLang)} ${a.codec}${a.channels ? ' ' + a.channels + 'ch' : ''}`).join(', '))],
     subs.length > 0 && [h('dt', null, T.subtitles), h('dd', null, subs.map(s => (s.lang || T.unknownLang) + (s.forced ? ' (kényszerített)' : '') + (s.text_based ? '' : ' [kép]')).join(', '))],
     it.container && [h('dt', null, T.file), h('dd', null, `${it.container.toUpperCase()}, ${fmtBytes(it.size)}`)],
-    d.collections && d.collections.length > 0 && [h('dt', null, T.inCollections), h('dd', null, d.collections.map((c, i) => [i ? ', ' : '', h('a', { href: '#/collections/' + c.id, style: { color: 'var(--lamp)' } }, c.name)]))]);
+    d.collections && d.collections.length > 0 && [h('dt', null, T.inCollections), h('dd', null, d.collections.map((c, i) => [i ? ', ' : '', h('a', { href: '#/collections/' + c.id }, c.name)]))]);
 
   const titleBlock = it.kind === 'episode'
     ? [h('div.sub', null, h('a', { href: '#/item/' + it.series_id }, it.series_title), '  ', T.ep(it.season_num, it.episode_num)), h('h1', null, it.title)]
@@ -662,10 +768,10 @@ async function viewItem(id) {
     h('div', null, titleBlock, facts, it.overview && h('p.overview', null, it.overview),
       h('div.actions', null,
         playTarget && h('button.btn.primary.big', { onclick: () => go('#/play/' + playTarget.id) }, icon('play'), playLabel),
-        playedBtn, favBtn, hideBtn, stars),
-      h('div.actions', null, collBtn, partyBtn, dlBox,
-        state.me.user.is_admin && (it.kind === 'movie' || it.kind === 'series') && h('button.btn.ghost', { onclick: () => fixMatchDialog(it) }, T.fixMatch)),
-      tagBox, sideInfo))));
+        playedBtn, favBtn, hideBtn, stars, moreBtn)))));
+  main.append(h('div.below', null,
+    h('section', null, h('h2', null, T.data), sideInfo),
+    tagBox && h('section', null, h('h2', null, T.tags), tagBox)));
 
   if (it.kind === 'series' && d.seasons) {
     const tabs = h('div.tabs', { role: 'tablist' });
@@ -674,7 +780,7 @@ async function viewItem(id) {
       tabs.querySelectorAll('.chip').forEach(c => { c.classList.remove('on'); c.setAttribute('aria-selected', 'false'); });
       btn.classList.add('on'); btn.setAttribute('aria-selected', 'true');
       const eps = await GET(`/api/items/${s.id}/children`);
-      list.replaceChildren(...eps.map(episodeRow));
+      put(list, ...eps.map(episodeRow));
     };
     let first = null;
     d.seasons.forEach(s => {
@@ -682,10 +788,10 @@ async function viewItem(id) {
       tabs.append(b);
       if (!first || (d.play_next && d.play_next.parent_id === s.id)) first = [s, b];
     });
-    main.append(h('h2', { style: { marginTop: '30px' } }, T.seasons), tabs, list);
+    main.append(h('h2', { class: 'mt7' }, T.seasons), tabs, list);
     if (first) showSeason(...first);
   }
-  if (it.kind === 'season' && d.episodes) main.append(h('h2', { style: { margin: '30px 0 12px' } }, T.episodes), h('div.episodes', null, d.episodes.map(episodeRow)));
+  if (it.kind === 'season' && d.episodes) main.append(h('h2', { class: 'mt7 mb3' }, T.episodes), h('div.episodes', null, d.episodes.map(episodeRow)));
   if (it.kind === 'episode' && d.next) main.append(shelf(T.nextEp, [d.next], 'landscape', { playOnClick: true }));
   if (d.similar && d.similar.length) main.append(shelf(T.similar, d.similar, 'poster'));
 }
@@ -727,14 +833,14 @@ function tagEditor(it) {
   const box = h('div.tags', { 'aria-label': T.tags });
   const listId = 'tagopts' + it.id;
   const dl = h('datalist', { id: listId });
-  GET('/api/facets').then(f => dl.replaceChildren(...f.tags.map(t => h('option', { value: t.value })))).catch(() => {});
+  GET('/api/facets').then(f => put(dl, ...f.tags.map(t => h('option', { value: t.value })))).catch(() => {});
   const save = async () => { const r = await api('PUT', `/api/items/${it.id}/tags`, { tags }); tags = r.tags; render(); };
   const input = h('input', { type: 'text', placeholder: T.addTag, list: listId, 'aria-label': T.addTag, onkeydown: e => {
     if (e.key === 'Enter' && input.value.trim()) { e.preventDefault(); tags.push(input.value.trim()); input.value = ''; save(); }
   } });
-  const render = () => box.replaceChildren(icon('tag'), ...tags.map(t => h('span.chip', null, t, h('button', { style: { background: 'none', border: 0, color: 'inherit', cursor: 'pointer', padding: 0 }, 'aria-label': `${t} törlése`, onclick: () => { tags = tags.filter(x => x !== t); save(); } }, '×'))), input, dl);
+  const render = () => put(box, icon('tag'), ...tags.map(t => h('span.chip', null, t, h('button', { class: 'chip-x', 'aria-label': `${t} törlése`, onclick: () => { tags = tags.filter(x => x !== t); save(); } }, icon('x')))), input, dl);
   render();
-  return h('div', { style: { marginBottom: '12px' } }, box);
+  return h('div', { class: 'mb3' }, box);
 }
 
 function downloadWidget(it) {
@@ -752,20 +858,20 @@ async function fixMatchDialog(it) {
   const qi = h('input', { type: 'text', value: it.title });
   const yi = h('input', { type: 'number', value: it.year || '' });
   const idi = h('input', { type: 'number', placeholder: 'pl. 603' });
-  const results = h('div', { style: { display: 'grid', gap: '8px', marginTop: '10px' } });
+  const results = h('div', { class: 'stack mt3' });
   const kind = it.kind === 'series' ? 'series' : 'movie';
   let m;
   const apply = async tmdbId => { await POST(`/api/items/${it.id}/metadata/match`, { tmdb_id: +tmdbId }); m.close(); toast(T.saved); viewItem(it.id); };
   const search = async () => {
     const r = await GET(`/api/admin/metadata/search?kind=${kind}&q=${encodeURIComponent(qi.value)}&year=${yi.value || 0}`);
-    results.replaceChildren(...r.slice(0, 10).map(x => h('div.row-gap', { style: { padding: '8px', background: 'var(--ink-2)', borderRadius: '6px', flexWrap: 'nowrap' } },
-      x.poster ? h('img', { src: x.poster, alt: '', style: { width: '46px', borderRadius: '4px' } }) : null,
-      h('div', { style: { flex: 1, minWidth: 0 } }, h('b', null, x.title), ' ', h('span.muted', null, x.year || ''), h('div.small.muted', null, (x.overview || '').slice(0, 140))),
+    put(results, ...r.slice(0, 10).map(x => h('div.entry', null,
+      x.poster ? h('img', { src: x.poster, alt: '', class: 'match-thumb' }) : null,
+      h('div', { class: 'grow-min' }, h('b', null, x.title), ' ', h('span.muted', null, x.year || ''), h('div.small.muted', null, (x.overview || '').slice(0, 140))),
       h('button.btn', { onclick: () => apply(x.id) }, T.matchApply))));
     if (!r.length) results.append(h('p.muted', null, T.searchEmpty));
   };
   m = modal(T.fixMatch, h('div', null, h('div.grid2', null, field('Cím', qi), field('Év', yi)), h('button.btn', { onclick: search }, T.matchSearch),
-    results, h('div', { style: { marginTop: '16px' } }, field(T.tmdbId, idi))), close => [h('button.btn', { onclick: close }, T.cancel), h('button.btn.primary', { onclick: () => idi.value && apply(idi.value) }, T.matchApply)]);
+    results, h('div', { class: 'mt4' }, field(T.tmdbId, idi))), close => [h('button.btn', { onclick: close }, T.cancel), h('button.btn.primary', { onclick: () => idi.value && apply(idi.value) }, T.matchApply)]);
 }
 
 // ===================================================================== collections
@@ -802,7 +908,7 @@ async function viewCollection(id) {
       h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(c.name))) { await api('DELETE', '/api/collections/' + id); go('#/collections'); } } }, T.delete))));
   const grid = h('div.grid');
   const items = r.items;
-  const render = () => grid.replaceChildren(...items.map((it, i) => card(it, 'poster', { menu: kids || c.kind !== 'manual' ? null : (x, btn) => popMenu(btn, [
+  const render = () => put(grid, ...items.map((it, i) => card(it, 'poster', { menu: kids || c.kind !== 'manual' ? null : (x, btn) => popMenu(btn, [
     i > 0 && [T.moveUp, () => move(i, -1)], i < items.length - 1 && [T.moveDown, () => move(i, 1)],
     [T.removeFromColl, async () => { await api('DELETE', `/api/collections/${id}/items/${x.id}`); items.splice(i, 1); render(); toast(T.removedFrom(c.name)); }]]) })));
   const move = async (i, d) => { [items[i], items[i + d]] = [items[i + d], items[i]]; render(); await api('PUT', `/api/collections/${id}/order`, { items: items.map(x => x.id) }); };
@@ -832,7 +938,7 @@ async function viewCollectionEdit(id, q) {
   const sort = h('select', null, f.sorts.map(s => h('option', { value: s.value, selected: s.value === (rs.sort || 'title') }, s.label)));
   const order = h('select', null, h('option', { value: 'asc', selected: rs.order !== 'desc' }, T.asc), h('option', { value: 'desc', selected: rs.order === 'desc' }, T.desc));
   const limit = h('input', { type: 'number', min: 0, value: rs.limit || '' });
-  const rows = h('div', { style: { display: 'grid', gap: '8px' } });
+  const rows = h('div', { class: 'stack' });
   const previewHead = h('h2', null, T.preview(0));
   const previewGrid = h('div.grid');
   const fieldDesc = name => f.fields.find(x => x.field === name);
@@ -854,10 +960,10 @@ async function viewCollectionEdit(id, q) {
     const fsel = h('select', { 'aria-label': 'Mező' }, f.fields.map(x => h('option', { value: x.field, selected: x.field === r.field }, x.label)));
     const osel = h('select', { 'aria-label': 'Művelet' });
     let vin;
-    const row = h('div.row-gap', { style: { flexWrap: 'nowrap' } });
+    const row = h('div.row-gap.rule-row');
     const rebuild = (keepV) => {
       const fd = fieldDesc(fsel.value);
-      osel.replaceChildren(...fd.ops.map(o => h('option', { value: o, selected: o === r.op }, T.ops[o] || o)));
+      put(osel, ...fd.ops.map(o => h('option', { value: o, selected: o === r.op }, T.ops[o] || o)));
       const nv = valueInput(fd, keepV ? r.value : undefined);
       nv.setAttribute('aria-label', 'Érték');
       if (vin) vin.replaceWith(nv); vin = nv;
@@ -875,23 +981,23 @@ async function viewCollectionEdit(id, q) {
     try {
       const r = await POST('/api/collections/preview', collect(), { quiet: true });
       previewHead.textContent = T.preview(r.total);
-      previewGrid.replaceChildren(...r.items.map(it => card(it, 'poster')));
-    } catch (e) { previewHead.textContent = e.message; previewGrid.replaceChildren(); }
+      put(previewGrid, ...r.items.map(it => card(it, 'poster')));
+    } catch (e) { previewHead.textContent = e.message; put(previewGrid); }
   }, 300);
   for (const el of [match, sort, order, limit]) { el.onchange = preview; el.oninput = preview; }
   main.append(h('div.page-head', null, h('h1', null, id ? c.name : T.newSmart)),
     h('div.panel', null,
-      h('div.grid2', null, field(T.collName, name), h('div', { style: { paddingTop: '22px' } }, h('label.check', null, shared, T.shared), h('label.check', null, pinned, T.pinned))),
+      h('div.grid2', null, field(T.collName, name), h('div', { class: 'pt5' }, h('label.check', null, shared, T.shared), h('label.check', null, pinned, T.pinned))),
       h('h2', null, T.rules), field('', match), rows,
-      h('button.btn', { style: { marginTop: '10px' }, onclick: () => { rows.append(ruleRow({ field: 'genre', op: 'is' })); preview(); } }, icon('plus'), T.addRule),
-      h('div.grid2', { style: { marginTop: '18px' } }, field(T.sort, h('div.row-gap', { style: { flexWrap: 'nowrap' } }, sort, order)), field(T.limit, limit)),
-      h('div.row-gap', { style: { justifyContent: 'flex-end' } }, h('a.btn', { href: id ? '#/collections/' + id : '#/collections' }, T.cancel),
+      h('button.btn', { class: 'mt3', onclick: () => { rows.append(ruleRow({ field: 'genre', op: 'is' })); preview(); } }, icon('plus'), T.addRule),
+      h('div.grid2', { class: 'mt4' }, field(T.sort, h('div.row-gap', { class: 'nowrap' }, sort, order)), field(T.limit, limit)),
+      h('div.row-gap', { class: 'end' }, h('a.btn', { href: id ? '#/collections/' + id : '#/collections' }, T.cancel),
         h('button.btn.primary', { onclick: async () => {
           const body = { name: name.value, kind: 'smart', rules: collect(), shared: shared.checked, pinned: pinned.checked };
           const r = id ? await api('PATCH', '/api/collections/' + id, body) : await POST('/api/collections', body);
           toast(T.saved); go('#/collections/' + (id || r.id));
         } }, T.save))),
-    previewHead, h('div', { style: { marginTop: '12px' } }, previewGrid));
+    previewHead, h('div', { class: 'mt3' }, previewGrid));
   preview();
 }
 
@@ -904,12 +1010,12 @@ async function viewDownloads() {
   let timer;
   const render = async () => {
     const r = await GET('/api/downloads');
-    if (!r.jobs.length) { box.replaceChildren(h('p.empty', null, T.dlEmpty)); return; }
-    box.replaceChildren(h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, 'Cím'), h('th', null, T.quality), h('th', null, 'Állapot'), h('th', null, ''))),
+    if (!r.jobs.length) { put(box, h('p.empty', null, T.dlEmpty)); return; }
+    put(box, h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, 'Cím'), h('th', null, T.quality), h('th', null, 'Állapot'), h('th', null, ''))),
       h('tbody', null, r.jobs.map(j => h('tr', null,
         h('td', null, h('a', { href: '#/item/' + j.item_id }, j.file_name)),
         h('td', null, j.quality),
-        h('td', { style: { minWidth: '180px' } }, j.status === 'running' ? h('div', null, h('div.bar', null, h('i', { style: { width: Math.round(j.progress * 100) + '%' } })), h('span.small.muted', null, Math.round(j.progress * 100) + '%')) : h('span' + (j.status === 'error' ? '.bad' : ''), { title: j.error || '' }, T.dlStatus[j.status] + (j.error ? ': ' + j.error : '')), j.size ? h('div.small.muted', null, fmtBytes(j.size)) : null),
+        h('td', { class: 'td-progress' }, j.status === 'running' ? h('div', null, h('div.bar', null, h('i', { style: { width: Math.round(j.progress * 100) + '%' } })), h('span.small.muted', null, Math.round(j.progress * 100) + '%')) : h('span' + (j.status === 'error' ? '.bad' : ''), { title: j.error || '' }, T.dlStatus[j.status] + (j.error ? ': ' + j.error : '')), j.size ? h('div.small.muted', null, fmtBytes(j.size)) : null),
         h('td', null, j.status === 'done' && h('a.btn.primary', { href: `/api/downloads/${j.key}/file`, download: j.file_name }, icon('dl'), T.saveFile))))))));
     if (r.jobs.some(j => j.status === 'running' || j.status === 'queued')) timer = setTimeout(render, 2000);
   };
@@ -923,9 +1029,61 @@ async function viewAccount() {
   const cur = h('input', { type: 'password', autocomplete: 'current-password' });
   const nw = h('input', { type: 'password', autocomplete: 'new-password' });
   main.append(h('div.page-head', null, h('h1', null, T.account)),
-    h('div.panel', { style: { maxWidth: '520px' } }, h('h2', null, 'Jelszócsere'), field('Jelenlegi jelszó', cur), field('Új jelszó', nw),
+    h('div.panel', { class: 'narrow' }, h('h2', null, 'Jelszócsere'), field('Jelenlegi jelszó', cur), field('Új jelszó', nw),
       h('button.btn.primary', { onclick: async () => { await POST('/api/me/password', { current: cur.value, new: nw.value }); cur.value = nw.value = ''; toast(T.saved); } }, T.save)),
+    devicesPanel(),
     h('p.muted', null, `${state.me.user.username} · ${state.me.server_name} · ${T.version} ${state.me.version}`));
+}
+
+function deviceRow(d, onChange, showUser) {
+  return h('div.entry', null, h('div', null,
+    h('div', null, h('strong', null, d.name || T.platforms[d.platform] || d.platform), d.current && h('span.muted', null, ' · ' + T.thisDevice)),
+    h('p.muted.small', null, [showUser && d.username, T.platforms[d.platform] || d.platform, d.app_version && 'v' + d.app_version, d.ip,
+      T.lastActive + ': ' + T.ago(Date.now() / 1000 - d.last_seen)].filter(Boolean).join(' · ')),
+    !d.current && h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/devices/' + d.id); toast(T.deleted); onChange(); } }, T.signOutDevice)));
+}
+
+function devicesPanel() {
+  const box = h('div.panel', { class: 'narrow' });
+  const load = async () => {
+    const r = await GET('/api/devices');
+    put(box, h('h2', null, T.myDevices), r.devices.map(d => deviceRow(d, load)),
+      r.devices.length > 1 && h('button.btn', { onclick: async () => { const x = await api('DELETE', '/api/devices'); toast(T.signedOutN(x.removed)); load(); } }, T.signOutOthers));
+  };
+  load();
+  return box;
+}
+
+// ===================================================================== quick connect (approve a TV / phone)
+async function viewQuickConnect(code) {
+  const main = shell('account');
+  const me = state.me;
+  if (me.profile.is_kids || me.profile_locked) { main.append(h('div.center', { class: 'tall' }, h('p.lede', null, T.qcKids))); return; }
+  const box = h('div.auth');
+  main.append(h('div.center', { class: 'tall' }, box));
+  const inp = h('input.pin-input', { type: 'text', inputmode: 'numeric', maxlength: 7, autocomplete: 'off', 'aria-label': T.qcCode, value: code });
+  const ask = () => { put(box, h('form', { onsubmit: async e => { e.preventDefault(); await lookup(inp.value); } },
+    h('h1', null, T.connectDevice), h('p.lede', null, T.qcLede), inp, h('button.btn.primary.big', { type: 'submit', class: 'wide mt3' }, T.next))); inp.focus(); };
+  async function lookup(c) {
+    let info;
+    try { info = await POST('/api/quickconnect/lookup', { code: c }); } catch { return ask(); }
+    const radios = [[0, T.qcAnyProfile, null], ...me.profiles.map(p => [p.id, p.name, p])].map(([id, label, p]) =>
+      h('label.check', null, h('input', { type: 'radio', name: 'qcp', value: id, checked: p ? p.id === me.profile.id : false }), ' ', label,
+        p && p.is_kids ? ' (' + T.kids + ')' : '', p && p.has_pin ? ' – PIN' : ''));
+    put(box, h('h1', null, T.connectDevice), h('p.lede', null, T.qcWants(info.device_name, T.platforms[info.platform] || info.platform)),
+      h('div.code', null, info.code),
+      h('fieldset', { class: 'mt3' }, h('legend', null, T.qcProfile), radios),
+      h('p.muted.small', null, T.qcPinNote, ' ', T.qcKidsNote),
+      h('div.row-gap', { class: 'mt3' },
+        h('button.btn.primary.big', { onclick: async () => {
+          const pid = +(box.querySelector('input[name=qcp]:checked')?.value || 0);
+          await POST('/api/quickconnect/approve', { code: info.code, profile_id: pid });
+          put(box, h('h1', null, T.connectDevice), h('p.lede', null, T.qcApproved), h('a.btn', { href: '#/home' }, T.home));
+        } }, T.approve),
+        h('button.btn', { onclick: async () => { await POST('/api/quickconnect/approve', { code: info.code, action: 'deny' }); toast(T.qcDenied); ask(); } }, T.deny)));
+    box.querySelector('button.primary')?.focus();
+  }
+  if (code && code.replace(/[^0-9]/g, '').length === 6) await lookup(code); else ask();
 }
 
 // ===================================================================== party join
@@ -935,9 +1093,9 @@ async function viewPartyJoin(code) {
     catch (e) { if (e.status !== 401 && e.status !== 428) toast(e.message || T.partyNotFound, true); }
   }
   const main = shell('party');
-  const inp = h('input.pin-input', { type: 'text', maxlength: 6, autocomplete: 'off', 'aria-label': T.partyCodeLabel, style: { textTransform: 'uppercase' } });
-  main.append(h('div.center', { style: { minHeight: '60vh' } }, h('form.auth', { onsubmit: e => { e.preventDefault(); go('#/party/' + inp.value.trim().toUpperCase()); } },
-    h('h1', null, T.partyJoinTitle), h('p.lede', null, T.partyCodeLabel), inp, h('button.btn.primary.big', { type: 'submit', style: { width: '100%', marginTop: '14px' } }, T.enter))));
+  const inp = h('input.pin-input', { type: 'text', maxlength: 6, autocomplete: 'off', 'aria-label': T.partyCodeLabel, class: 'upper' });
+  main.append(h('div.center', { class: 'tall' }, h('form.auth', { onsubmit: e => { e.preventDefault(); go('#/party/' + inp.value.trim().toUpperCase()); } },
+    h('h1', null, T.partyJoinTitle), h('p.lede', null, T.partyCodeLabel), inp, h('button.btn.primary.big', { type: 'submit', class: 'wide mt3' }, T.enter))));
   inp.focus();
 }
 
@@ -969,7 +1127,7 @@ const langName = l => ({ hun: 'Magyar', eng: 'Angol', ger: 'Német', fre: 'Franc
 async function viewPlayer(id, q) {
   const profile = state.me.profile;
   const root = app();
-  root.replaceChildren();
+  put(root);
   const video = h('video', { playsinline: true, preload: 'auto', 'aria-label': 'Videó' });
   const spinner = h('div.spin', { role: 'progressbar', 'aria-label': T.loading });
   const mid = h('div.p-mid', null, spinner);
@@ -989,13 +1147,14 @@ async function viewPlayer(id, q) {
   const fsBtn = h('button.p-btn', { 'aria-label': T.fullscreen, title: T.fullscreen + ' (F)' }, icon('fs'));
   const pop = h('div.p-pop.hidden');
   const upnext = h('div.upnext.hidden');
+  const skipBtn = h('button.btn.primary.big.skip-seg.hidden', { onclick: () => doSkip() });
   const ui = h('div.ui', null,
     h('div.p-top', null, h('button.p-btn', { 'aria-label': T.back, onclick: () => exit() }, icon('back')), h('div.t', null, titleEl, subEl)),
     mid,
     h('div.p-bottom', null, timeline, h('div.p-bar', null,
       playBtn, h('button.p-btn', { 'aria-label': T.rewind, title: T.rewind, onclick: () => seekBy(-10) }, icon('rw')), h('button.p-btn', { 'aria-label': T.forward, title: T.forward, onclick: () => seekBy(10) }, icon('ff')),
       volBtn, vol, timeEl, h('span.grow'), nextBtn, favBtn, moreBtn, whyBtn, ccBtn, gearBtn, fsBtn)));
-  const stage = h('div.stage', null, video, ui, pop, upnext);
+  const stage = h('div.stage', null, video, ui, pop, upnext, skipBtn);
   const player = h('div.player', null, stage);
   root.append(player);
 
@@ -1004,6 +1163,8 @@ async function viewPlayer(id, q) {
   let audioIdx = null, burnIdx = null, maxBitrate = 0, force = '', subIdx = -1, showAllLangs = false;
   let duration = 0, credits = null, nextItem = null, nextShown = false, nextTimer = null, lastReport = 0, exiting = false;
   let dragging = false, dead = false;
+  let segments = [], shownSeg = null, markStart = null;
+  const skipped = new Set();
   const caps = detectCaps();
   const partyCode = q.get('party');
   let party = null;
@@ -1022,7 +1183,7 @@ async function viewPlayer(id, q) {
   async function start(startAt, opts = {}) {
     if (dead) return;
     clearUpNext();
-    mid.replaceChildren(spinner);
+    put(mid, spinner);
     const body = { caps, start: startAt, max_bitrate: maxBitrate, force, prev_session: session || '' };
     if (audioIdx != null) body.audio_idx = audioIdx;
     if (burnIdx != null) body.burn_sub_idx = burnIdx;
@@ -1032,6 +1193,9 @@ async function viewPlayer(id, q) {
     if (dead) { if (r.session) fetch('/api/hls/' + r.session, { method: 'DELETE', credentials: 'same-origin' }); return; }
     info = r; mode = r.mode; session = r.session || null; offset = r.start_offset || 0;
     duration = r.duration || 0; credits = r.credits_start ?? null;
+    segments = r.segments || [];
+    const cr = segments.find(g => g.type === 'credits');
+    if (cr) credits = cr.start;
     if (audioIdx == null) audioIdx = r.audio_idx;
     if (hls) { hls.destroy(); hls = null; }
     video.removeAttribute('src');
@@ -1073,7 +1237,7 @@ async function viewPlayer(id, q) {
   }
 
   function showError(msg, reasons) {
-    mid.replaceChildren(h('div.p-error', { role: 'alert' }, h('h2', null, T.playErr), h('p', null, msg),
+    put(mid, h('div.p-error', { role: 'alert' }, h('h2', null, T.playErr), h('p', null, msg),
       reasons && reasons.length && h('ul.why-list.muted', null, reasons.map(r => h('li', null, r))),
       h('div.row-gap', null, h('button.btn.primary', { onclick: () => start(pos()) }, T.retry),
         force !== 'transcode' && h('button.btn', { onclick: () => { force = 'transcode'; start(pos()); } }, T.forceTranscode),
@@ -1133,10 +1297,10 @@ async function viewPlayer(id, q) {
   // ---------------------------------------------------------------- popovers
   function openPop(build) {
     if (!pop.classList.contains('hidden') && pop._b === build) { pop.classList.add('hidden'); return; }
-    pop._b = build; pop.replaceChildren(...build()); pop.classList.remove('hidden');
+    pop._b = build; put(pop, build()); pop.classList.remove('hidden');
     pop.querySelector('button')?.focus();
   }
-  const opt = (label, on, fn) => h('button.opt' + (on ? '.on' : ''), { onclick: () => { pop.classList.add('hidden'); fn(); } }, label);
+  const opt = (label, on, fn) => h('button.opt' + (on ? '.on' : ''), { 'aria-pressed': on ? 'true' : 'false', onclick: () => { pop.classList.add('hidden'); fn(); } }, on ? icon('check') : h('span', { class: 'opt-gap' }), label);
   function buildTracks() {
     const langs = (profile.sub_langs || '').split(',').filter(Boolean), alangs = (profile.audio_langs || '').split(',').filter(Boolean);
     const audios = info.streams.filter(s => s.type === 'audio');
@@ -1152,7 +1316,7 @@ async function viewPlayer(id, q) {
       ...visS.map(s => s.text_based
         ? opt(`${langName(s.lang)}${s.forced ? ' (kényszerített)' : ''}${s.external ? ' · külső' : ''}`, s.type_index === subIdx, () => { subIdx = s.type_index; if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); })
         : opt(`${langName(s.lang)} · ${T.burnIn} (${s.codec})`, s.type_index === burnIdx, () => { subIdx = -1; burnIdx = s.type_index; applySubtitle(); start(pos()); })),
-      (hiddenCount > 0 || showAllLangs) && h('label.check', { style: { marginTop: '10px' } }, h('input', { type: 'checkbox', checked: showAllLangs, onchange: e => { showAllLangs = e.target.checked; pop._b = null; openPop(buildTracks); } }), T.showAll),
+      (hiddenCount > 0 || showAllLangs) && h('label.check', { class: 'mt3' }, h('input', { type: 'checkbox', checked: showAllLangs, onchange: e => { showAllLangs = e.target.checked; pop._b = null; openPop(buildTracks); } }), T.showAll),
     ];
   }
   function buildQuality() {
@@ -1163,7 +1327,7 @@ async function viewPlayer(id, q) {
     const src = info.source || {};
     return [h('h3', null, T.whyTitle[mode] || mode),
       h('ul.why-list', null, (info.reasons || []).map(r => h('li', null, r))),
-      info.encoder && h('p', { style: { marginTop: '10px' } }, h('span.muted', null, T.encoder + ': '), info.encoder_label || info.encoder),
+      info.encoder && h('p', { class: 'mt3' }, h('span.muted', null, T.encoder + ': '), info.encoder_label || info.encoder),
       info.bitrate && h('p.muted.small', null, `Cél: ${(info.bitrate / 1e6).toFixed(1).replace('.', ',')} Mbps, ${info.width} px széles`),
       h('p.muted.small', null, `Forrás: ${(src.container || '').toUpperCase()} · ${src.video_codec || '?'} ${src.width}×${src.height} · ${src.audio_codec || '–'}${src.hdr ? ' · ' + src.hdr : ''}`),
       h('p.muted.small', null, `Böngésző: ${caps.video.join(', ')} | ${caps.audio.join(', ')}`)];
@@ -1173,6 +1337,15 @@ async function viewPlayer(id, q) {
       opt(T.addToCollection, false, () => addToCollectionMenu(item, moreBtn)),
       opt(T.tags + '…', false, () => modal(T.tags, tagEditor(item), close => [h('button.btn', { onclick: close }, T.close)])),
       !partyCode && opt(T.startParty, false, async () => { const r = await POST('/api/party', { item_id: id }); exiting = true; await report(); go(`#/play/${id}?party=${r.code}&t=${Math.floor(pos())}`); }),
+      state.me.user.is_admin && opt(T.markIntroStart + ` (${fmtTime(pos())})`, false, () => { markStart = pos(); toast(T.markIntroStart + ': ' + fmtTime(markStart)); }),
+      state.me.user.is_admin && opt(T.markIntroEnd + ` (${fmtTime(pos())})`, false, () => {
+        if (markStart == null || pos() <= markStart) return toast(T.markStartFirst, true);
+        saveMark('intro', markStart, pos()); markStart = null;
+      }),
+      state.me.user.is_admin && opt(T.markCredits + ` (${fmtTime(pos())})`, false, () => saveMark('credits', pos(), duration || pos() + 60)),
+      state.me.user.is_admin && segments.some(g => g.source === 'manual') && opt(T.clearIntro, false, async () => {
+        await api('DELETE', `/api/items/${id}/segments/intro`); const f = await GET(`/api/items/${id}/segments`); segments = f.segments; toast(T.deleted);
+      }),
     ];
   }
   ccBtn.onclick = () => info && openPop(buildTracks);
@@ -1182,7 +1355,7 @@ async function viewPlayer(id, q) {
   favBtn.onclick = async () => {
     if (!item) return; item.user_data.favorite = !item.user_data.favorite;
     await POST(`/api/items/${id}/favorite`, { favorite: item.user_data.favorite });
-    favBtn.classList.toggle('on', item.user_data.favorite); favBtn.replaceChildren(icon('heart', item.user_data.favorite));
+    favBtn.classList.toggle('on', item.user_data.favorite); put(favBtn, icon('heart', item.user_data.favorite));
   };
 
   // ---------------------------------------------------------------- timeline & controls
@@ -1220,20 +1393,21 @@ async function viewPlayer(id, q) {
   video.addEventListener('dblclick', toggleFS);
   vol.oninput = () => { video.volume = +vol.value; video.muted = false; localStorage.setItem('kinora-vol', vol.value); paintVol(); };
   volBtn.onclick = () => { video.muted = !video.muted; paintVol(); };
-  const paintVol = () => volBtn.replaceChildren(icon(video.muted || video.volume === 0 ? 'mute' : 'vol'));
+  const paintVol = () => put(volBtn, icon(video.muted || video.volume === 0 ? 'mute' : 'vol'));
   fsBtn.onclick = toggleFS;
   function toggleFS() { if (document.fullscreenElement) document.exitFullscreen(); else player.requestFullscreen?.().catch(() => {}); }
-  video.addEventListener('play', () => { playBtn.replaceChildren(icon('pause')); playBtn.setAttribute('aria-label', T.pause); });
-  video.addEventListener('pause', () => { playBtn.replaceChildren(icon('play')); playBtn.setAttribute('aria-label', T.play); report(); });
-  video.addEventListener('waiting', () => { mid.replaceChildren(spinner); party?.buffering(true); });
-  video.addEventListener('playing', () => { if (mid.firstChild === spinner) mid.replaceChildren(); party?.buffering(false); });
-  video.addEventListener('canplay', () => { if (mid.firstChild === spinner && !video.paused) mid.replaceChildren(); party?.buffering(false); });
-  video.addEventListener('loadeddata', () => { if (video.paused && mid.firstChild === spinner) mid.replaceChildren(); });
+  video.addEventListener('play', () => { put(playBtn, icon('pause')); playBtn.setAttribute('aria-label', T.pause); });
+  video.addEventListener('pause', () => { put(playBtn, icon('play')); playBtn.setAttribute('aria-label', T.play); report(); });
+  video.addEventListener('waiting', () => { put(mid, spinner); party?.buffering(true); });
+  video.addEventListener('playing', () => { if (mid.firstChild === spinner) put(mid); party?.buffering(false); });
+  video.addEventListener('canplay', () => { if (mid.firstChild === spinner && !video.paused) put(mid); party?.buffering(false); });
+  video.addEventListener('loadeddata', () => { if (video.paused && mid.firstChild === spinner) put(mid); });
   video.addEventListener('timeupdate', () => {
     if (!dragging) paintTimeline();
     const now = Date.now();
     if (now - lastReport > 10000 && !video.paused) { lastReport = now; report(); }
     checkUpNext();
+    checkSkip();
   });
   video.addEventListener('ended', () => {
     if (dead) return;
@@ -1274,6 +1448,45 @@ async function viewPlayer(id, q) {
     if (!item || (!ended && pos() < 1)) return;
     try { await POST(`/api/items/${id}/progress`, { position: pos(), ended: !!ended }, { keepalive: true, quiet: true }); } catch { /* offline */ }
   }
+  // ---------------------------------------------------------------- skip intro / recap / credits
+  function currentSeg() {
+    const p = pos();
+    return segments.find(g => g.type !== 'preview' && p >= g.start && p < g.end - 1) || null;
+  }
+  function checkSkip() {
+    const mode = profile.skip_intro || 'manual';
+    let g = mode === 'off' ? null : currentSeg();
+    if (g && g.type === 'credits' && nextItem) g = null; // the next-episode card takes over
+    if (g && mode === 'auto' && !skipped.has(g.type + g.start) && !party) {
+      skipped.add(g.type + g.start);
+      toast(T.skippedIntro);
+      userSeek(g.end);
+      return;
+    }
+    if (g === shownSeg) return;
+    shownSeg = g;
+    skipBtn.classList.toggle('hidden', !g);
+    if (g) skipBtn.textContent = g.type === 'credits' ? T.skipCredits : g.type === 'recap' ? T.skipRecap : T.skipIntro;
+  }
+  function doSkip() {
+    const g = currentSeg();
+    if (!g) return;
+    skipped.add(g.type + g.start);
+    skipBtn.classList.add('hidden'); shownSeg = null;
+    if (party) party.send({ t: 'skip', pos: g.end, kind: g.type }); // everyone in the party jumps
+    seekTo(g.end);
+  }
+  async function saveMark(type, start, end) {
+    const r = await api('PUT', `/api/items/${id}/segments/${type}`, { start, end });
+    toast(T.markSaved);
+    const fresh = await GET(`/api/items/${id}/segments`).catch(() => null);
+    if (fresh) segments = fresh.segments;
+    if (r.can_propagate && await confirmBox(T.propagateAsk)) {
+      const p = await POST(`/api/items/${id}/segments/${type}/propagate`, {});
+      toast(T.propagated(p.updated));
+    }
+  }
+
   function checkUpNext() {
     if (!nextItem || nextShown || !duration) return;
     const at = credits ?? Math.max(0, duration - 30);
@@ -1283,9 +1496,9 @@ async function viewPlayer(id, q) {
     nextShown = true;
     let n = 10;
     const count = h('span.count', null, T.nextIn(n));
-    upnext.replaceChildren(artImg(nextItem, 'thumb', nextItem.title), h('div.b', null,
+    put(upnext, artImg(nextItem, 'thumb', nextItem.title), h('div.b', null,
       h('div.muted.small', null, T.nextEp + ' · ' + T.ep(nextItem.season_num, nextItem.episode_num)), h('b', null, nextItem.title),
-      h('div', { style: { margin: '6px 0 10px' } }, profile.autoplay_next && !party ? count : null),
+      h('div', { class: 'mt2 mb3' }, profile.autoplay_next && !party ? count : null),
       h('div.row-gap', null, h('button.btn.primary', { onclick: playNext }, icon('play'), T.playNow), h('button.btn', { onclick: clearUpNext }, T.dismiss))));
     upnext.classList.remove('hidden');
     if (profile.autoplay_next && !party) nextTimer = setInterval(() => { n--; count.textContent = T.nextIn(n); if (n <= 0) playNext(); }, 1000);
@@ -1327,7 +1540,7 @@ async function viewPlayer(id, q) {
   nextItem = detail.next || null;
   nextBtn.classList.toggle('hidden', !nextItem);
   nextBtn.onclick = playNext;
-  favBtn.replaceChildren(icon('heart', item.user_data.favorite)); favBtn.classList.toggle('on', item.user_data.favorite);
+  put(favBtn, icon('heart', item.user_data.favorite)); favBtn.classList.toggle('on', item.user_data.favorite);
   titleEl.textContent = item.kind === 'episode' ? item.series_title : item.title;
   subEl.textContent = item.kind === 'episode' ? `${T.ep(item.season_num, item.episode_num)} · ${item.title}` : [item.year, item.content_rating].filter(Boolean).join(' · ');
   document.title = item.title + ' – ' + T.appName;
@@ -1351,9 +1564,9 @@ function partyClient(code, player, stage, p) {
   const link = location.origin + '/#/party/' + code;
   const reacts = h('div.reacts');
   panel.append(
-    h('header', null, h('div.row-gap', { style: { justifyContent: 'space-between' } }, h('div', null, h('div.muted.small', null, T.party), h('div.code', null, code)),
-      h('button.btn', { onclick: () => modal(T.partyLink, h('div', null, qrImg(link), h('p.mono', { style: { marginTop: '10px', wordBreak: 'break-all' } }, link)), close => [h('button.btn', { onclick: () => copyText(link) }, T.copy), h('button.btn.primary', { onclick: close }, T.close)]) }, T.partyLink)),
-      h('label.check.hidden', { style: { marginTop: '10px', marginBottom: 0 } }, everyone, T.partyEveryone), status),
+    h('header', null, h('div.row-gap', { class: 'spread' }, h('div', null, h('div.code', { 'aria-label': T.party + ' ' + code }, code)),
+      h('button.btn', { onclick: () => modal(T.partyLink, h('div', null, qrImg(link), h('p.mono', { class: 'mt3 break-all' }, link)), close => [h('button.btn', { onclick: () => copyText(link) }, T.copy), h('button.btn.primary', { onclick: close }, T.close)]) }, T.partyLink)),
+      h('label.check.hidden', { class: 'mt3 mb0' }, everyone, T.partyEveryone), status),
     membersEl, chat, reacts,
     h('form', { onsubmit: e => { e.preventDefault(); if (msg.value.trim()) { send({ t: 'chat', text: msg.value }); msg.value = ''; } } }, msg, h('button.btn', { type: 'submit' }, T.partySend)));
   player.append(panel);
@@ -1371,7 +1584,7 @@ function partyClient(code, player, stage, p) {
     ws.onmessage = ev => {
       const m = JSON.parse(ev.data);
       switch (m.t) {
-        case 'hello': myId = m.id; reacts.replaceChildren(...m.reactions.map(e => h('button', { 'aria-label': e, onclick: () => send({ t: 'react', emoji: e }) }, e))); break;
+        case 'hello': myId = m.id; put(reacts, ...m.reactions.map(e => h('button', { 'aria-label': e, onclick: () => send({ t: 'react', emoji: e }) }, e))); break;
         case 'pong': {
           const now = Date.now(), rtt = now - m.c;
           if (rtt <= bestRtt * 1.5 || rtt < 60) { bestRtt = Math.min(bestRtt, rtt); offset = m.s - (m.c + rtt / 2); }
@@ -1402,7 +1615,7 @@ function partyClient(code, player, stage, p) {
     const me = st.members.find(x => x.id === myId);
     everyone.closest('label').classList.toggle('hidden', !(me && me.host));
     everyone.checked = st.everyone;
-    membersEl.replaceChildren(h('div.muted.small', null, T.partyMembers), ...st.members.map(x => h('div.member', null, h('span.dot', { style: { background: x.color } }), x.name, x.host && h('span.muted.small', null, '· ' + T.host), x.buffering && h('span.small', { style: { color: 'var(--lamp)' } }, '· ' + T.buffering))));
+    put(membersEl, h('div.muted.small', null, T.partyMembers), ...st.members.map(x => h('div.member', null, h('span.dot', { style: { background: x.color } }), x.name, x.host && h('span.muted.small', null, '· ' + T.host), x.buffering && h('span.small', { style: { color: 'var(--amber)' } }, '· ' + T.buffering))));
     status.textContent = st.waiting.length && st.intended ? T.partyWaiting(st.waiting) : '';
     sync(true);
   }
@@ -1431,11 +1644,11 @@ function partyClient(code, player, stage, p) {
 async function viewAdmin(tab) {
   if (!state.me.user.is_admin) return go('#/home');
   const main = shell('admin');
-  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['settings', T.aSettings]];
+  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['settings', T.aSettings]];
   const body = h('div');
   main.append(h('div.page-head', null, h('h1', null, T.admin)), h('div.admin', null,
     h('nav.admin-nav', { 'aria-label': T.admin }, tabs.map(([k, l]) => h('a' + (k === tab ? '.on' : ''), { href: '#/admin/' + k }, l))), body));
-  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, settings: adminSettings }[tab];
+  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, settings: adminSettings }[tab];
   if (fn) await fn(body);
 }
 
@@ -1445,8 +1658,8 @@ async function adminDash(body) {
     const d = await GET('/api/admin/dashboard');
     const up = d.uptime_sec, uptime = up > 86400 ? `${Math.floor(up / 86400)} nap ${Math.floor(up / 3600) % 24} ó` : `${Math.floor(up / 3600)} ó ${Math.floor(up / 60) % 60} p`;
     const stat = (v, l) => h('div.stat', null, h('b', null, v), h('span', null, l));
-    body.replaceChildren(
-      h('div.stat-grid', null, stat(d.library.movies, 'film'), stat(d.library.series, 'sorozat'), stat(d.library.episodes, 'epizód'), stat(fmtBytes(d.library.bytes), T.size),
+    put(body, 
+      h('div.ledger', null, stat(d.library.movies, 'film'), stat(d.library.series, 'sorozat'), stat(d.library.episodes, 'epizód'), stat(fmtBytes(d.library.bytes), T.size),
         stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime), stat(d.version, T.version)),
       d.library.missing > 0 && h('p.muted', null, `${d.library.missing} fájl jelenleg hiányzik (nem törlődött – ha visszakerül, a megnézett állapot megmarad).`),
       h('div.panel', null, h('h2', null, T.activeTranscodes), d.transcodes.length ? h('table.tbl', null, h('tbody', null, d.transcodes.map(s => h('tr', null, h('td', null, s.title), h('td', null, s.mode), h('td', null, s.encoder), h('td', null, fmtTime(s.seconds)))))) : h('p.muted', null, 'Nincs.')),
@@ -1468,19 +1681,21 @@ function scanTable(scans) {
 
 async function adminLibs(body) {
   let t;
+  if (!state.installMode) state.installMode = (await GET('/api/admin/browse?path=/').catch(() => ({}))).mode || '';
   const render = async () => {
     const [libs, scans] = await Promise.all([GET('/api/libraries'), GET('/api/admin/scan')]);
     state.libs = libs;
     const scanOf = id => scans.find(s => s.library_id === id);
-    body.replaceChildren(h('div.panel', null, h('div.row-gap', { style: { justifyContent: 'space-between', marginBottom: '10px' } }, h('h2', { style: { margin: 0 } }, T.aLibs), h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary)),
+    put(body, h('div.panel', null, h('div.row-gap', { class: 'spread mb3' }, h('h2', { class: 'm0' }, T.aLibs), h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary)),
       libs.length ? h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.libName), h('th', null, T.libPath), h('th', null, T.libKind), h('th', null, T.lastScan), h('th', null, ''))),
         h('tbody', null, libs.map(l => {
           const s = scanOf(l.id);
           return h('tr', null, h('td', null, h('b', null, l.name), h('div.small.muted', null, `${l.count} cím`)), h('td.mono', null, l.path), h('td', null, T.kinds[l.kind]),
-            h('td', { style: { minWidth: '200px' } }, s && s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, h('div.bar', null, h('i', { style: { width: (s.total ? s.done / s.total * 100 : 5) + '%' } })))
+            h('td', { class: 'td-progress' }, s && s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, h('div.bar', null, h('i', { style: { width: (s.total ? s.done / s.total * 100 : 5) + '%' } })))
               : s && s.error ? h('span.bad', null, s.error) : l.last_scan_at ? T.ago(Date.now() / 1000 - l.last_scan_at) : T.never,
               s && s.errors ? h('div.small.bad', { title: s.last_error }, `${s.errors} hibás fájl: ${s.last_error}`) : null),
             h('td', null, h('div.row-gap', null, h('button.btn', { onclick: async () => { await POST(`/api/libraries/${l.id}/scan`); render(); } }, T.scan),
+              h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?library=' + l.id)) }, T.permCheck),
               h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(l.name))) { await api('DELETE', '/api/libraries/' + l.id); state.libs = null; render(); } } }, T.delete))));
         })))) : h('p.muted', null, T.homeEmptyAdmin)));
     clearTimeout(t);
@@ -1493,29 +1708,49 @@ async function adminLibs(body) {
     const name = h('input', { type: 'text' });
     const path = h('input', { type: 'text', placeholder: '/media/movies' });
     const kind = h('select', null, Object.entries(T.kinds).map(([k, v]) => h('option', { value: k }, v)));
-    modal(T.addLibrary, h('div', null, field(T.libName, name), h('label.field', null, h('span', null, T.libPath), h('div.row-gap', { style: { flexWrap: 'nowrap' } }, path, h('button.btn', { type: 'button', onclick: () => folderPicker(path.value, p => { path.value = p; if (!name.value) name.value = p.split(/[\\/]/).filter(Boolean).pop() || ''; }) }, T.choose))),
-      h('div.hint', { style: { marginTop: '0' } }, T.mediaHint), field(T.libKind, kind)), close => [h('button.btn', { onclick: close }, T.cancel),
-      h('button.btn.primary', { onclick: async () => { await POST('/api/libraries', { name: name.value, path: path.value, kind: kind.value }); close(); state.libs = null; render(); } }, T.addLibrary)]);
+    modal(T.addLibrary, h('div', null, field(T.libName, name), h('label.field', null, h('span', null, T.libPath), h('div.row-gap', { class: 'nowrap' }, path, h('button.btn', { type: 'button', onclick: () => folderPicker(path.value, p => { path.value = p; if (!name.value) name.value = p.split(/[\\/]/).filter(Boolean).pop() || ''; }) }, T.choose))),
+      h('div.hint', { class: 'mt0' }, state.installMode === 'docker' ? T.mediaHintDocker : T.mediaHintNative), field(T.libKind, kind)), close => [h('button.btn', { onclick: close }, T.cancel),
+      h('button.btn.primary', { onclick: async () => {
+        try { await POST('/api/libraries', { name: name.value, path: path.value, kind: kind.value }, { quiet: true }); }
+        catch (e) { if (e.body && e.body.perm) permDialog(e.body.perm); else toast(e.message, true); return; }
+        close(); state.libs = null; render();
+      } }, T.addLibrary)]);
   }
 }
 
+function permDialog(rep) {
+  const copyBlock = lines => h('div', null, h('pre.code', null, lines.join('\n')), h('button.btn', { onclick: () => copyText(lines.join('\n')) }, T.copy));
+  modal(T.permCheck, h('div', null,
+    h('p', { class: rep.ok ? 'ok' : 'bad' }, rep.ok ? T.permOk : rep.message),
+    !rep.ok && rep.problems.length > 0 && h('ul.small', null, rep.problems.map(pr => h('li.mono', null, `${pr.path}: ${pr.need === 'x' ? 'belépés (x)' : 'olvasás (rX)'}`))),
+    !rep.ok && rep.commands.length > 0 && [h('p', { class: 'mt3' }, T.permFix), copyBlock(rep.commands)],
+    !rep.ok && rep.group_commands && [h('p', { class: 'mt3' }, T.permGroup), copyBlock(rep.group_commands)],
+    rep.hint && h('p.muted.small', { class: 'mt3' }, rep.hint)), close => [h('button.btn.primary', { onclick: close }, T.close)]);
+}
+
 async function folderPicker(start, onPick) {
-  const list = h('div', { style: { display: 'grid', gap: '2px', maxHeight: '50vh', overflow: 'auto', margin: '10px 0' } });
+  const list = h('div', { class: 'scroll-list' });
   const cur = h('div.mono');
+  const shortcuts = h('div.chips', { 'aria-label': T.shortcuts });
   let current = '';
   const load = async p => {
     const r = await GET('/api/admin/browse' + (p ? '?path=' + encodeURIComponent(p) : ''));
-    current = r.path; cur.textContent = r.path;
-    list.replaceChildren(r.parent && h('button.opt', { onclick: () => load(r.parent) }, '↑ ' + T.up), ...r.dirs.map(d => h('button.opt', { onclick: () => load(r.path.replace(/[\\/]$/, '') + r.sep + d) }, d)));
+    current = r.path; cur.textContent = r.path + (r.host_path && r.host_path !== r.path ? '  ·  ' + T.hostPath(r.host_path) : '');
+    put(shortcuts, (r.shortcuts || []).map(sc => h('button.chip' + (sc === r.path ? '.on' : ''), { onclick: () => load(sc) }, sc)));
+    const locked = new Set(r.locked || []);
+    put(list, r.parent && h('button.opt', { onclick: () => load(r.parent) }, '↑ ' + T.up), ...r.dirs.map(d => h('button.opt', { onclick: () => load(r.path.replace(/[\\/]$/, '') + r.sep + d) },
+      locked.has(d) && [icon('lock'), ' '], d, locked.has(d) && h('span.muted.small', null, ' · ' + T.locked))));
     if (!r.dirs.length) list.append(h('p.muted.small', null, 'Nincs almappa.'));
   };
-  modal(T.pickFolder, h('div', null, cur, list), close => [h('button.btn', { onclick: close }, T.cancel), h('button.btn.primary', { onclick: () => { onPick(current); close(); } }, T.useFolder)]);
+  modal(T.pickFolder, h('div', null, shortcuts, cur, list), close => [h('button.btn', { onclick: close }, T.cancel),
+    h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?path=' + encodeURIComponent(current))) }, T.permCheck),
+    h('button.btn.primary', { onclick: () => { onPick(current); close(); } }, T.useFolder)]);
   await load(start || '').catch(() => load(''));
 }
 
 async function adminUsers(body) {
   const users = await GET('/api/admin/users');
-  body.replaceChildren(h('div.panel', null, h('div.row-gap', { style: { justifyContent: 'space-between', marginBottom: '10px' } }, h('h2', { style: { margin: 0 } }, T.aUsers), h('button.btn.primary', { onclick: newUser }, icon('plus'), T.newUser)),
+  put(body, h('div.panel', null, h('div.row-gap', { class: 'spread mb3' }, h('h2', { class: 'm0' }, T.aUsers), h('button.btn.primary', { onclick: newUser }, icon('plus'), T.newUser)),
     h('div.scroll-x', null, h('table.tbl', null, h('tbody', null, users.map(u => h('tr', null,
       h('td', null, h('b', null, u.username), u.id === state.me.user.id && h('span.muted', null, ' ' + T.you)), h('td', null, T.profilesN(u.profiles)), h('td', null, u.is_admin ? T.isAdmin : ''),
       h('td', null, h('div.row-gap', null,
@@ -1538,12 +1773,12 @@ async function adminInvites(body) {
   const invs = await GET('/api/admin/invites');
   const base = (await GET('/api/admin/settings')).values.public_url || location.origin;
   const linkOf = c => base + '/#/join/' + c;
-  body.replaceChildren(h('div.panel', null, h('div.row-gap', { style: { justifyContent: 'space-between', marginBottom: '10px' } }, h('h2', { style: { margin: 0 } }, T.aInvites), h('button.btn.primary', { onclick: newInv }, icon('plus'), T.newInvite)),
-    invs.length ? h('div', { style: { display: 'grid', gap: '14px' } }, invs.map(i => h('div.row-gap', { style: { alignItems: 'flex-start', padding: '12px', background: 'var(--ink-2)', borderRadius: '6px', opacity: i.uses_left > 0 ? 1 : 0.55 } },
+  put(body, h('div.panel', null, h('div.row-gap', { class: 'spread mb3' }, h('h2', { class: 'm0' }, T.aInvites), h('button.btn.primary', { onclick: newInv }, icon('plus'), T.newInvite)),
+    invs.length ? h('div', null, invs.map(i => h('div.entry', { style: { opacity: i.uses_left > 0 ? 1 : 0.55 } },
       qrImg(linkOf(i.code)),
-      h('div', { style: { flex: 1, minWidth: '220px' } }, h('div.code.mono', { style: { fontSize: '18px', color: 'var(--lamp)' } }, i.code), i.note && h('p', null, i.note),
+      h('div', null, h('div.code', null, i.code), i.note && h('p', null, i.note),
         h('p.muted.small', null, T.usesLeft(i.uses_left), i.expires_at ? ` · ${T.expires}: ${new Date(i.expires_at * 1000).toLocaleString('hu-HU')}` : ''),
-        h('p.mono.small', { style: { wordBreak: 'break-all' } }, linkOf(i.code)),
+        h('p.mono.small', { class: 'break-all' }, linkOf(i.code)),
         h('div.row-gap', null, h('button.btn', { onclick: () => copyText(linkOf(i.code)) }, T.copy), h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/admin/invites/' + i.code); adminInvites(body); } }, T.delete)))))) : h('p.muted', null, 'Nincs meghívó.')));
   function newInv() {
     const note = h('input', { type: 'text', placeholder: 'pl. Nagyiéknak' }), uses = h('input', { type: 'number', value: 1, min: 1, max: 100 }), hours = h('input', { type: 'number', value: 72, min: 0 });
@@ -1575,12 +1810,26 @@ async function adminTranscode(body) {
   const table = res => h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.encoder), h('th', null, 'Eredmény'), h('th', null, 'Idő'), h('th', null, 'Részletek'))),
     h('tbody', null, res.map(r => h('tr', null, h('td', null, h('b', null, r.label), h('div.small.muted.mono', null, r.name)), h('td', { class: r.ok ? 'ok' : 'bad' }, r.ok ? 'működik' : 'nem elérhető'), h('td', null, r.ok ? r.ms + ' ms' : ''), h('td.small.muted', null, r.error || ''))))));
   const tbl = h('div', null, table(d.encoders || []));
-  const btn = h('button.btn', { onclick: async () => { btn.disabled = true; btn.textContent = T.hwTesting; try { const r = await POST('/api/admin/hwtest'); tbl.replaceChildren(table(r.results)); toast(T.selectedEnc + ': ' + r.selected.label); } finally { btn.disabled = false; btn.textContent = T.hwTest; } } }, T.hwTest);
+  const btn = h('button.btn', { onclick: async () => { btn.disabled = true; btn.textContent = T.hwTesting; try { const r = await POST('/api/admin/hwtest'); put(tbl, table(r.results)); toast(T.selectedEnc + ': ' + r.selected.label); } finally { btn.disabled = false; btn.textContent = T.hwTest; } } }, T.hwTest);
   const encOpts = [['auto', T.encAuto], ...(d.encoders || []).filter(e => e.ok).map(e => [e.name, e.label])];
-  body.replaceChildren(
-    h('div.panel', null, h('h2', null, 'Encoder-önteszt'), h('p.muted', null, 'Minden encoder valóban lekódol 1 másodpercnyi tesztvideót – így az derül ki, ami tényleg működik, nem csak az, amit az ffmpeg ismer.'), btn, h('div', { style: { marginTop: '14px' } }, tbl),
-      h('p', { style: { marginTop: '12px' } }, h('span.muted', null, T.selectedEnc + ': '), d.encoder_selected.label), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))),
-    h('div.panel', null, h('h2', null, T.encSetting), settingsForm(s.values, s.env, [['encoder', T.encSetting, 'select', encOpts]], () => adminTranscode(body))));
+  put(body, 
+    h('div.panel', null, h('h2', null, 'Encoder-önteszt'), h('p.muted', null, 'Minden encoder valóban lekódol 1 másodpercnyi tesztvideót – így az derül ki, ami tényleg működik, nem csak az, amit az ffmpeg ismer.'), btn, h('div', { class: 'mt3' }, tbl),
+      h('p', { class: 'mt3' }, h('span.muted', null, T.selectedEnc + ': '), d.encoder_selected.label), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))),
+    h('div.panel', null, h('h2', null, T.encSetting), settingsForm(s.values, s.env, [['encoder', T.encSetting, 'select', encOpts]], () => adminTranscode(body))),
+    await segmentsPanel(s));
+}
+
+async function segmentsPanel(s) {
+  const st = await GET('/api/admin/segments').catch(() => null);
+  const onoff = [['1', T.on], ['0', T.off]];
+  return h('div.panel', null, h('h2', null, T.aSegments),
+    st && h('dl.side-info', null,
+      h('dt', null, T.segBackend), h('dd', { class: st.available ? 'ok' : 'bad' }, st.backend),
+      st.stats && [h('dt', null, 'Állapot'), h('dd', null, T.segStats(st.stats.episodes, st.stats.analysed, st.stats.with_intro, st.stats.with_credits, st.stats.manual))],
+      h('dt', null, T.segQueue), h('dd', null, String(st.queue || 0)),
+      st.running && [h('dt', null, T.segRunning), h('dd', null, st.running)],
+      st.last_error && [h('dt', null, 'Utolsó hiba'), h('dd.bad.small', null, st.last_error)]),
+    settingsForm(s.values, s.env, [['intro_detection', T.segDetection, 'select', onoff], ['intro_window_min', T.segWindow, 'number']]));
 }
 
 async function adminMeta(body) {
@@ -1588,25 +1837,25 @@ async function adminMeta(body) {
   const retry = h('input', { type: 'checkbox' });
   const st = m.status;
   let t;
-  body.replaceChildren(
+  put(body, 
     h('div.panel', null, h('h2', null, 'TMDB'), h('p.muted', null, T.metaHint),
       settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', 'Magyar'], ['en-US', 'Angol'], ['de-DE', 'Német']]]], () => adminMeta(body))),
     h('div.panel', null, h('h2', null, T.refreshMeta), h('label.check', null, retry, T.retryNoMatch),
       h('button.btn.primary', { disabled: !m.enabled, onclick: async () => { await POST('/api/admin/metadata/refresh', { retry_no_match: retry.checked }); adminMeta(body); } }, T.refreshMeta),
-      h('p.muted', { style: { marginTop: '12px' } }, T.metaStatus + ': ', st.running ? `fut – ${st.done}/${st.total}` : st.finished_at ? `kész (${st.matched} találat, ${st.no_match} nincs találat)` : '–', st.last_error ? h('div.bad.small', null, st.last_error) : null)));
+      h('p.muted', { class: 'mt3' }, T.metaStatus + ': ', st.running ? `fut – ${st.done}/${st.total}` : st.finished_at ? `kész (${st.matched} találat, ${st.no_match} nincs találat)` : '–', st.last_error ? h('div.bad.small', null, st.last_error) : null)));
   if (st.running) { t = setTimeout(() => adminMeta(body), 2000); onCleanup(() => clearTimeout(t)); }
 }
 
 async function adminConnect(body) {
   const c = await GET('/api/admin/connect');
-  const card = (title, url, sub) => h('div.row-gap', { style: { alignItems: 'flex-start', padding: '12px', background: 'var(--ink-2)', borderRadius: '6px' } }, qrImg(url),
-    h('div', null, h('b', null, title), h('p.mono', null, url), sub && h('p.muted.small', null, sub), h('button.btn', { onclick: () => copyText(url) }, T.copy)));
+  const card = (title, url, sub) => h('div.entry', null, qrImg(url),
+    h('div', null, h('b', null, title), h('p.mono', { class: 'break-all' }, url), sub && h('p.muted.small', null, sub), h('button.btn', { onclick: () => copyText(url) }, T.copy)));
   const kindLabel = { lan: 'Helyi hálózat', tailscale: 'Tailscale', other: 'Egyéb' };
-  body.replaceChildren(
+  put(body, 
     h('div.panel', null, h('h2', null, T.aConnect), h('p.muted', null, T.connectLede),
-      h('div', { style: { display: 'grid', gap: '12px' } }, c.public_url ? card('Nyilvános URL', c.public_url) : h('p.muted', null, T.noPublic),
+      h('div', null, c.public_url ? card('Nyilvános URL', c.public_url) : h('p.muted', null, T.noPublic),
         c.addresses.map(a => card(kindLabel[a.kind] + ' (' + a.iface + ')', a.url))),
-      c.in_container && h('p.muted.small', { style: { marginTop: '12px' } }, 'Dockerben futsz: a fenti címek a konténer belső címei lehetnek. Kívülről a gazdagép IP-címén és a kiajánlott porton (alapból 8096) éred el.')),
+      c.in_container && h('p.muted.small', { class: 'mt3' }, 'Dockerben futsz: a fenti címek a konténer belső címei lehetnek. Kívülről a gazdagép IP-címén és a kiajánlott porton (alapból 8096) éred el.')),
     h('div.panel', null, h('h2', null, 'Tailscale (ajánlott, portnyitás nélkül)'), h('p', null, 'Telepítsd a Tailscale-t a szerverre és a telefonodra ugyanazzal a fiókkal, vagy használd a docker-compose.tailscale.yml sidecart. Ezután a 100.x.y.z címen bárhonnan eléred.'),
       h('pre.code', null, 'TS_AUTHKEY=tskey-... docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d')),
     h('div.panel', null, h('h2', null, 'Cloudflare Tunnel (saját domain, HTTPS)'), h('p', null, 'Hozz létre egy tunnelt a Cloudflare Zero Trust felületén, a public hostname mutasson a http://kinora:8096 címre, majd:'),
@@ -1616,9 +1865,16 @@ async function adminConnect(body) {
       h('pre.code', null, 'location / {\n  proxy_pass http://127.0.0.1:8096;\n  proxy_http_version 1.1;\n  proxy_set_header Upgrade $http_upgrade;\n  proxy_set_header Connection "upgrade";\n  proxy_set_header Host $host;\n  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n  proxy_set_header X-Forwarded-Proto $scheme;\n  proxy_buffering off;\n  client_max_body_size 0;\n}')));
 }
 
+async function adminDevices(body) {
+  const r = await GET('/api/admin/devices');
+  put(body, h('div.panel', null, h('h2', null, T.aDevices), r.devices.map(d => deviceRow(d, () => adminDevices(body), true))));
+}
+
 async function adminSettings(body) {
   const s = await GET('/api/admin/settings');
-  body.replaceChildren(
-    h('div.panel', null, h('h2', null, T.aSettings), settingsForm(s.values, s.env, [['server_name', T.serverName], ['public_url', T.publicUrl, 'url'], ['scan_interval_min', T.scanInterval, 'number']], () => { state.status = null; })),
+  const onoff = [['1', T.on], ['0', T.off]];
+  put(body, 
+    h('div.panel', null, h('h2', null, T.aSettings), settingsForm(s.values, s.env, [['server_name', T.serverName], ['public_url', T.publicUrl, 'url'], ['scan_interval_min', T.scanInterval, 'number'],
+      ['quickconnect_enabled', T.qcEnabled, 'select', onoff], ['discovery_enabled', T.discEnabled, 'select', onoff]], () => { state.status = null; })),
     h('div.panel', null, h('h2', null, 'Mentés'), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
 }

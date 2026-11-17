@@ -1,0 +1,30 @@
+[Unit]
+Description=Kinora médiaszerver
+Documentation=https://github.com/ScotyLucas/kinora
+After=network-online.target remote-fs.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kinora
+Group=kinora
+EnvironmentFile=/etc/kinora/kinora.env
+ExecStartPre=/opt/kinora/bin/kinora-guard
+ExecStart=/opt/kinora/bin/kinora
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+# hardening: everything read-only except data, cache and the binary folder (self-update)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/kinora /var/cache/kinora /opt/kinora/bin
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

@@ -26,6 +26,10 @@ func splitLangs(s string) []string {
 
 // playableItem loads a visible movie/episode with streams, or writes an error.
 func (s *Server) playableItem(w http.ResponseWriter, r *http.Request, c *reqCtx) *store.Item {
+	if !c.tokenAllows(pathID(r, "id")) {
+		writeErr(w, http.StatusForbidden, "a lejátszási token másik elemhez tartozik")
+		return nil
+	}
 	it, err := s.st.ItemFull(pathID(r, "id"), c.Profile)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "az elem nem található")
@@ -66,7 +70,18 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request, c *reqCt
 		maxK = req.MaxBitrate
 	}
 	d := media.Decide(it, req, splitLangs(c.Profile.AudioLangs), maxK, s.Encoders.ToneMap())
+	tok := s.mintStreamToken(c, it.ID)
+	subs := []map[string]any{}
+	for _, st := range it.Streams {
+		if st.Type == "subtitle" {
+			subs = append(subs, map[string]any{"idx": st.TypeIndex, "lang": st.Lang, "title": st.Title, "codec": st.Codec,
+				"forced": st.Forced, "text_based": st.TextBased, "url": withStreamToken(fmt.Sprintf("/api/items/%d/subtitles/%d", it.ID, st.TypeIndex), tok)})
+		}
+	}
 	resp := map[string]any{
+		"stream_token":  tok,
+		"subtitles":     subs,
+		"segments":      s.effectiveSegments(it),
 		"mode":          d.Mode,
 		"reasons":       d.Reasons,
 		"audio_idx":     d.AudioIdx,
@@ -80,7 +95,7 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request, c *reqCt
 			"width": it.Width, "height": it.Height, "bitrate": it.Bitrate, "hdr": it.HDR},
 	}
 	if d.Mode == "direct" {
-		resp["url"] = fmt.Sprintf("/api/stream/%d", it.ID)
+		resp["url"] = withStreamToken(fmt.Sprintf("/api/stream/%d", it.ID), tok)
 		resp["encoder"] = ""
 		writeJSON(w, http.StatusOK, resp)
 		return
@@ -92,7 +107,7 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request, c *reqCt
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error(), "reasons": d.Reasons, "mode": d.Mode})
 		return
 	}
-	resp["url"] = "/api/hls/" + sess.ID + "/index.m3u8"
+	resp["url"] = withStreamToken("/api/hls/"+sess.ID+"/index.m3u8", tok)
 	resp["session"] = sess.ID
 	resp["start_offset"] = req.Start
 	if d.VideoCopy {
@@ -182,7 +197,7 @@ func (s *Server) handleHLS(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 		return
 	}
 	sess := s.Media.Get(r.PathValue("session"), c.User.ID)
-	if sess == nil {
+	if sess == nil || !c.tokenAllows(sess.ItemID) {
 		writeErr(w, http.StatusNotFound, "a lejátszási munkamenet lejárt – indítsd újra a lejátszást")
 		return
 	}
@@ -192,6 +207,9 @@ func (s *Server) handleHLS(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 		if err != nil {
 			writeErr(w, http.StatusNotFound, "a playlist még nem áll rendelkezésre")
 			return
+		}
+		if st := r.URL.Query().Get("st"); st != "" {
+			b = rewritePlaylist(b, st)
 		}
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		w.Write(b)

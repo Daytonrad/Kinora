@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="https://github.com/ScotyLucas/kinora" version="1.0.0" viewmodes="maximized">
+    <!-- Samsung Smart TV, Tizen 4.0+ (2018 models and newer) -->
+    <tizen:application id="KinoraTV01.Kinora" package="KinoraTV01" required_version="4.0"/>
+    <tizen:profile name="tv-samsung"/>
+    <content src="index.html"/>
+    <icon src="icon.png"/>
+    <name>Kinora</name>
+    <description>Kinora médiaszerver kliens</description>
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+
+    <!-- network access to the user's own server (any LAN address, http or https) -->
+    <access origin="*" subdomains="true"/>
+    <tizen:allow-navigation>*</tizen:allow-navigation>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <!-- remote keys: media keys, colour keys (tizen.tvinputdevice.registerKey) -->
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <!-- model name for the device list, own IP for LAN server search -->
+    <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+    <tizen:privilege name="http://tizen.org/privilege/network.get"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
+                   encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>

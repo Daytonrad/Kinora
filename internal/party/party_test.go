@@ -140,6 +140,11 @@ func TestPartySync(t *testing.T) {
 	if s["playing"] != false {
 		t.Fatal("seek must not resume a paused room")
 	}
+	// skip intro: everyone jumps, the room is told who skipped what
+	a.send(map[string]any{"t": "skip", "pos": 95.5, "kind": "intro"})
+	// the room announces first, then broadcasts the new state
+	b.waitFor("sys", func(m map[string]any) bool { return strings.Contains(m["text"].(string), "átugrotta az intrót") })
+	b.waitFor("state", func(m map[string]any) bool { return m["pos"].(float64) == 95.5 })
 	// position advances while playing
 	a.send(map[string]any{"t": "play"})
 	b.waitFor("state", playing(true))

@@ -34,10 +34,16 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, c *reqCtx)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"setup_needed": n == 0,
-		"version":      Version,
-		"server_name":  s.st.Setting("server_name"),
-		"logged_in":    c.User != nil,
+		"product":              "kinora",
+		"setup_needed":         n == 0,
+		"version":              Version,
+		"api_version":          APIVersion,
+		"min_client_api":       MinClientAPI,
+		"server_id":            s.serverID(),
+		"server_name":          s.st.Setting("server_name"),
+		"logo_url":             s.logoURL(),
+		"quickconnect_enabled": s.qcEnabled(),
+		"logged_in":            c.User != nil,
 	})
 }
 
@@ -46,6 +52,7 @@ type credentials struct {
 	Username   string `json:"username"`
 	Password   string `json:"password"`
 	Code       string `json:"code"`
+	store.DeviceInfo
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, c *reqCtx) {
@@ -76,17 +83,19 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 		s.st.SetSetting("server_name", name)
 	}
 	s.log.Info("setup complete", "admin", u.Username)
-	s.startSession(w, r, u)
+	s.startSession(w, r, u, in.DeviceInfo)
 }
 
-func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u *store.User) {
-	tok, err := s.st.CreateSession(u.ID)
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u *store.User, d store.DeviceInfo) {
+	tok, dev, err := s.st.CreateDeviceSession(u.ID, deviceFromRequest(r, d), 0, 0)
 	if err != nil {
 		s.internalErr(w, r, err)
 		return
 	}
-	s.setSessionCookie(w, r, tok)
-	writeJSON(w, http.StatusOK, map[string]any{"token": tok, "user": u})
+	if o := r.Header.Get("Origin"); o == "" || sameOrigin(r, o) || !s.isAppOrigin(o) {
+		s.setSessionCookie(w, r, tok) // the web client; native apps keep the token instead
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"token": tok, "device_id": dev, "user": u})
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request, c *reqCtx) {
@@ -103,7 +112,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 		writeErr(w, http.StatusUnauthorized, "hibás felhasználónév vagy jelszó")
 		return
 	}
-	s.startSession(w, r, u)
+	s.startSession(w, r, u, in.DeviceInfo)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, c *reqCtx) {
@@ -149,7 +158,7 @@ func (s *Server) handleJoin(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 		return
 	}
 	s.log.Info("user joined via invite", "user", u.Username)
-	s.startSession(w, r, u)
+	s.startSession(w, r, u, in.DeviceInfo)
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, c *reqCtx) {
@@ -158,12 +167,25 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 		s.internalErr(w, r, err)
 		return
 	}
+	if c.ProfileLock > 0 { // a kids device only ever sees its own profile
+		var only []*store.Profile
+		for _, p := range profiles {
+			if p.ID == c.ProfileLock {
+				only = append(only, p)
+			}
+		}
+		profiles = only
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user":        c.User,
-		"profile":     c.Profile,
-		"profiles":    profiles,
-		"server_name": s.st.Setting("server_name"),
-		"version":     Version,
+		"user":           c.User,
+		"profile":        c.Profile,
+		"profiles":       profiles,
+		"profile_locked": c.ProfileLock > 0,
+		"device_id":      c.DeviceID,
+		"media_token":    s.mintStreamToken(c, 0), // artwork for <img> without headers
+		"server_name":    s.st.Setting("server_name"),
+		"version":        Version,
+		"api_version":    APIVersion,
 	})
 }
 
@@ -177,6 +199,10 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request, c *reqCt
 	}
 	if !s.limiter.allow("login:"+clientIP(r), 10, 5*time.Minute) {
 		writeErr(w, http.StatusTooManyRequests, "túl sok próbálkozás")
+		return
+	}
+	if c.ProfileLock > 0 {
+		writeErr(w, http.StatusForbidden, "ezen az eszközön nem lehet jelszót módosítani")
 		return
 	}
 	if !s.st.CheckUserPassword(c.User, in.Current) {
@@ -200,7 +226,7 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request, c *reqCt
 // kids profiles cannot change anything, PIN-protected profiles can only be
 // edited while selected.
 func (s *Server) editableProfile(w http.ResponseWriter, c *reqCtx, id int64) *store.Profile {
-	if c.Profile != nil && c.Profile.IsKids {
+	if (c.Profile != nil && c.Profile.IsKids) || c.ProfileLock > 0 {
 		writeErr(w, http.StatusForbidden, "gyerekprofilból nem lehet profilt módosítani")
 		return nil
 	}
@@ -217,7 +243,7 @@ func (s *Server) editableProfile(w http.ResponseWriter, c *reqCtx, id int64) *st
 }
 
 func (s *Server) handleProfileCreate(w http.ResponseWriter, r *http.Request, c *reqCtx) {
-	if c.Profile != nil && c.Profile.IsKids {
+	if (c.Profile != nil && c.Profile.IsKids) || c.ProfileLock > 0 {
 		writeErr(w, http.StatusForbidden, "gyerekprofilból nem lehet profilt létrehozni")
 		return
 	}
@@ -278,7 +304,7 @@ func (s *Server) handleProfileSelect(w http.ResponseWriter, r *http.Request, c *
 		return
 	}
 	p, err := s.st.Profile(pathID(r, "id"))
-	if err != nil || p.UserID != c.User.ID {
+	if err != nil || p.UserID != c.User.ID || (c.ProfileLock > 0 && p.ID != c.ProfileLock) {
 		writeErr(w, http.StatusNotFound, "a profil nem található")
 		return
 	}
@@ -300,6 +326,10 @@ func (s *Server) handleProfileSelect(w http.ResponseWriter, r *http.Request, c *
 }
 
 func (s *Server) handleProfileLeave(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	if c.ProfileLock > 0 {
+		writeErr(w, http.StatusForbidden, "ez az eszköz egy profilhoz van kötve")
+		return
+	}
 	if err := s.st.SetSessionProfile(c.Token, 0); err != nil {
 		s.internalErr(w, r, err)
 		return

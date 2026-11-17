@@ -1,0 +1,19 @@
+{
+  "name": "ios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kinora for iPhone/iPad (Capacitor, Xcode project; builds on macOS only)",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-secure-storage": "8.0.1",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/ios": "8.6.0",
+    "kinora-native": "file:../native-plugin"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0"
+  }
+}

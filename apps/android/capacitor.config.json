@@ -1,0 +1,16 @@
+{
+  "appId": "io.github.scotylucas.kinora",
+  "appName": "Kinora",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true
+  },
+  "plugins": {
+    "SecureStorage": {}
+  }
+}
