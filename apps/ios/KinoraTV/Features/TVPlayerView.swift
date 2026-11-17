@@ -13,7 +13,7 @@ import KinoraKit
 struct TVPlayerView: View {
     @Bindable var player: PlayerModel
 
-    enum Focus: Hashable { case timeline, skip, next, dismissNext, audio, subtitles, speed, chapters, retry, transcode, close }
+    enum Focus: Hashable { case timeline, skip, next, dismissNext, audio, subtitles, speed, chapters, party, retry, transcode, close }
 
     @FocusState private var focus: Focus?
     @State private var chrome = true
@@ -50,6 +50,10 @@ struct TVPlayerView: View {
                 errorPanel(message)
             } else {
                 controls
+            }
+
+            if let party = player.party {
+                TVPartyOverlay(party: party, chrome: chrome)
             }
 
             if let s = seekFlash {
@@ -106,7 +110,14 @@ struct TVPlayerView: View {
                 }
                 .onTapGesture { player.togglePlay(); show() }
             if chrome {
-                menuRow.transition(.opacity)
+                TVMenuRow(player: player, focus: $focus)
+                    .equatable()
+                    .transition(.opacity)
+                    .onChange(of: focus) { _, f in
+                        // Menus and buttons keep the controls up while they have the focus.
+                        // An open menu takes the focus away from all of them (nil): no hiding then either.
+                        if f == .timeline || f == .skip { scheduleHide() } else { hideTask?.cancel() }
+                    }
             }
         }
         .padding(.horizontal, 90)
@@ -154,79 +165,6 @@ struct TVPlayerView: View {
         }
     }
 
-    private var menuRow: some View {
-        let audio = player.info?.audioTracks ?? []
-        let subs = player.info?.textSubtitles ?? []
-        return HStack(spacing: 24) {
-            if !subs.isEmpty {
-                Menu {
-                    Button { player.selectSubtitle(nil) } label: { check("Ki", player.subtitle == nil) }
-                    ForEach(subs) { s in
-                        Button { player.selectSubtitle(s) } label: { check(TrackLabel.subtitle(s), player.subtitle == s) }
-                    }
-                    if player.subtitle != nil {
-                        Section("Időzítés: \(Self.delayLabel(player.subtitleDelay))") {
-                            Button("Korábban (−0,5 mp)", systemImage: "minus") { player.shiftSubtitles(by: -0.5) }
-                            Button("Később (+0,5 mp)", systemImage: "plus") { player.shiftSubtitles(by: 0.5) }
-                            if player.subtitleDelay != 0 {
-                                Button("Visszaállítás", systemImage: "arrow.counterclockwise") { player.shiftSubtitles(by: 0) }
-                            }
-                        }
-                    }
-                } label: {
-                    Label(player.subtitle.map { TrackLabel.subtitle($0) } ?? "Felirat", systemImage: "captions.bubble")
-                }
-                .focused($focus, equals: .subtitles)
-            }
-            if audio.count > 1, !player.isOffline {
-                Menu {
-                    ForEach(audio, id: \.typeIndex) { a in
-                        Button { player.selectAudio(a.typeIndex) } label: { check(TrackLabel.audio(a), a.typeIndex == player.audioIdx) }
-                    }
-                } label: {
-                    Label(audio.first { $0.typeIndex == player.audioIdx }.map { TrackLabel.audio($0) } ?? "Hang",
-                          systemImage: "speaker.wave.2")
-                }
-                .focused($focus, equals: .audio)
-            }
-            if !player.chapters.isEmpty {
-                Menu {
-                    ForEach(Array(player.chapters.enumerated()), id: \.offset) { i, c in
-                        Button { player.seek(to: c.start) } label: {
-                            let name = c.title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(i + 1). fejezet"
-                            check("\(name) · \(Self.clock(c.start))", c == player.currentChapter)
-                        }
-                    }
-                } label: { Label("Fejezetek", systemImage: "list.bullet") }
-                .focused($focus, equals: .chapters)
-            }
-            Menu {
-                ForEach(PlaybackSpeeds.all, id: \.self) { r in
-                    Button { player.setSpeed(r) } label: { check(PlaybackSpeeds.label(r), r == player.speed) }
-                }
-                if !player.isOffline {
-                    Section("Minőség") {
-                        Button { player.setQuality(nil) } label: { check("Automatikus", player.qualityCap == nil) }
-                        ForEach(SettingChoices.bitrates, id: \.0) { b in
-                            Button { player.setQuality(b.0) } label: { check(b.1, player.qualityCap == b.0) }
-                        }
-                    }
-                }
-            } label: { Label(PlaybackSpeeds.label(player.speed), systemImage: "gauge.with.dots.needle.67percent") }
-            .focused($focus, equals: .speed)
-        }
-        .font(.callout)
-        .focusSection()
-        .onChange(of: focus) { _, f in
-            // Menus and buttons keep the controls up while they have the focus.
-            // An open menu takes the focus away from all of them (nil): no hiding then either.
-            if f == .timeline || f == .skip { scheduleHide() } else { hideTask?.cancel() }
-        }
-    }
-
-    @ViewBuilder private func check(_ title: String, _ on: Bool) -> some View {
-        if on { Label(title, systemImage: "checkmark") } else { Text(title) }
-    }
 
     private func errorPanel(_ message: String) -> some View {
         VStack(spacing: 30) {
@@ -315,6 +253,124 @@ struct TVPlayerView: View {
         case .credits: "Stáblista átugrása"
         default: "Intró átugrása"
         }
+    }
+}
+
+/// Subtitle, audio, chapter and speed/quality menus.
+///
+/// A view of its own, compared by `==`: the player view's body runs on every playback tick
+/// (the position changes), and a tvOS `Menu` that is rebuilt while open flickers. This one
+/// only redraws when a value it reads changes (track, speed, quality, chapter).
+private struct TVMenuRow: View, Equatable {
+    @Environment(AppModel.self) private var model
+    let player: PlayerModel
+    var focus: FocusState<TVPlayerView.Focus?>.Binding
+    @State private var composing = false
+    @State private var message = ""
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.player === b.player }
+
+    var body: some View {
+        let audio = player.info?.audioTracks ?? []
+        let subs = player.info?.textSubtitles ?? []
+        HStack(spacing: 24) {
+            if !subs.isEmpty {
+                Menu {
+                    Button { player.selectSubtitle(nil) } label: { check("Ki", player.subtitle == nil) }
+                    ForEach(subs) { s in
+                        Button { player.selectSubtitle(s) } label: { check(TrackLabel.subtitle(s), player.subtitle == s) }
+                    }
+                    if player.subtitle != nil {
+                        Section("Időzítés: \(TVPlayerView.delayLabel(player.subtitleDelay))") {
+                            Button("Korábban (−0,5 mp)", systemImage: "minus") { player.shiftSubtitles(by: -0.5) }
+                            Button("Később (+0,5 mp)", systemImage: "plus") { player.shiftSubtitles(by: 0.5) }
+                            if player.subtitleDelay != 0 {
+                                Button("Visszaállítás", systemImage: "arrow.counterclockwise") { player.shiftSubtitles(by: 0) }
+                            }
+                        }
+                    }
+                } label: {
+                    Label(player.subtitle.map { TrackLabel.subtitle($0) } ?? "Felirat", systemImage: "captions.bubble")
+                }
+                .focused(focus, equals: .subtitles)
+            }
+            if audio.count > 1, !player.isOffline {
+                Menu {
+                    ForEach(audio, id: \.typeIndex) { a in
+                        Button { player.selectAudio(a.typeIndex) } label: { check(TrackLabel.audio(a), a.typeIndex == player.audioIdx) }
+                    }
+                } label: {
+                    Label(audio.first { $0.typeIndex == player.audioIdx }.map { TrackLabel.audio($0) } ?? "Hang",
+                          systemImage: "speaker.wave.2")
+                }
+                .focused(focus, equals: .audio)
+            }
+            if !player.chapters.isEmpty {
+                Menu {
+                    ForEach(Array(player.chapters.enumerated()), id: \.offset) { i, c in
+                        Button { player.seek(to: c.start) } label: {
+                            let name = c.title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(i + 1). fejezet"
+                            check("\(name) · \(TVPlayerView.clock(c.start))", c == player.currentChapter)
+                        }
+                    }
+                } label: { Label("Fejezetek", systemImage: "list.bullet") }
+                .focused(focus, equals: .chapters)
+            }
+            if let party = player.party {
+                Menu {
+                    Section("Reakció") {
+                        ForEach(party.reactions, id: \.self) { e in Button(e) { party.react(e) } }
+                    }
+                    Button("Üzenet írása…", systemImage: "text.bubble") { message = ""; composing = true }
+                    if party.isHost {
+                        Button { party.setEveryone(!party.everyone) } label: { check("Mindenki irányíthat", party.everyone) }
+                    }
+                    Button("Kilépés a watch partyból", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                        player.close()
+                    }
+                } label: { Label("Party · \(party.code)", systemImage: "person.2.fill") }
+                .focused(focus, equals: .party)
+                .alert("Üzenet a partynak", isPresented: $composing) {
+                    TextField("Üzenet", text: $message)
+                    Button("Küldés") { party.chat(message) }
+                    Button("Mégse", role: .cancel) {}
+                }
+            }
+            Menu {
+                // In a party the room's clock sets the speed.
+                if player.party == nil {
+                    ForEach(PlaybackSpeeds.all, id: \.self) { r in
+                        Button { player.setSpeed(r) } label: { check(PlaybackSpeeds.label(r), r == player.speed) }
+                    }
+                }
+                if player.party == nil, !player.isOffline {
+                    Section("Watch party") {
+                        Button("Watch party indítása", systemImage: "person.2") { model.startParty(player.item) }
+                    }
+                }
+                if !player.isOffline {
+                    Section("Minőség") {
+                        Button { player.setQuality(nil) } label: { check("Automatikus", player.qualityCap == nil) }
+                        ForEach(SettingChoices.bitrates, id: \.0) { b in
+                            Button { player.setQuality(b.0) } label: { check(b.1, player.qualityCap == b.0) }
+                        }
+                    }
+                }
+            } label: {
+                if player.party == nil {
+                    Label(PlaybackSpeeds.label(player.speed), systemImage: "gauge.with.dots.needle.67percent")
+                } else {
+                    Label("Minőség", systemImage: "dial.medium")
+                }
+            }
+            .focused(focus, equals: .speed)
+        }
+        .font(.callout)
+        .focusSection()
+    }
+
+    @ViewBuilder private func check(_ title: String, _ on: Bool) -> some View {
+        if on { Label(title, systemImage: "checkmark") } else { Text(title) }
     }
 }
 
@@ -415,5 +471,68 @@ private struct TVPlayerSurface: UIViewRepresentable {
             hosted?.frame = bounds
             CATransaction.commit()
         }
+    }
+}
+
+/// Watch party on the TV: the room code and members at the top while the controls show,
+/// chat and room events for a few seconds at the top left, reactions floating up.
+private struct TVPartyOverlay: View {
+    var party: PartySession
+    var chrome: Bool
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            GeometryReader { geo in
+                ForEach(party.floating) { f in
+                    FloatingReaction(item: f, big: true)
+                        .position(x: geo.size.width * f.x, y: geo.size.height * 0.75)
+                }
+            }
+            HStack(alignment: .top) {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    let recent = party.lines.suffix(4).filter { ctx.date.timeIntervalSince($0.at) < 8 }
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(recent) { line in
+                            Group {
+                                if let name = line.name {
+                                    Text("\(Text(name + ": ").bold().foregroundColor(Color(partyHex: line.color ?? "")))\(line.text)")
+                                } else {
+                                    Text(line.text).italic().foregroundStyle(Theme.plaster)
+                                }
+                            }
+                            .font(.callout)
+                            .padding(.horizontal, 18).padding(.vertical, 10)
+                            .background(.black.opacity(0.6), in: .rect(cornerRadius: 14))
+                            .transition(.opacity)
+                        }
+                    }
+                    .frame(maxWidth: 900, alignment: .leading)
+                    .animation(.easeOut(duration: 0.3), value: recent.map(\.id))
+                }
+                Spacer()
+                if chrome || party.status != nil {
+                    VStack(alignment: .trailing, spacing: 10) {
+                        Text("Watch party · \(party.code)").font(.callout.weight(.semibold).monospaced())
+                        HStack(spacing: 16) {
+                            ForEach(party.members) { m in
+                                HStack(spacing: 6) {
+                                    Circle().fill(Color(partyHex: m.color)).frame(width: 14, height: 14)
+                                    Text(m.name + (m.host ? " ★" : "")).font(.caption)
+                                    if m.buffering { ProgressView().scaleEffect(0.6) }
+                                }
+                            }
+                        }
+                        if let s = party.status { Text(s).font(.caption).foregroundStyle(Theme.amber) }
+                    }
+                    .padding(.horizontal, 24).padding(.vertical, 16)
+                    .background(.black.opacity(0.6), in: .rect(cornerRadius: 18))
+                    .transition(.opacity)
+                }
+            }
+            .padding(.horizontal, 90)
+            .padding(.top, 50)
+        }
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.25), value: chrome)
     }
 }

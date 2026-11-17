@@ -3,18 +3,21 @@ import Foundation
 /// A link into the app: widgets and other apps open these.
 ///   kinora://item/42 – the detail page
 ///   kinora://play/42 – start (or resume) playback
+///   kinora://party/ABC234 – join a watch party
 public enum KinoraLink: Equatable, Sendable {
     case item(Int)
     case play(Int)
+    case party(String)
 
     public static let scheme = "kinora"
 
     public init?(url: URL) {
         guard url.scheme?.lowercased() == Self.scheme, let host = url.host()?.lowercased(),
-              let id = url.pathComponents.dropFirst().first.flatMap({ Int($0) }) else { return nil }
+              let arg = url.pathComponents.dropFirst().first else { return nil }
         switch host {
-        case "item": self = .item(id)
-        case "play": self = .play(id)
+        case "item": guard let id = Int(arg) else { return nil }; self = .item(id)
+        case "play": guard let id = Int(arg) else { return nil }; self = .play(id)
+        case "party": guard let code = PartySync.normalizedCode(arg) else { return nil }; self = .party(code)
         default: return nil
         }
     }
@@ -23,6 +26,7 @@ public enum KinoraLink: Equatable, Sendable {
         switch self {
         case .item(let id): URL(string: "\(Self.scheme)://item/\(id)")!
         case .play(let id): URL(string: "\(Self.scheme)://play/\(id)")!
+        case .party(let code): URL(string: "\(Self.scheme)://party/\(code)")!
         }
     }
 }

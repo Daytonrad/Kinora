@@ -23,6 +23,12 @@ struct TVMainView: View {
         }
         .onAppear { model.handlePendingLink() }
         .id(model.me?.profile?.id)
+        .alert("Watch party", isPresented: Binding(get: { model.partyError != nil && !model.playerVisible },
+                                                   set: { if !$0 { model.partyError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.partyError ?? "")
+        }
         .fullScreenCover(isPresented: Binding(get: { model.playerVisible && model.player != nil },
                                               set: { if !$0 { model.player?.close() } })) {
             if let p = model.player { TVPlayerView(player: p) }
@@ -305,6 +311,11 @@ struct TVDetailView: View {
                 if let t = playTarget, t.progress != nil {
                     Button { model.play(t, from: 0) } label: { Label("Elölről", systemImage: "arrow.counterclockwise") }
                         .buttonStyle(TVPillStyle())
+                }
+                if let t = playTarget, t.kind == .movie || t.kind == .episode {
+                    Button { model.startParty(t) } label: { Label("Watch party", systemImage: "person.2") }
+                        .buttonStyle(TVPillStyle())
+                        .disabled(model.partyJoining)
                 }
                 Button { Task { await setPlayed(!userData.played) } } label: {
                     Label(userData.played ? "Megnézve" : "Megnézettnek jelölés",
@@ -600,6 +611,8 @@ struct TVSettingsTab: View {
     @Environment(AppModel.self) private var model
     @State private var subtitleSize = AppSettings.subtitleStyle.size
     @State private var confirmLogout = false
+    @State private var joining = false
+    @State private var partyCode = ""
 
     var body: some View {
         ScrollView {
@@ -615,6 +628,11 @@ struct TVSettingsTab: View {
                         }
                         .padding(.bottom, 20)
                     }
+                    Button { partyCode = ""; joining = true } label: {
+                        Label("Csatlakozás watch partyhoz", systemImage: "person.2.wave.2")
+                    }
+                    .buttonStyle(TVRowStyle())
+                    .disabled(model.partyJoining)
                     if model.me?.profileLocked != true {
                         Button { model.switchProfile() } label: { Label("Profilváltás", systemImage: "person.2") }
                             .buttonStyle(TVRowStyle())
@@ -654,6 +672,15 @@ struct TVSettingsTab: View {
             .padding(80)
         }
         .background(Theme.black)
+        .alert("Csatlakozás watch partyhoz", isPresented: $joining) {
+            TextField("6 karakteres kód", text: $partyCode)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+            Button("Csatlakozás") { model.joinParty(partyCode) }
+            Button("Mégse", role: .cancel) {}
+        } message: {
+            Text("A kódot a party indítója látja a lejátszóban, vagy a meghívó üzenetben.")
+        }
         .alert("Kijelentkezel?", isPresented: $confirmLogout) {
             Button("Kijelentkezés", role: .destructive) { Task { await model.logout() } }
             Button("Mégse", role: .cancel) {}

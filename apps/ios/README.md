@@ -76,12 +76,29 @@ megy, ezért távoli eléréshez HTTPS ajánlott (reverse proxy, Cloudflare, Tai
 - **Vezérlés iPhone-ról, zárolt képernyőn is:** a lejátszó Now Playing adatot (cím, borítókép, idő) tesz közzé és
   fogadja a távoli parancsokat. Az iPhone a zárolási képernyőn és a Vezérlőközpontban felajánlja a tévé lejátszását,
   az Apple TV Remote pedig ugyanúgy vezérli, mint a Siri Remote. A telefonra ehhez nem kell semmi külön.
-- **Top Shelf:** ha a kezdőképernyőn a Kinora ikonján áll a fókusz, felül nagyban látszik a „Folytatás” (állóképek
+- **Top Shelf:** ha a kezdőképernyőn a Kinora ikonján áll a fókusz, felül nagyban látszik a „Folytatás” (plakátok
   haladássávval, kattintásra ott folytatja) és az „Új a könyvtárban” (plakátok, kattintásra az adatlap). A bővítmény az
   App Groupon át az app belépését használja, a képeket letölti a közös tárolóba, és szerver nélkül az utolsó állapotot
   mutatja. Az app ugyanott frissíti, ahol az iPhone a widgeteket.
 - Letöltés, kép a képben és widget tvOS-en nincs.
 - Az ikon rétegei és a Top Shelf képek az `apps/branding/brand.mjs`-ből készülnek.
+
+## Watch party
+
+Közös nézés a szerver szobáin át, ugyanaz a protokoll és szinkronszabály, mint a weben, így app és böngésző egy szobában lehet.
+
+- **Indítás:** az adatlapon („Watch party indítása” filmnél és epizódnál), vagy lejátszás közben a beállítások menüből
+  (ilyenkor a szoba onnan indul, ahol épp tartasz). Apple TV-n az adatlap „Watch party” gombja vagy a sebesség/minőség menü.
+- **Csatlakozás:** a kezdőlap fejlécének gombja kóddal (6 karakter), vagy a meghívó linkje: `kinora://party/<KÓD>`.
+  Apple TV-n a Beállítások → „Csatlakozás watch partyhoz”. Akinek nincs appja, a meghívóban lévő webes linket nyitja meg.
+- **Panel (iPhone, iPad):** kód és meghívó küldése, résztvevők (házigazda, ki tölt), „Mindenki irányíthat” kapcsoló a
+  házigazdának, csevegés olvasatlan-jelzővel, reakciók a videó fölött úszva, kilépés.
+- **Apple TV:** a kód és a résztvevők a jobb felső sarokban, a csevegés és a reakciók pár másodpercig a videó fölött; a
+  Watch party menüben reakció, üzenet írása, „Mindenki irányíthat” és kilépés.
+- **Szinkron:** a szerver órája a mérvadó (ping/pong alapján becsülve); 1,5 mp-nél nagyobb eltérésnél tekerés, kisebbnél
+  5%-kal gyorsabb vagy lassabb lejátszás. Ha valaki tölt, a szoba megvárja.
+- Party alatt a sebesség 1×, nincs automatikus átugrás és következő rész visszaszámlálás, a letöltött példány helyett a
+  szerverről játszik. Az átugrás és a következő rész gombját csak az látja, aki irányíthat.
 
 ## Ütemterv
 
@@ -99,7 +116,7 @@ megy, ezért távoli eléréshez HTTPS ajánlott (reverse proxy, Cloudflare, Tai
   („Eszköz csatlakoztatása”), külső szervercím hozzáadása.
 - **v0.6** (kész): hang- és feliratválasztás, felirat stílusa és késleltetése, offline letöltés, sebesség, minőségkorlát,
   fejezetek, sorozatonkénti nyelvek, Spotlight; Apple TV app.
-- Később: watch party.
+- **v0.6.3** (kész): watch party iPhone-on, iPaden és Apple TV-n.
 
 ## Licenc
 

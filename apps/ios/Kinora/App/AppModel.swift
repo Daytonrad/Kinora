@@ -34,6 +34,10 @@ final class AppModel {
     var playerVisible = false
     /// The settings sheet is shown.
     var settingsVisible = false
+    /// A watch party could not be started or joined (shown as an alert).
+    var partyError: String?
+    /// Joining a party is in progress (a spinner on the join screen).
+    private(set) var partyJoining = false
     /// Bumped when a playback ends, so screens refresh progress and watched marks.
     private(set) var playbackGeneration = 0
 
@@ -301,7 +305,7 @@ final class AppModel {
     // MARK: - playback
 
     /// Plays a movie or episode; `from` nil resumes where the profile left off.
-    func play(_ item: Item, from start: Double? = nil) {
+    func play(_ item: Item, from start: Double? = nil, party: PartySession? = nil) {
         guard let client else { return }
         player?.close()
         let resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
@@ -311,7 +315,11 @@ final class AppModel {
         #else
         let local: PlaybackInfo? = nil
         #endif
-        let p = PlayerModel(item: item, start: start ?? resume, client: client, profile: me?.profile, local: local)
+        // A party streams from the server, so everyone sees the same cut and the same segments.
+        let p = PlayerModel(item: item, start: start ?? resume, client: client, profile: me?.profile,
+                            local: party == nil ? local : nil)
+        p.party = party
+        party?.player = p
         p.onClose = { [weak self, weak p] in
             guard let self, self.player === p else { return }
             self.player = nil
@@ -325,6 +333,79 @@ final class AppModel {
         player = p
         playerVisible = true
         Task { await p.begin() }
+    }
+
+    // MARK: - watch party
+
+    /// Opens a room on a movie or episode and joins it as the host. From the player the
+    /// playback goes on where it is; from the detail page it starts at the resume position.
+    func startParty(_ item: Item) {
+        guard let client, !partyJoining else { return }
+        partyJoining = true
+        Task {
+            defer { partyJoining = false }
+            do {
+                let info = try await guarded { try await client.createParty(itemId: item.id) }
+                if let p = player, p.item.id == item.id, p.party == nil, !p.isOffline {
+                    let session = PartySession(code: info.code, client: client)
+                    session.connect()
+                    _ = await session.firstState()
+                    session.adopt(position: p.livePosition, playing: p.isPlaying)
+                    p.party = session
+                    session.player = p
+                    session.panelOpen = true
+                } else {
+                    let resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
+                    await enterParty(info.code, item: item, client: client, hostFrom: resume)
+                }
+            } catch {
+                partyError = error.localizedDescription
+            }
+        }
+    }
+
+    /// The room behind a code (typed, or from a kinora://party link).
+    func joinParty(_ typed: String) {
+        guard let client else { return }
+        guard let code = PartySync.normalizedCode(typed) else {
+            partyError = "A kód 6 betű vagy szám."
+            return
+        }
+        guard !partyJoining else { return }
+        partyJoining = true
+        Task {
+            defer { partyJoining = false }
+            do {
+                let info = try await guarded { try await client.party(code) }
+                let detail = try await guarded { try await client.item(info.itemId) }
+                await enterParty(code, item: detail.item, client: client)
+            } catch KinoraError.http(404, _) {
+                partyError = "Nincs ilyen watch party. Ellenőrizd a kódot."
+            } catch {
+                partyError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Connects first, so playback starts where the room is instead of seeking there.
+    private func enterParty(_ code: String, item: Item, client: KinoraClient, hostFrom: Double? = nil) async {
+        let session = PartySession(code: code, client: client)
+        session.connect()
+        let st = await session.firstState()
+        if session.gone {
+            session.leave()
+            partyError = session.status ?? "Nem sikerült csatlakozni a watch partyhoz."
+            return
+        }
+        if let hostFrom {
+            session.adopt(position: hostFrom, playing: true)
+            session.panelOpen = true
+            play(item, from: hostFrom, party: session)
+            return
+        }
+        var target = item
+        if let st, st.itemId != item.id, let d = try? await client.item(st.itemId) { target = d.item }
+        play(target, from: st?.pos ?? 0, party: session)
     }
 
     /// A guarded call on the current server's client (browse screens).
@@ -354,7 +435,7 @@ final class AppModel {
         }
     }
 
-    /// kinora://item/42 or kinora://play/42; waits until the user is on home.
+    /// kinora://item/42, kinora://play/42 or kinora://party/ABC234; waits until the user is on home.
     func open(_ url: URL) {
         guard let link = KinoraLink(url: url) else { return }
         pendingLink = link
@@ -371,6 +452,8 @@ final class AppModel {
                 playerVisible = false
                 tab = .home
                 homePath = NavigationPath([detail.item])
+            case .party(let code):
+                joinParty(code)
             case .play(let id):
                 guard let detail = try? await api({ try await $0.item(id) }) else { return }
                 // A series or season has nothing to play itself: show it instead.

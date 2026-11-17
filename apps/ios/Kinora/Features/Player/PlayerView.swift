@@ -4,6 +4,7 @@ import KinoraKit
 
 /// Full-screen player: video, controls that hide while playing, skip and next-episode prompts.
 struct PlayerView: View {
+    @Environment(AppModel.self) private var model
     let player: PlayerModel
     @State private var chrome = true
     @State private var scrubbing = false
@@ -45,6 +46,24 @@ struct PlayerView: View {
                 if chrome { controls.transition(.opacity) }
                 PromptsView(player: player)
             }
+
+            if let party = player.party {
+                PartyReactionsLayer(party: party)
+                if party.panelOpen {
+                    HStack {
+                        Spacer()
+                        PartyPanel(party: party) { player.close() }
+                    }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: player.party?.panelOpen)
+        .alert("Watch party", isPresented: Binding(get: { model.partyError != nil && model.playerVisible },
+                                                   set: { if !$0 { model.partyError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.partyError ?? "")
         }
         .background { keyboardShortcuts }
         .foregroundStyle(.white)
@@ -96,6 +115,25 @@ struct PlayerView: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 6)
+                if let party = player.party {
+                    Button { party.panelOpen.toggle() } label: {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                            .overlay(alignment: .topTrailing) {
+                                if party.unread > 0 {
+                                    Text("\(min(party.unread, 99))")
+                                        .font(.caption2.weight(.bold)).foregroundStyle(Theme.amberInk)
+                                        .padding(.horizontal, 5).padding(.vertical, 1)
+                                        .background(Theme.amber, in: .capsule)
+                                        .offset(x: -2, y: 4)
+                                }
+                            }
+                            .contentShape(.circle)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(party.unread > 0 ? "Watch party, \(party.unread) új üzenet" : "Watch party")
+                }
                 ChaptersMenu(player: player)
                 OptionsMenu(player: player)
                 AirPlayButton().frame(width: 44, height: 44)
@@ -408,6 +446,7 @@ private struct CaptionView: View {
 }
 
 private struct OptionsMenu: View {
+    @Environment(AppModel.self) private var model
     var player: PlayerModel
 
     var body: some View {
@@ -448,13 +487,16 @@ private struct OptionsMenu: View {
                 }
                 .menuActionDismissBehavior(.disabled)
             }
-            Picker(selection: Binding(get: { player.speed }, set: { player.setSpeed($0) })) {
-                ForEach(PlaybackSpeeds.all, id: \.self) { Text(PlaybackSpeeds.label($0)).tag($0) }
-            } label: {
-                Label("Sebesség", systemImage: "gauge.with.dots.needle.67percent")
-                Text(PlaybackSpeeds.label(player.speed))
+            // In a party the room's clock sets the speed.
+            if player.party == nil {
+                Picker(selection: Binding(get: { player.speed }, set: { player.setSpeed($0) })) {
+                    ForEach(PlaybackSpeeds.all, id: \.self) { Text(PlaybackSpeeds.label($0)).tag($0) }
+                } label: {
+                    Label("Sebesség", systemImage: "gauge.with.dots.needle.67percent")
+                    Text(PlaybackSpeeds.label(player.speed))
+                }
+                .pickerStyle(.menu)
             }
-            .pickerStyle(.menu)
             if !player.isOffline {
                 Picker(selection: Binding(get: { player.qualityCap ?? -1 }, set: { player.setQuality($0 < 0 ? nil : $0) })) {
                     Text("Automatikus").tag(-1)
@@ -465,6 +507,9 @@ private struct OptionsMenu: View {
                 }
                 .pickerStyle(.menu)
             }
+            if player.party == nil, !player.isOffline {
+                Button("Watch party indítása", systemImage: "person.2") { model.startParty(player.item) }
+            }
             }
             .modifier(MenuPresence(player: player))
         } label: {
@@ -473,7 +518,7 @@ private struct OptionsMenu: View {
                 .frame(width: 44, height: 44)
                 .contentShape(.circle)
         }
-        .accessibilityLabel("Hang, felirat, sebesség és minőség")
+        .accessibilityLabel("Hang, felirat, sebesség, minőség és watch party")
     }
 
 }

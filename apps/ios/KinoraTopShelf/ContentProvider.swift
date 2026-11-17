@@ -3,7 +3,7 @@ import TVServices
 import KinoraKit
 
 /// The Apple TV home screen's top shelf: while the Kinora icon has the focus, the titles in
-/// progress (large stills with progress) and the newest ones (posters) show above the apps.
+/// progress (with progress) and the newest ones show above the apps, both as posters.
 ///
 /// It uses the app's login through the App Group, like the iPhone widgets. Images are fetched
 /// with the token and stored in the App Group container, because the system loads them from a
@@ -22,8 +22,8 @@ final class ContentProvider: TVTopShelfContentProvider {
         guard let home = try? await client.home() else { return Shelf.cached() }
 
         let shelf = Shelf(
-            resume: await Shelf.cards(WidgetFeed.continueWatching(home).prefix(10), wide: true, client: client),
-            recent: await Shelf.cards(WidgetFeed.recentlyAdded(home).prefix(12), wide: false, client: client)
+            resume: await Shelf.cards(WidgetFeed.continueWatching(home).prefix(12), resume: true, client: client),
+            recent: await Shelf.cards(WidgetFeed.recentlyAdded(home).prefix(12), resume: false, client: client)
         )
         shelf.save()
         return shelf
@@ -51,22 +51,22 @@ struct Shelf: Codable, Sendable {
 
     var content: (any TVTopShelfContent)? {
         var sections: [TVTopShelfItemCollection<TVTopShelfSectionedItem>] = []
-        if !resume.isEmpty { sections.append(Self.section("Folytatás", resume, wide: true)) }
-        if !recent.isEmpty { sections.append(Self.section("Új a könyvtárban", recent, wide: false)) }
+        if !resume.isEmpty { sections.append(Self.section("Folytatás", resume, resume: true)) }
+        if !recent.isEmpty { sections.append(Self.section("Új a könyvtárban", recent, resume: false)) }
         return sections.isEmpty ? nil : TVTopShelfSectionedContent(sections: sections)
     }
 
-    private static func section(_ title: String, _ cards: [Card], wide: Bool) -> TVTopShelfItemCollection<TVTopShelfSectionedItem> {
+    private static func section(_ title: String, _ cards: [Card], resume: Bool) -> TVTopShelfItemCollection<TVTopShelfSectionedItem> {
         let items = cards.map { c in
-            let item = TVTopShelfSectionedItem(identifier: "\(wide ? "r" : "n")\(c.id)")
+            let item = TVTopShelfSectionedItem(identifier: "\(resume ? "r" : "n")\(c.id)")
             item.title = c.title
-            item.imageShape = wide ? .hdtv : .poster
+            item.imageShape = .poster
             if let name = c.image, let dir = Self.directory {
                 item.setImageURL(dir.appending(path: name), for: [.screenScale1x, .screenScale2x])
             }
             if let p = c.progress, p > 0 { item.playbackProgress = min(1, p) }
             // A click opens the title (or resumes it), the play button always plays.
-            item.displayAction = TVTopShelfAction(url: (wide ? KinoraLink.play(c.id) : .item(c.id)).url)
+            item.displayAction = TVTopShelfAction(url: (resume ? KinoraLink.play(c.id) : .item(c.id)).url)
             item.playAction = TVTopShelfAction(url: KinoraLink.play(c.id).url)
             return item
         }
@@ -75,29 +75,24 @@ struct Shelf: Codable, Sendable {
         return collection
     }
 
-    static func cards(_ items: ArraySlice<Item>, wide: Bool, client: KinoraClient) async -> [Card] {
+    static func cards(_ items: ArraySlice<Item>, resume: Bool, client: KinoraClient) async -> [Card] {
         var out: [Card] = []
         for item in items {
             let episode = item.kind == .episode
             let title = episode
                 ? [item.seriesTitle, item.episodeLabel].compactMap { $0 }.joined(separator: " · ")
                 : item.title
-            var data: Data?
-            if wide {
-                data = try? await client.image(item.id, episode ? .thumb : .backdrop)
-                if data == nil, let series = item.seriesId { data = try? await client.image(series, .backdrop) }
-            } else {
-                data = try? await client.image(item.seriesId ?? item.id, .poster)
-                // No poster (a home video, say): the still still beats an empty card.
-                if data == nil { data = try? await client.image(item.id, .backdrop) }
-            }
-            let name = "\(wide ? "wide" : "poster")-\(item.id).jpg"
+            // Episodes show their series' poster, like the recently added row in the app.
+            var data = try? await client.image(item.seriesId ?? item.id, .poster)
+            // No poster (a home video, say): the still still beats an empty card.
+            if data == nil { data = try? await client.image(item.id, episode ? .thumb : .backdrop) }
+            let name = "poster-\(item.id).jpg"
             var stored: String?
             if let data, let dir = directory {
                 try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                 if (try? data.write(to: dir.appending(path: name), options: .atomic)) != nil { stored = name }
             }
-            out.append(Card(id: item.id, title: title, progress: wide ? item.progress : nil, image: stored))
+            out.append(Card(id: item.id, title: title, progress: resume ? item.progress : nil, image: stored))
         }
         return out
     }

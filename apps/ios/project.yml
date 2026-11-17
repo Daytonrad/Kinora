@@ -126,6 +126,8 @@ targets:
       - Kinora/App/Theme.swift
       - Kinora/Features/Browse/Artwork.swift
       - Kinora/Features/Player/PlayerModel.swift
+      - Kinora/Features/Party/PartySession.swift
+      - Kinora/Features/Party/PartyViews.swift
     dependencies:
       - package: KinoraKit
       - target: KinoraTopShelf

@@ -26,6 +26,12 @@ struct HomeView: View {
         // A new profile sees its own home: rebuild everything when it changes.
         .id(model.me?.profile?.id)
         .sheet(isPresented: $model.settingsVisible) { SettingsView() }
+        .alert("Watch party", isPresented: Binding(get: { model.partyError != nil && !model.playerVisible },
+                                                   set: { if !$0 { model.partyError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.partyError ?? "")
+        }
         .fullScreenCover(isPresented: Binding(get: { model.playerVisible && model.player != nil },
                                               set: { model.playerVisible = $0 })) {
             if let p = model.player { PlayerView(player: p) }
@@ -35,6 +41,7 @@ struct HomeView: View {
 
 struct HomeTab: View {
     @Environment(AppModel.self) private var model
+    @State private var joining = false
     @State private var data: HomeData?
     @State private var error: String?
     @Environment(\.metrics) private var metrics
@@ -66,12 +73,21 @@ struct HomeTab: View {
         .navigationTitle("Kezdőlap")
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .top) { header }
+        .sheet(isPresented: $joining) { PartyJoinView().presentationDetents([.medium]) }
     }
 
     private var header: some View {
         HStack {
             BrandMark(size: 28)
             Spacer()
+            Button { joining = true } label: {
+                Image(systemName: "person.2.wave.2")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
+            }
+            .foregroundStyle(Theme.plaster)
+            .accessibilityLabel("Csatlakozás watch partyhoz")
             AccountMenu()
         }
         .padding(.horizontal, metrics.gutter)

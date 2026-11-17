@@ -15,9 +15,9 @@ final class PlayerModel: NSObject {
     private(set) var item: Item
     private(set) var info: PlaybackInfo?
     private(set) var error: String?
-    private(set) var loading = true
+    private(set) var loading = true { didSet { party?.buffering(waiting) } }
     private(set) var isPlaying = false
-    private(set) var buffering = false
+    private(set) var buffering = false { didSet { party?.buffering(waiting) } }
     /// Seconds from the start of the file.
     private(set) var position: Double = 0
     private(set) var next: Item?
@@ -40,6 +40,9 @@ final class PlayerModel: NSObject {
     /// Playing a downloaded file from the device.
     let isOffline: Bool
     var fill = false { didSet { layer.videoGravity = fill ? .resizeAspectFill : .resizeAspect } }
+
+    /// The watch party this player follows; nil when watching alone.
+    var party: PartySession?
 
     /// The full-screen player is on screen (set by the view).
     var presented = true
@@ -105,6 +108,18 @@ final class PlayerModel: NSObject {
     // MARK: - derived
 
     var duration: Double { info?.duration ?? item.runtimeSec ?? 0 }
+
+    /// Loading or stalled: a watch party waits for this viewer.
+    var waiting: Bool { loading || buffering }
+
+    /// The position now, not as of the last tick (the party sync measures drift with it).
+    var livePosition: Double {
+        let now = player.currentTime().seconds
+        return now.isFinite && player.currentItem != nil && !loading ? offset + now : position
+    }
+
+    /// In a party only those who may control play and skip; the others follow.
+    var canControl: Bool { party?.canControl ?? true }
     var pipSupported: Bool { pip != nil }
 
     var title: String {
@@ -114,14 +129,14 @@ final class PlayerModel: NSObject {
 
     /// The intro / recap / credits part being watched, unless the profile turned skipping off.
     var currentSegment: Segment? {
-        guard skipMode != "off", let segs = info?.segments else { return nil }
+        guard skipMode != "off", canControl, let segs = info?.segments else { return nil }
         if showNext { return nil } // the next-episode card takes over at the credits
         return segs.first { [.intro, .recap, .credits].contains($0.type) && position >= $0.start && position < $0.end - 1 }
     }
 
     /// From the credits (or near the end) the next episode is offered.
     var showNext: Bool {
-        guard next != nil, !nextDismissed, duration > 0 else { return false }
+        guard next != nil, !nextDismissed, duration > 0, canControl else { return false }
         if ended { return true }
         let at = info?.creditsAt ?? max(duration - 30, duration * 0.85)
         return position >= at
@@ -153,6 +168,7 @@ final class PlayerModel: NSObject {
         appObservers = []
         statusObservation = nil
         pip?.stopPictureInPicture()
+        party?.leave()
         tearDownRemoteCommands()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         onClose?()
@@ -203,12 +219,14 @@ final class PlayerModel: NSObject {
             session = info.session
             offset = info.mode == .direct ? 0 : (info.startOffset ?? 0)
             position = t
+            syncChapter()
             pendingSeek = info.mode == .direct && t > 0 ? t : nil
             let playerItem = AVPlayerItem(url: url)
             watch(playerItem)
             player.replaceCurrentItem(with: playerItem)
             player.defaultRate = speed
-            player.play()
+            // In a party the room says whether to play (the sync starts it when it does).
+            if party?.state.map({ $0.playing }) ?? true { player.play() }
             if item.kind == .episode, next == nil {
                 next = try? await client.nextEpisode(after: item.id)
             }
@@ -273,6 +291,7 @@ final class PlayerModel: NSObject {
     }
 
     func setSpeed(_ rate: Float) {
+        guard party == nil else { return } // the party sync owns the rate
         speed = rate
         player.defaultRate = rate
         if player.timeControlStatus != .paused { player.rate = rate }
@@ -295,7 +314,14 @@ final class PlayerModel: NSObject {
     }
 
     var chapters: [Chapter] { (info?.chapters ?? []).sorted { $0.start < $1.start } }
-    var currentChapter: Chapter? { chapters.current(at: position) }
+    /// Stored, not computed from `position`: views that show it (an open tvOS menu) only redraw
+    /// when the chapter changes, not on every tick.
+    private(set) var currentChapter: Chapter?
+
+    private func syncChapter() {
+        let now = chapters.current(at: position)
+        if now != currentChapter { currentChapter = now }
+    }
 
     private func stopSession() {
         guard let s = session else { return }
@@ -307,24 +333,39 @@ final class PlayerModel: NSObject {
     // MARK: - controls
 
     func togglePlay() {
-        if player.timeControlStatus == .paused {
-            if ended { ended = false; seek(to: 0) }
-            player.play()
-        } else {
-            player.pause()
-            report()
-        }
+        if player.timeControlStatus == .paused { play() } else { pause() }
+    }
+
+    func play() {
+        if ended { ended = false; seek(to: 0) }
+        party?.played()
+        player.play()
+        updateNowPlaying()
+    }
+
+    func pause() {
+        party?.paused(at: livePosition)
+        player.pause()
+        report()
         updateNowPlaying()
     }
 
     func seek(by delta: Double) { seek(to: position + delta) }
 
-    /// Seconds from the start of the file.
+    /// Seconds from the start of the file; a party follows.
     func seek(to target: Double) {
-        guard let info else { return }
+        guard let t = move(to: target) else { return }
+        party?.seeked(to: t)
+    }
+
+    /// Seeks without telling the party (its own corrections, skips it hears about otherwise).
+    @discardableResult
+    private func move(to target: Double) -> Double? {
+        guard let info else { return nil }
         let t = max(0, duration > 2 ? min(target, duration - 2) : target)
         ended = false
         position = t
+        syncChapter()
         if info.mode == .direct {
             player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         } else {
@@ -339,12 +380,13 @@ final class PlayerModel: NSObject {
             }
         }
         updateNowPlaying()
+        return t
     }
 
     func skipSegment() {
         guard let s = currentSegment else { return }
         skipped.insert(s.start)
-        seek(to: s.end)
+        if let t = move(to: s.end) { party?.skipped(to: t, kind: s.type) }
     }
 
     func dismissNext() {
@@ -354,7 +396,13 @@ final class PlayerModel: NSObject {
     }
 
     func playNext() {
-        guard let n = next else { return }
+        guard let n = next, canControl else { return }
+        party?.nextItem(n.id)
+        load(n, at: n.progress != nil ? (n.userData?.position ?? 0) : 0)
+    }
+
+    /// Another title in the same player: the next episode, or the one a party moved to.
+    private func load(_ n: Item, at start: Double) {
         countdown?.cancel()
         nextCountdown = nil
         report(ended: true)
@@ -365,13 +413,45 @@ final class PlayerModel: NSObject {
         ended = false
         skipped = []
         position = 0
+        syncChapter()
         audioIdx = nil
         subtitlesChosen = false
         languagesApplied = false
         subtitleDelay = 0
         selectSubtitle(nil, remember: false)
-        let resume = n.progress != nil ? (n.userData?.position ?? 0) : 0
-        Task { await start(at: resume) }
+        Task { await self.start(at: start) }
+    }
+
+    // MARK: - watch party
+
+    private var switching: Int?
+
+    /// The room moved to another title (the host started the next episode).
+    func partySwitch(to id: Int) {
+        guard switching != id, !closed else { return }
+        switching = id
+        let c = client
+        Task {
+            defer { switching = nil }
+            guard let detail = try? await c.item(id), !closed, item.id != id else { return }
+            next = nil
+            load(detail.item, at: party?.state.map { $0.itemId == id ? $0.pos : 0 } ?? 0)
+        }
+    }
+
+    /// The room's clock: play or pause, jump when far off, run a little faster or slower when near.
+    func partyApply(playing: Bool, seek target: Double?, rate: Float) {
+        if let target { move(to: target) }
+        if playing {
+            if ended { return }
+            if player.rate != rate { player.rate = rate }
+        } else if player.timeControlStatus != .paused {
+            player.pause()
+            report()
+        }
+        if speed != 1 { speed = 1 }
+        player.defaultRate = 1
+        updateNowPlaying()
     }
 
     func startPiP() { pip?.startPictureInPicture() }
@@ -449,6 +529,7 @@ final class PlayerModel: NSObject {
         guard !closed else { return }
         let now = player.currentTime().seconds
         if now.isFinite, player.currentItem != nil, !loading { position = offset + now }
+        syncChapter()
         updateCaption()
         let wasPlaying = isPlaying
         isPlaying = player.timeControlStatus == .playing
@@ -457,7 +538,7 @@ final class PlayerModel: NSObject {
         if wasPlaying != isPlaying { updateNowPlaying() }
         if isPlaying, Date.now.timeIntervalSince(lastReport) > 10 { report() }
 
-        if skipMode == "auto", let s = currentSegment, s.type != .credits, !skipped.contains(s.start) {
+        if skipMode == "auto", party == nil, let s = currentSegment, s.type != .credits, !skipped.contains(s.start) {
             skipped.insert(s.start)
             seek(to: s.end)
         }
@@ -468,6 +549,8 @@ final class PlayerModel: NSObject {
         ended = true
         isPlaying = false
         report(ended: true)
+        // A party stays together at the end: the host starts the next episode or leaves.
+        if party != nil { return }
         if next != nil, !nextDismissed {
             if autoplayNext { playNext() }
         } else {
@@ -476,7 +559,7 @@ final class PlayerModel: NSObject {
     }
 
     private func updateCountdown() {
-        if showNext, autoplayNext, countdown == nil {
+        if showNext, autoplayNext, party == nil, countdown == nil {
             nextCountdown = 10
             countdown = Task { [weak self] in
                 while let self, let n = self.nextCountdown, n > 0 {
@@ -544,11 +627,11 @@ final class PlayerModel: NSObject {
     private func setUpRemoteCommands() {
         let center = MPRemoteCommandCenter.shared()
         center.playCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.player.play() }
+            MainActor.assumeIsolated { self?.play() }
             return .success
         }
         center.pauseCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.player.pause() }
+            MainActor.assumeIsolated { self?.pause() }
             return .success
         }
         center.togglePlayPauseCommand.addTarget { [weak self] _ in

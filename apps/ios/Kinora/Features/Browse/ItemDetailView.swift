@@ -132,6 +132,16 @@ struct ItemDetailView: View {
                     await setPlayed(!userData.played)
                 }
             }
+            if let t = playTarget, t.kind == .movie || t.kind == .episode {
+                Button { model.startParty(t) } label: {
+                    Label("Watch party indítása", systemImage: "person.2")
+                        .padding(.vertical, 6)
+                        .contentShape(.rect)
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.plaster)
+                .disabled(model.partyJoining)
+            }
             if let t = playTarget, let p = t.progress {
                 HStack(spacing: 10) {
                     ProgressView(value: p).tint(Theme.amber).frame(maxWidth: 120)
