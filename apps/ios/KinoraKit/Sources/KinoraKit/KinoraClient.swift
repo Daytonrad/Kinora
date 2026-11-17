@@ -19,6 +19,11 @@ public actor KinoraClient {
 
     public func setToken(_ token: String?) { self.token = token }
 
+    /// Another known address of the same server (used by failover).
+    public func setAddresses(_ urls: [String]) {
+        server.urls = ServerAddress.merge([server.url], urls)
+    }
+
     public func setOnAddressChange(_ handler: @escaping @Sendable (SavedServer) -> Void) {
         onAddressChange = handler
     }
@@ -36,6 +41,10 @@ public actor KinoraClient {
     /// POST that ignores the response body.
     public func post(_ path: String, _ body: some Encodable & Sendable = Empty()) async throws {
         _ = try await send("POST", path, body: body)
+    }
+
+    public func patch<R: Decodable & Sendable>(_ path: String, _ body: some Encodable & Sendable, as: R.Type = R.self) async throws -> R {
+        try await decode(send("PATCH", path, body: body))
     }
 
     public func delete(_ path: String) async throws {

@@ -26,6 +26,8 @@ final class AppModel {
     private(set) var player: PlayerModel?
     /// The full-screen player is shown.
     var playerVisible = false
+    /// The settings sheet is shown.
+    var settingsVisible = false
     /// Bumped when a playback ends, so screens refresh progress and watched marks.
     private(set) var playbackGeneration = 0
 
@@ -118,6 +120,7 @@ final class AppModel {
     }
 
     func showServers() {
+        settingsVisible = false
         servers = store.servers
         screen = .servers
     }
@@ -214,6 +217,7 @@ final class AppModel {
     }
 
     func switchProfile() {
+        settingsVisible = false
         player?.close()
         homePath = NavigationPath()
         tab = .home
@@ -222,6 +226,7 @@ final class AppModel {
 
     func logout() async {
         guard let server else { return }
+        settingsVisible = false
         player?.close()
         await client?.logout()
         store.setToken(nil, for: server.id)
@@ -231,8 +236,33 @@ final class AppModel {
         reloadWidgets()
     }
 
+    // MARK: - settings
+
+    /// Saves profile settings and refreshes `me`, so the player picks them up next time.
+    func updateProfile(_ update: ProfileUpdate) async throws {
+        guard let id = me?.profile?.id else { return }
+        _ = try await api { try await $0.updateProfile(id, update) }
+        try await loadMe()
+    }
+
+    /// Adds another address (e.g. the public one) to the current server.
+    /// Throws when a different Kinora server answers there.
+    func addAddress(_ input: String) async throws {
+        guard var saved = server else { return }
+        let found = try await Discovery.resolve(input)
+        if let other = found.status.serverId, !saved.id.hasPrefix("http"), other != saved.id {
+            throw KinoraError.http(409, "Ezen a címen egy másik Kinora-szerver válaszol.")
+        }
+        saved.urls = ServerAddress.merge(saved.urls, [found.url])
+        store.upsert(saved)
+        servers = store.servers
+        server = servers.first { $0.id == saved.id } ?? saved
+        await client?.setAddresses(server?.urls ?? saved.urls)
+    }
+
     /// The token was rejected: back to login, keep the server.
     func sessionLost() {
+        settingsVisible = false
         if let server { store.setToken(nil, for: server.id) }
         me = nil
         notice = KinoraError.unauthorized.errorDescription

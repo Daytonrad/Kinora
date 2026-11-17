@@ -252,7 +252,10 @@ struct AccountMenu: View {
             if let p = model.me?.profile {
                 Text(p.name)
             }
-            Button("Profilváltás", systemImage: "person.2") { model.switchProfile() }
+            Button("Beállítások", systemImage: "gearshape") { model.settingsVisible = true }
+            if model.me?.profileLocked != true {
+                Button("Profilváltás", systemImage: "person.2") { model.switchProfile() }
+            }
             Button("Másik szerver", systemImage: "server.rack") { model.showServers() }
             Button("Kijelentkezés", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                 Task { await model.logout() }

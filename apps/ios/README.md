@@ -67,6 +67,9 @@ megy, ezért távoli eléréshez HTTPS ajánlott (reverse proxy, Cloudflare, Tai
   ahol abbahagytad. „Új a könyvtárban” (kicsi, közepes, nagy): a legújabb címek, koppintásra a részletek. Ha a szerver
   nem érhető el, az utolsó adatot mutatják. Linkek: `kinora://item/<id>` és `kinora://play/<id>`. Fekvő telefonon a
   nagy borítókép nem tölti ki a képernyőt.
+- **v0.5**: beállítások a fiókmenüből, mint a webes `/settings`: lejátszás (feliratok, nyelvek, maximális minőség,
+  következő rész), intró átugrása, hang a háttérben, bejelentkezett eszközök kiléptetése, tévé jóváhagyása kóddal
+  („Eszköz csatlakoztatása”), külső szervercím hozzáadása.
 - Később: offline letöltés, watch party, tvOS.
 
 ## Licenc

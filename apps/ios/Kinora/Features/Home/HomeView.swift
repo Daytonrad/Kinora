@@ -22,6 +22,7 @@ struct HomeView: View {
         .onAppear { model.handlePendingLink() }
         // A new profile sees its own home: rebuild everything when it changes.
         .id(model.me?.profile?.id)
+        .sheet(isPresented: $model.settingsVisible) { SettingsView() }
         .fullScreenCover(isPresented: Binding(get: { model.playerVisible && model.player != nil },
                                               set: { model.playerVisible = $0 })) {
             if let p = model.player { PlayerView(player: p) }

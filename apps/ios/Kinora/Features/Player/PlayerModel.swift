@@ -52,6 +52,7 @@ final class PlayerModel: NSObject {
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
+    private var appObservers: [NSObjectProtocol] = []
 
     init(item: Item, start: Double, client: KinoraClient, profile: Profile?) {
         self.item = item
@@ -118,6 +119,8 @@ final class PlayerModel: NSObject {
         player.replaceCurrentItem(with: nil)
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        appObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        appObservers = []
         statusObservation = nil
         pip?.stopPictureInPicture()
         tearDownRemoteCommands()
@@ -246,6 +249,25 @@ final class PlayerModel: NSObject {
                 self.didEnd()
             }
         }
+        // Settings → "Hang folytatása a háttérben": without a layer AVPlayer keeps the sound
+        // going in the background. Picture in picture, when it started, takes precedence.
+        let center = NotificationCenter.default
+        appObservers = [
+            center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, !self.pipActive, AppSettings.backgroundAudio else { return }
+                    let wasPlaying = self.player.rate > 0
+                    self.layer.player = nil
+                    if wasPlaying { self.player.play() }
+                }
+            },
+            center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.layer.player == nil else { return }
+                    self.layer.player = self.player
+                }
+            },
+        ]
     }
 
     private func watch(_ playerItem: AVPlayerItem) {
