@@ -56,8 +56,15 @@ func (s *Server) mintStreamToken(c *reqCtx, itemID int64) string {
 	var pid int64
 	if c.Profile != nil {
 		pid = c.Profile.ID
+	} else if c.ProfileLock > 0 {
+		pid = c.ProfileLock // kids device before its PIN: filter as the locked profile
 	}
 	exp := time.Now().Add(StreamTokenTTL).Unix()
+	if itemID == 0 {
+		// artwork-only token: stable for a calendar day so image URLs stay cacheable
+		day := int64(24 * 3600)
+		exp = (time.Now().Unix()/day + 2) * day
+	}
 	p := fmt.Sprintf("1|%d|%d|%d|%s|%d", c.User.ID, pid, itemID, c.DeviceID, exp)
 	return base64.RawURLEncoding.EncodeToString([]byte(p)) + "." + s.sign(p)
 }

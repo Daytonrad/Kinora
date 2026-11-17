@@ -12,7 +12,7 @@ import 'core-js/actual/weak-map';
 import './styles/tokens.gen.css';
 import './styles/app.css';
 
-import { state, render, installKeys, initMode, api } from './app';
+import { state, render, installKeys, initMode, api, loadMe } from './app';
 import { initPlatform } from './platform';
 import { applyServerTheme } from './theme';
 import './views/auth';
@@ -31,6 +31,10 @@ async function boot() {
     render().then(() => { if (state.api) applyServerTheme(api()); });
   });
   await render();
+  // keep the artwork token and profile fresh in long-running sessions (TVs left on)
+  window.setInterval(() => {
+    if (state.api && state.me && !document.hidden) loadMe().catch(() => { /* offline: retry next hour */ });
+  }, 60 * 60 * 1000);
 }
 
 boot();

@@ -20,6 +20,8 @@ var reHexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 // serverID is a stable random identifier (lets apps recognise a server whose address changed).
 func (s *Server) serverID() string {
+	s.serverIDMu.Lock()
+	defer s.serverIDMu.Unlock()
 	id := s.st.Setting("server_id")
 	if len(id) != 16 {
 		id = store.RandomToken(8)

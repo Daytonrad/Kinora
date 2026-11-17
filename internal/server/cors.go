@@ -45,7 +45,19 @@ func (s *Server) isAppOrigin(o string) bool {
 
 func sameOrigin(r *http.Request, origin string) bool {
 	host := strings.TrimPrefix(strings.TrimPrefix(origin, "http://"), "https://")
-	return host != origin && strings.EqualFold(host, r.Host)
+	if host == origin {
+		return false
+	}
+	if strings.EqualFold(host, r.Host) {
+		return true
+	}
+	// a reverse proxy that rewrites Host usually reports the original one
+	for _, fh := range strings.Split(r.Header.Get("X-Forwarded-Host"), ",") {
+		if fh = strings.TrimSpace(fh); fh != "" && strings.EqualFold(host, fh) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) cors(next http.Handler) http.Handler {

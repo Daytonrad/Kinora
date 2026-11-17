@@ -73,6 +73,8 @@ route('play', async (parts, q) => {
   let hls: any = null;
   let session = '';
   let lastReport = 0;
+  let startedAt = Date.now();
+  let retriedToken = false;
   let ended = false;
   let nextItem: Item | null = null;
   let nextTimer = 0;
@@ -349,7 +351,15 @@ route('play', async (parts, q) => {
   });
   video.addEventListener('error', () => {
     const err = video.error;
-    if (!hls) fail(T.playErr + (err ? ` (kód: ${err.code})` : ''), info ? info.reasons : undefined);
+    if (hls) return;
+    // a stream token lives 6 h: after a long pause get a fresh one instead of failing
+    if (Date.now() - startedAt > 5 * 3600 * 1000 && !retriedToken) {
+      retriedToken = true;
+      startedAt = Date.now();
+      start(pos());
+      return;
+    }
+    fail(T.playErr + (err ? ` (kód: ${err.code})` : ''), info ? info.reasons : undefined);
   });
   rail.addEventListener('click', (e: MouseEvent) => {
     const r = rail.getBoundingClientRect();

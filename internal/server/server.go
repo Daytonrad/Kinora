@@ -54,6 +54,7 @@ type Server struct {
 	limiter *rateLimiter
 	qc      *quickConnect
 
+	serverIDMu    sync.Mutex
 	streamKeyOnce sync.Once
 	streamKey     []byte
 	extraOrigins  map[string]bool
@@ -259,6 +260,15 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
+// peerIP is the TCP peer address, ignoring forwarding headers.
+func peerIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
 func isHTTPS(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
@@ -342,6 +352,20 @@ type rateLimiter struct {
 }
 
 func newRateLimiter() *rateLimiter { return &rateLimiter{hits: map[string][]time.Time{}} }
+
+// count returns the hits of key inside window without recording a new one.
+func (rl *rateLimiter) count(key string, window time.Duration) int {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	cut := time.Now().Add(-window)
+	n := 0
+	for _, t := range rl.hits[key] {
+		if !t.Before(cut) {
+			n++
+		}
+	}
+	return n
+}
 
 // allow records a hit and reports whether key is still under limit within window.
 func (rl *rateLimiter) allow(key string, limit int, window time.Duration) bool {

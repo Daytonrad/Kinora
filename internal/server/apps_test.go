@@ -378,9 +378,80 @@ func TestQuickConnectFlow(t *testing.T) {
 	if !foundTV {
 		t.Fatal("quick connect must register a device")
 	}
-	// the token is handed out once
-	if code := tv.do("GET", "/api/quickconnect/status?secret="+ini.Secret, nil, &s); code != 410 {
-		t.Fatalf("second poll %d", code)
+	// a lost answer can be fetched again for a short grace period – the same token, no new device
+	var again qcStatus
+	if code := tv.do("GET", "/api/quickconnect/status?secret="+ini.Secret, nil, &again); code != 200 || again.Token != s.Token {
+		t.Fatalf("re-delivery %d %+v", code, again)
+	}
+	var after struct {
+		Devices []store.Device `json:"devices"`
+	}
+	c.do("GET", "/api/devices", nil, &after)
+	if len(after.Devices) != len(list.Devices) {
+		t.Fatal("re-delivery must not create another device")
+	}
+	// the code itself is spent
+	if code := c.do("POST", "/api/quickconnect/lookup", map[string]string{"code": ini.Code}, nil); code != 404 {
+		t.Fatalf("spent code lookup %d", code)
+	}
+}
+
+func TestQuickConnectGraceExpires(t *testing.T) {
+	c, _, srv := newTestServerFull(t)
+	tv := appClient(c, "", "null")
+	var ini qcInit
+	tv.do("POST", "/api/quickconnect/initiate", map[string]string{"platform": "tizen"}, &ini)
+	c.do("POST", "/api/quickconnect/approve", map[string]any{"code": ini.Code}, nil)
+	tv.do("GET", "/api/quickconnect/status?secret="+ini.Secret, nil, nil)
+	srv.qc.mu.Lock()
+	srv.qc.bySecret[sha(ini.Secret)].Expires = time.Now().Add(-time.Second)
+	srv.qc.mu.Unlock()
+	if code := tv.do("GET", "/api/quickconnect/status?secret="+ini.Secret, nil, nil); code != 410 {
+		t.Fatalf("after grace %d", code)
+	}
+}
+
+func TestQuickConnectApprovalsDoNotUseAttemptBudget(t *testing.T) {
+	c, _ := newTestServer(t)
+	tv := appClient(c, "", "null")
+	for i := 0; i < qcAttempts+2; i++ {
+		var ini qcInit
+		tv.do("POST", "/api/quickconnect/initiate", map[string]string{"platform": "webos"}, &ini)
+		if code := c.do("POST", "/api/quickconnect/lookup", map[string]string{"code": ini.Code}, nil); code != 200 {
+			t.Fatalf("lookup %d: %d", i, code)
+		}
+		if code := c.do("POST", "/api/quickconnect/approve", map[string]any{"code": ini.Code}, nil); code != 200 {
+			t.Fatalf("approve %d: %d", i, code)
+		}
+	}
+}
+
+func TestLockedKidsDeviceBeforePIN(t *testing.T) {
+	c, st := newTestServer(t)
+	var kid store.Profile
+	c.do("POST", "/api/profiles", map[string]any{"name": "Kicsi", "is_kids": true, "max_rating_level": 2, "pin": "4321"}, &kid)
+	tv := appClient(c, "", "null")
+	var ini qcInit
+	tv.do("POST", "/api/quickconnect/initiate", map[string]string{"platform": "tizen"}, &ini)
+	selectFirstProfile(t, c)
+	c.do("POST", "/api/quickconnect/approve", map[string]any{"code": ini.Code, "profile_id": kid.ID}, nil)
+	var s qcStatus
+	tv.do("GET", "/api/quickconnect/status?secret="+ini.Secret, nil, &s)
+	if !s.NeedsPIN || !s.ProfileLocked {
+		t.Fatalf("status %+v", s)
+	}
+	dev := appClient(c, s.Token, "null")
+	var me struct {
+		MediaToken string `json:"media_token"`
+	}
+	dev.do("GET", "/api/me", nil, &me)
+	r := itoa(itemID(st, "Space Drama"))
+	if code := dev.do("GET", "/api/images/"+r+"/thumb", nil, nil); code != 404 {
+		t.Fatalf("locked device (session) sees R artwork: %d", code)
+	}
+	anon := &client{t: t, base: c.base, hc: &http.Client{}}
+	if code := anon.do("GET", "/api/images/"+r+"/thumb?st="+me.MediaToken, nil, nil); code != 404 {
+		t.Fatalf("locked device (token) sees R artwork: %d", code)
 	}
 }
 

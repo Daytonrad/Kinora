@@ -37,6 +37,7 @@ type qcEntry struct {
 	Lock       bool
 	NeedsPIN   bool
 	ApprovedBy string
+	issued     map[string]any // the approved response, re-sent if the first answer got lost
 }
 
 type quickConnect struct {
@@ -126,8 +127,9 @@ func (q *quickConnect) decide(code string, approve bool, userID, profileID int64
 	return true
 }
 
-// poll returns the entry for a secret. An approved or denied entry is removed
-// (consumed) by the first poll that sees it, so the token is handed out once.
+// poll returns the entry for a secret. A denied entry is removed by the first poll
+// that sees it. An approved one is claimed ("issuing") so concurrent polls cannot
+// create two sessions; issue() or release() finishes the claim.
 func (q *quickConnect) poll(secret string) (*qcEntry, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -142,11 +144,39 @@ func (q *quickConnect) poll(secret string) (*qcEntry, bool) {
 		return nil, false
 	}
 	cp := *e
-	if e.Status != "pending" {
+	switch e.Status {
+	case "denied":
 		delete(q.byCode, e.Code)
 		delete(q.bySecret, h)
+	case "approved":
+		e.Status = "issuing"
+	case "issuing":
+		cp.Status = "pending" // another poll is creating the session right now
 	}
 	return &cp, true
+}
+
+// issue stores the approved response for a short grace period: if the device never
+// received it (timeout, flaky Wi-Fi), the next poll with the same secret gets it again.
+func (q *quickConnect) issue(secret string, resp map[string]any) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if e := q.bySecret[sha(secret)]; e != nil {
+		e.Status, e.issued = "issued", resp
+		delete(q.byCode, e.Code) // the code can no longer be approved or looked up
+		if g := time.Now().Add(60 * time.Second); g.Before(e.Expires) {
+			e.Expires = g
+		}
+	}
+}
+
+// release undoes a claim when creating the session failed, so the device can retry.
+func (q *quickConnect) release(secret string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if e := q.bySecret[sha(secret)]; e != nil && e.Status == "issuing" {
+		e.Status = "approved"
+	}
 }
 
 func (s *Server) qcEnabled() bool { return s.st.Setting("quickconnect_enabled") != "0" }
@@ -160,7 +190,8 @@ func (s *Server) handleQCInitiate(w http.ResponseWriter, r *http.Request, c *req
 	if !decode(w, r, &d) {
 		return
 	}
-	if !s.limiter.allow("qcinit:"+clientIP(r), 30, qcWindow) {
+	// per client IP, and per TCP peer (X-Forwarded-For can be forged from the LAN)
+	if !s.limiter.allow("qcinit:"+clientIP(r), 30, qcWindow) || !s.limiter.allow("qcinit-peer:"+peerIP(r), 300, qcWindow) {
 		writeErr(w, http.StatusTooManyRequests, "túl sok kódkérés, próbáld újra pár perc múlva")
 		return
 	}
@@ -191,6 +222,8 @@ func (s *Server) handleQCStatus(w http.ResponseWriter, r *http.Request, c *reqCt
 		return
 	}
 	switch e.Status {
+	case "issued":
+		writeJSON(w, http.StatusOK, e.issued)
 	case "pending":
 		writeJSON(w, http.StatusOK, map[string]any{"status": "pending", "expires_in": int(time.Until(e.Expires).Seconds())})
 	case "denied":
@@ -198,6 +231,7 @@ func (s *Server) handleQCStatus(w http.ResponseWriter, r *http.Request, c *reqCt
 	case "approved":
 		u, err := s.st.UserByID(e.UserID)
 		if err != nil {
+			s.qc.release(secret)
 			writeJSON(w, http.StatusGone, map[string]any{"status": "expired", "error": "a fiók már nem létezik"})
 			return
 		}
@@ -212,14 +246,17 @@ func (s *Server) handleQCStatus(w http.ResponseWriter, r *http.Request, c *reqCt
 		d.IP = clientIP(r)
 		tok, dev, err := s.st.CreateDeviceSession(u.ID, d, pre, lock)
 		if err != nil {
+			s.qc.release(secret)
 			s.internalErr(w, r, err)
 			return
 		}
 		s.log.Info("quick connect approved", "user", u.Username, "device", d.Name, "platform", d.Platform, "by", e.ApprovedBy)
-		writeJSON(w, http.StatusOK, map[string]any{
+		resp := map[string]any{
 			"status": "approved", "token": tok, "device_id": dev, "user": u,
 			"profile_id": e.ProfileID, "needs_pin": e.NeedsPIN, "profile_locked": e.Lock,
-		})
+		}
+		s.qc.issue(secret, resp)
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 
@@ -234,13 +271,20 @@ func (s *Server) qcGuard(w http.ResponseWriter, r *http.Request, c *reqCtx) bool
 		writeErr(w, http.StatusForbidden, "gyerekprofilból nem lehet eszközt csatlakoztatni")
 		return false
 	}
-	ipOK := s.limiter.allow("qccode:ip:"+clientIP(r), qcAttempts, qcWindow)
-	userOK := s.limiter.allow(fmt.Sprintf("qccode:user:%d", c.User.ID), qcAttempts, qcWindow)
-	if !ipOK || !userOK {
+	// only wrong codes use up the budget (see qcFailed), so normal approvals never hit it
+	if s.limiter.count("qccode:ip:"+clientIP(r), qcWindow) >= qcAttempts ||
+		s.limiter.count(fmt.Sprintf("qccode:user:%d", c.User.ID), qcWindow) >= qcAttempts {
 		writeErr(w, http.StatusTooManyRequests, "túl sok kódbeírási kísérlet, várj pár percet")
 		return false
 	}
 	return true
+}
+
+// qcFailed records a wrong / expired code against the IP and the user.
+func (s *Server) qcFailed(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	s.limiter.allow("qccode:ip:"+clientIP(r), qcAttempts+1, qcWindow)
+	s.limiter.allow(fmt.Sprintf("qccode:user:%d", c.User.ID), qcAttempts+1, qcWindow)
+	writeErr(w, http.StatusNotFound, "ismeretlen vagy lejárt kód")
 }
 
 func normCode(code string) string {
@@ -261,7 +305,7 @@ func (s *Server) handleQCLookup(w http.ResponseWriter, r *http.Request, c *reqCt
 	}
 	e := s.qc.pending(normCode(in.Code))
 	if e == nil {
-		writeErr(w, http.StatusNotFound, "ismeretlen vagy lejárt kód")
+		s.qcFailed(w, r, c)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -282,7 +326,7 @@ func (s *Server) handleQCApprove(w http.ResponseWriter, r *http.Request, c *reqC
 	code := normCode(in.Code)
 	if in.Action == "deny" {
 		if !s.qc.decide(code, false, 0, 0, false, false, c.User.Username) {
-			writeErr(w, http.StatusNotFound, "ismeretlen vagy lejárt kód")
+			s.qcFailed(w, r, c)
 			return
 		}
 		ok(w)
@@ -298,7 +342,7 @@ func (s *Server) handleQCApprove(w http.ResponseWriter, r *http.Request, c *reqC
 		lock, needsPIN = p.IsKids, p.HasPIN
 	}
 	if !s.qc.decide(code, true, c.User.ID, in.ProfileID, lock, needsPIN, c.User.Username) {
-		writeErr(w, http.StatusNotFound, "ismeretlen vagy lejárt kód")
+		s.qcFailed(w, r, c)
 		return
 	}
 	ok(w)

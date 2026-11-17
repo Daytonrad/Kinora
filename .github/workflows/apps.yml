@@ -41,6 +41,8 @@ jobs:
 
   android:
     runs-on: ubuntu-24.04
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -65,7 +67,7 @@ jobs:
           KINORA_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KINORA_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KINORA_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        if: env.KS_B64 != ''
+        if: env.HAS_KEYSTORE == 'true'
         run: |
           echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/kinora.jks"
           KINORA_KEYSTORE="$RUNNER_TEMP/kinora.jks" npm run build:release -w android
