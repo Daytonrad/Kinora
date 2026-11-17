@@ -92,7 +92,19 @@ export async function resolveServer(input: string): Promise<ConnectResult> {
       if (e && e.message === 'not kinora') sawSomething = true;
     }
   }
-  return { error: sawSomething ? T.notKinora(input) : T.unreachable(input) };
+  if (sawSomething) return { error: T.notKinora(input) };
+  const host = (cands[0] || '').replace(/^https?:\/\//, '').split(/[:/]/)[0];
+  return { error: T.unreachable(input) + (isPrivateHost(host) ? ' ' + T.privateAddr : '') };
+}
+
+/** RFC 1918 / link-local / CGNAT / .local: reachable only inside the home network. */
+export function isPrivateHost(host: string): boolean {
+  const m = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(host);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    return a === 10 || a === 127 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
+  }
+  return /\.(local|lan|home)$/i.test(host) || host.indexOf('.') < 0;
 }
 
 /** Version handshake: null when compatible, else a Hungarian explanation. */

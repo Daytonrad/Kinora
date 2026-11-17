@@ -4,7 +4,8 @@ import { h, put, icon, toast } from '../dom';
 import { T } from '../i18n';
 import { state, api, route, shell, choose, go, confirmBox, loadMe, persistServer, render, sheet, Profile } from '../app';
 import { prefGet, prefSet, APP_VERSION, getPlatform } from '../platform';
-import { setCurrentServer } from '../api';
+import { setCurrentServer, resolveServer, serverURLs } from '../api';
+import { mergeURLs } from '../address';
 
 function row(label: string, value: string, onClick: () => void): HTMLElement {
   return h('button.set-row', { onclick: onClick }, h('span.set-label', null, label), h('span.set-value', null, value));
@@ -81,6 +82,9 @@ route('settings', async () => {
     section(T.devices, devicesBox),
     section(T.server,
       h('p.muted', null, `${s.name} · ${s.url} · ${T.version} ${me.version}`),
+      h('div.addr-list', null, h('span.set-label', null, T.addresses),
+        serverURLs(s).map(u => h('div.muted.small', null, u + (u === s.url ? ' · ' + T.current : '')))),
+      row(T.addAddress, '', () => addAddress()),
       row(T.switchServer, '', async () => { await setCurrentServer(null); go('#/servers'); }),
       row(T.logout, '', async () => {
         if (!(await confirmBox(T.logout + '?', T.logout, T.cancel))) return;
@@ -93,6 +97,25 @@ route('settings', async () => {
     h('p.muted.small.ver', null, `${T.appName} ${APP_VERSION} · ${T.platforms[getPlatform()] || getPlatform()}`)));
   loadDevices();
 });
+
+// "Külső cím hozzáadása": another address of the same server (checked by server_id)
+async function addAddress() {
+  const s = state.api!.server;
+  const inp = h('input.addr', { type: 'text', inputmode: 'url', autocapitalize: 'off', spellcheck: 'false', placeholder: 'https://kinora.pelda.hu', 'data-autofocus': '' }) as HTMLInputElement;
+  const err = h('p.err', { role: 'alert' });
+  const l = sheet(T.addAddress, h('form', { onsubmit: async (e: Event) => {
+    e.preventDefault();
+    err.textContent = T.connecting;
+    const r = await resolveServer(inp.value);
+    if ('error' in r) { err.textContent = r.error; return; }
+    if (r.status.server_id && s.id.indexOf('http') !== 0 && r.status.server_id !== s.id) { err.textContent = T.otherServerAnswers; return; }
+    s.urls = mergeURLs(s.url, s.urls, r.url);
+    await persistServer(s);
+    l.close();
+    toast(T.addressAdded);
+    render();
+  } }, h('p.lede', null, T.addAddressLede), inp, err, h('div.actions', null, h('button.btn.primary.big', { type: 'submit' }, T.save))));
+}
 
 // ------------------------------------------------------------------ approve another device's code (phone → TV)
 

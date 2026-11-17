@@ -415,3 +415,7 @@ html.mode-tv .next-card { width: 640px; }
   * { transition: none !important; -webkit-animation-duration: 3s !important; animation-duration: 3s !important; }
   html.mode-tv .card:focus, html.mode-tv .who:focus .face { transform: none; }
 }
+
+/* settings: known addresses of the server */
+.addr-list { padding: var(--s2) 0; border-bottom: var(--hair) solid var(--rule); }
+.addr-list .set-label { display: block; margin-bottom: var(--s1); }
