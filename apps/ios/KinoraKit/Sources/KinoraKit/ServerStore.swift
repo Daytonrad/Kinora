@@ -25,7 +25,7 @@ public struct SavedServer: Codable, Sendable, Equatable, Identifiable, Hashable 
 }
 
 /// Saved servers (UserDefaults) and their tokens (Keychain).
-/// Pass an App Group suite / access group once the widget extension shares them.
+/// `ServerStore.shared()` puts both in the App Group, so the widgets see them too.
 public final class ServerStore: @unchecked Sendable {
     private let defaults: UserDefaults
     private let keychain: Keychain
@@ -79,6 +79,14 @@ public final class ServerStore: @unchecked Sendable {
         if let token { keychain.write(token, account: id) } else { keychain.delete(account: id) }
     }
 
+    /// Copies servers saved before the App Group existed (v0.3 and older), once.
+    func adopt(from old: UserDefaults) {
+        guard old !== defaults, defaults.data(forKey: listKey) == nil,
+              let data = old.data(forKey: listKey) else { return }
+        defaults.set(data, forKey: listKey)
+        if currentID == nil { currentID = old.string(forKey: currentKey) }
+    }
+
     private func save(_ list: [SavedServer]) {
         defaults.set(try? JSONEncoder().encode(list), forKey: listKey)
     }
@@ -105,13 +113,25 @@ public struct Keychain: Sendable {
         return q
     }
 
+    /// Looks in every group this build can reach. With an access group set, a token found
+    /// elsewhere (saved before the widgets shared it) is moved into the group.
     public func read(account: String) -> String? {
         var q = query(account)
+        q.removeValue(forKey: kSecAttrAccessGroup as String)
         q[kSecReturnData as String] = true
+        q[kSecReturnAttributes as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var out: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess,
+              let attrs = out as? [String: Any], let data = attrs[kSecValueData as String] as? Data,
+              let value = String(data: data, encoding: .utf8) else { return nil }
+        if let accessGroup, let found = attrs[kSecAttrAccessGroup as String] as? String, found != accessGroup,
+           write(value, account: account) {
+            var old = query(account)
+            old[kSecAttrAccessGroup as String] = found
+            SecItemDelete(old as CFDictionary)
+        }
+        return value
     }
 
     /// Stores the value; returns false if the keychain refused it
@@ -130,7 +150,10 @@ public struct Keychain: Sendable {
         return status == errSecSuccess
     }
 
+    /// Removes the item from every group, so an old copy cannot log the user back in.
     public func delete(account: String) {
-        SecItemDelete(query(account) as CFDictionary)
+        var q = query(account)
+        q.removeValue(forKey: kSecAttrAccessGroup as String)
+        SecItemDelete(q as CFDictionary)
     }
 }

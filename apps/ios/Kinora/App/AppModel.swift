@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import WidgetKit
 import KinoraKit
 
 /// App-wide state: which server, which session, which screen.
@@ -21,8 +22,21 @@ final class AppModel {
     private(set) var me: Me?
     /// A message shown once on the next screen (e.g. "session expired").
     var notice: String?
+    /// The current playback; it outlives the player screen in picture in picture.
+    private(set) var player: PlayerModel?
+    /// The full-screen player is shown.
+    var playerVisible = false
+    /// Bumped when a playback ends, so screens refresh progress and watched marks.
+    private(set) var playbackGeneration = 0
 
-    private let store = ServerStore()
+    enum Tab: Hashable { case home, libraries, search }
+    /// The selected tab and the home tab's stack, so links from widgets can open a title.
+    var tab: Tab = .home
+    var homePath = NavigationPath()
+    /// A link that arrived before the user reached home (still launching, picking a profile).
+    private var pendingLink: KinoraLink?
+
+    private let store = ServerStore.shared()
     private(set) var client: KinoraClient?
 
     static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
@@ -177,6 +191,7 @@ final class AppModel {
         server = s
         await client?.setToken(token)
         try? await loadMe()
+        reloadWidgets()
     }
 
     // MARK: - session
@@ -195,19 +210,25 @@ final class AppModel {
         }
         try await loadMe()
         screen = .home
+        reloadWidgets()
     }
 
     func switchProfile() {
+        player?.close()
+        homePath = NavigationPath()
+        tab = .home
         screen = .profiles
     }
 
     func logout() async {
         guard let server else { return }
+        player?.close()
         await client?.logout()
         store.setToken(nil, for: server.id)
         await client?.setToken(nil)
         me = nil
         screen = .login
+        reloadWidgets()
     }
 
     /// The token was rejected: back to login, keep the server.
@@ -216,6 +237,7 @@ final class AppModel {
         me = nil
         notice = KinoraError.unauthorized.errorDescription
         screen = .login
+        reloadWidgets()
     }
 
     /// Runs a server call; a rejected token sends the user back to login.
@@ -224,9 +246,73 @@ final class AppModel {
         catch KinoraError.unauthorized { sessionLost(); throw KinoraError.unauthorized }
     }
 
+    // MARK: - playback
+
+    /// Plays a movie or episode; `from` nil resumes where the profile left off.
+    func play(_ item: Item, from start: Double? = nil) {
+        guard let client else { return }
+        player?.close()
+        let resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
+        let p = PlayerModel(item: item, start: start ?? resume, client: client, profile: me?.profile)
+        p.onClose = { [weak self, weak p] in
+            guard let self, self.player === p else { return }
+            self.player = nil
+            self.playerVisible = false
+            self.playbackGeneration += 1
+            self.reloadWidgets(after: .seconds(2))
+        }
+        // Picture in picture: the full-screen player steps aside and comes back on restore.
+        p.onPiPStart = { [weak self] in self?.playerVisible = false }
+        p.onPiPRestore = { [weak self] in self?.playerVisible = true }
+        player = p
+        playerVisible = true
+        Task { await p.begin() }
+    }
+
     /// A guarded call on the current server's client (browse screens).
     func api<T: Sendable>(_ work: (KinoraClient) async throws -> T) async throws -> T {
         guard let client else { throw KinoraError.network }
         return try await guarded { try await work(client) }
+    }
+
+    // MARK: - widgets and links
+
+    /// Widgets show the profile's progress; ask for fresh data after it changed. The delay
+    /// lets the last progress report reach the server first.
+    func reloadWidgets(after delay: Duration = .zero) {
+        Task {
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    /// kinora://item/42 or kinora://play/42; waits until the user is on home.
+    func open(_ url: URL) {
+        guard let link = KinoraLink(url: url) else { return }
+        pendingLink = link
+        handlePendingLink()
+    }
+
+    func handlePendingLink() {
+        guard screen == .home, let link = pendingLink, client != nil else { return }
+        pendingLink = nil
+        Task {
+            switch link {
+            case .item(let id):
+                guard let detail = try? await api({ try await $0.item(id) }) else { return }
+                playerVisible = false
+                tab = .home
+                homePath = NavigationPath([detail.item])
+            case .play(let id):
+                guard let detail = try? await api({ try await $0.item(id) }) else { return }
+                // A series or season has nothing to play itself: show it instead.
+                if detail.item.kind == .movie || detail.item.kind == .episode {
+                    play(detail.item)
+                } else {
+                    tab = .home
+                    homePath = NavigationPath([detail.item])
+                }
+            }
+        }
     }
 }

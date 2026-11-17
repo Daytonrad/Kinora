@@ -90,11 +90,11 @@ elemre, felhasználóra és eszközre kötött **stream-tokent** kapnak (`?st=`)
 A lejátszó a `MediaSource.isTypeSupported`/`canPlayType` eredményét egy platformonkénti táblázattal egészíti ki (`shared/src/player/caps.ts`).
 A TV-k natív lejátszója sokszor üres választ ad olyan formátumra, amit közvetlenül le tud játszani (MKV, HEVC, AC-3/E-AC-3), és így a direct play minél
 gyakrabban működik. HDR10-et csak akkor jelez, ha a platform igazolja (Tizen: `webapis.avinfo.isHdrTvSupport()`, máshol `(dynamic-range: high)`).
-HLS: Tizen és webOS natívan a `<video>`-ban, Androidon hls.js, iOS-en AVPlayer (v0.3). A feliratokat az app maga rajzolja ki a szerver WebVTT-jéből, mert a `<track>` a régi TV-ken megbízhatatlan.
+HLS: Tizen és webOS natívan a `<video>`-ban, Androidon hls.js, iOS-en AVPlayer. A feliratokat az app maga rajzolja ki a szerver WebVTT-jéből, mert a `<track>` a régi TV-ken megbízhatatlan.
 
 ## Tudatosan későbbre hagyva (v2)
 
 - **Offline letöltés a telefonra:** a szerver már készít átkódolt letöltéseket (`/api/downloads`). A tárolás natív fájlba (Capacitor Filesystem) és az offline
   lejátszás a következő kör; a lejátszó URL-alapú, így egy helyi fájl-URL-re cserélhető.
 - Watch party az appokból (a WebSocket jelenleg sütis hitelesítésű).
-- Chromecast vezérlés. (AirPlay és kép a képben az iOS app v0.3-as körében.)
+- Chromecast vezérlés. (AirPlay és kép a képben az iOS appban van.)

@@ -6,16 +6,26 @@ struct HomeView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        TabView {
-            NavigationStack { HomeTab().browseDestinations() }
+        @Bindable var model = model
+        TabView(selection: $model.tab) {
+            NavigationStack(path: $model.homePath) { HomeTab().browseDestinations() }
                 .tabItem { Label("Kezdőlap", systemImage: "house") }
+                .tag(AppModel.Tab.home)
             NavigationStack { LibrariesView().browseDestinations() }
                 .tabItem { Label("Könyvtárak", systemImage: "square.grid.2x2") }
+                .tag(AppModel.Tab.libraries)
             NavigationStack { SearchView().browseDestinations() }
                 .tabItem { Label("Keresés", systemImage: "magnifyingglass") }
+                .tag(AppModel.Tab.search)
         }
+        // A widget link that arrived while signing in.
+        .onAppear { model.handlePendingLink() }
         // A new profile sees its own home: rebuild everything when it changes.
         .id(model.me?.profile?.id)
+        .fullScreenCover(isPresented: Binding(get: { model.playerVisible && model.player != nil },
+                                              set: { model.playerVisible = $0 })) {
+            if let p = model.player { PlayerView(player: p) }
+        }
     }
 }
 
@@ -46,6 +56,7 @@ struct HomeTab: View {
         }
         .refreshable { await load() }
         .task { if data == nil { await load() } }
+        .onChange(of: model.playbackGeneration) { Task { await load() } }
         .kinoraScreen()
         .navigationTitle("Kezdőlap")
         .toolbar(.hidden, for: .navigationBar)
@@ -74,13 +85,13 @@ struct HomeTab: View {
 /// The featured title at the top of home.
 private struct HeroCard: View {
     var item: Item
+    @Environment(\.verticalSizeClass) private var vSize
 
     var body: some View {
         NavigationLink(value: item) {
             ZStack(alignment: .bottomLeading) {
                 ArtworkView(item: item, kind: .backdrop)
-                    .aspectRatio(16 / 10, contentMode: .fit)
-                    .frame(maxWidth: .infinity)
+                    .heroFrame(16 / 10, compactHeight: vSize == .compact)
                 LinearGradient(colors: [.clear, Theme.black.opacity(0.95)], startPoint: .center, endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(item.title)

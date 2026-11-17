@@ -29,6 +29,7 @@ targets:
       - path: Kinora
     dependencies:
       - package: KinoraKit
+      - target: KinoraWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(KINORA_BUNDLE_ID)
@@ -38,6 +39,11 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
+    # The App Group carries the saved servers and the login token to the widgets.
+    entitlements:
+      path: Kinora/Kinora.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
     info:
       path: Kinora/Info.plist
       properties:
@@ -47,6 +53,11 @@ targets:
         CFBundleDevelopmentRegion: hu
         ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
+        KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
+        # kinora://item/42 and kinora://play/42, opened by the widgets.
+        CFBundleURLTypes:
+          - CFBundleURLName: $(KINORA_BUNDLE_ID)
+            CFBundleURLSchemes: [kinora]
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIApplicationSceneManifest:
@@ -67,6 +78,39 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: A Kinora a helyi hálózaton keresi és éri el a médiaszerveredet.
+  KinoraWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KinoraWidgets
+    dependencies:
+      - package: KinoraKit
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(KINORA_BUNDLE_ID).widgets
+        PRODUCT_NAME: KinoraWidgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+    entitlements:
+      path: KinoraWidgets/KinoraWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
+    info:
+      path: KinoraWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Kinora
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: hu
+        KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
 schemes:
   Kinora:
     build:

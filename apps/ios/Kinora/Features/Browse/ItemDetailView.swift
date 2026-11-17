@@ -4,6 +4,7 @@ import KinoraKit
 /// Movie, series, season or episode page.
 struct ItemDetailView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.verticalSizeClass) private var vSize
     /// What the previous screen knew; shown at once while the full detail loads.
     var item: Item
 
@@ -34,6 +35,7 @@ struct ItemDetailView: View {
         .refreshable { await load() }
         // Runs again on returning from an episode, so watched marks stay current.
         .task { await load() }
+        .onChange(of: model.playbackGeneration) { Task { await load() } }
         .task(id: season) { await loadEpisodes() }
         .kinoraScreen()
         .navigationTitle(current.title)
@@ -45,8 +47,7 @@ struct ItemDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             ArtworkView(item: current, kind: current.kind == .episode ? .thumb : .backdrop)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                .heroFrame(16 / 9, compactHeight: vSize == .compact)
                 .overlay {
                     LinearGradient(colors: [.clear, Theme.black], startPoint: .center, endPoint: .bottom)
                 }
@@ -91,11 +92,11 @@ struct ItemDetailView: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Button {} label: {
+                Button { if let t = playTarget { model.play(t) } } label: {
                     Label(playLabel, systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(true)
+                .disabled(playTarget == nil)
 
                 IconToggle(on: userData.favorite, onIcon: "heart.fill", offIcon: "heart",
                            label: userData.favorite ? "Kedvenc – eltávolítás" : "Kedvencekhez") {
@@ -106,8 +107,18 @@ struct ItemDetailView: View {
                     await setPlayed(!userData.played)
                 }
             }
-            Text("A lejátszás a következő verzióban érkezik.")
-                .font(.caption).foregroundStyle(Theme.muted)
+            if let t = playTarget, let p = t.progress {
+                HStack(spacing: 10) {
+                    ProgressView(value: p).tint(Theme.amber).frame(maxWidth: 120)
+                    if let left = Format.runtime((t.runtimeSec ?? 0) - (t.userData?.position ?? 0)) {
+                        Text("még \(left)").font(.caption).foregroundStyle(Theme.muted)
+                    }
+                    Spacer()
+                    Button("Lejátszás elölről", systemImage: "arrow.counterclockwise") { model.play(t, from: 0) }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.plaster)
+                }
+            }
         }
         .padding(.horizontal, 20)
     }

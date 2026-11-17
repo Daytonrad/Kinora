@@ -280,3 +280,15 @@ extension View {
             .toolbarBackground(Theme.black, for: .navigationBar)
     }
 }
+
+extension View {
+    /// Wide artwork at its own ratio; on a phone in landscape a short strip instead,
+    /// so the title and play button stay on screen.
+    @ViewBuilder func heroFrame(_ ratio: CGFloat, compactHeight: Bool) -> some View {
+        if compactHeight {
+            frame(maxWidth: .infinity).frame(height: 170).clipped()
+        } else {
+            aspectRatio(ratio, contentMode: .fit).frame(maxWidth: .infinity)
+        }
+    }
+}

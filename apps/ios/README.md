@@ -10,6 +10,7 @@ ios/
     App.xcconfig       verzió, bundle ID, közös build-beállítások
     Local.example.xcconfig → másold Local.xcconfig néven, ide jön a saját Team ID-d
   Kinora/              az app (SwiftUI): App/ (állapot, téma), Features/ (képernyők), Assets.xcassets
+  KinoraWidgets/       WidgetKit-bővítmény: Folytatás és Új a könyvtárban
   KinoraKit/           Swift csomag: API-kliens, modellek, szerverlista + Keychain, felderítés – UI nélkül, Macen tesztelhető
 ```
 
@@ -23,6 +24,10 @@ ios/
    és írd bele a `DEVELOPMENT_TEAM`-et (Xcode → Settings → Accounts, vagy developer.apple.com → Membership).
    A `Local.xcconfig` git-ignorált, a Team ID nem kerül a repóba. Saját Team-mel a `KINORA_BUNDLE_ID`-t is itt írd felül, mert az alapértelmezett bundle ID a hivatalos buildé.
 3. `xcodegen` ebben a mappában, majd nyisd meg a `Kinora.xcodeproj`-ot és Run.
+
+Az app és a widgetek egy App Groupon (`group.<bundle ID>`) osztoznak: ebben van a szerverlista, a widgetek utolsó
+adata és a Keychain-hozzáférési csoport. Automatikus aláírásnál az Xcode a saját Team-edhez létrehozza a csoportot,
+kézzel semmit nem kell beállítani a developer.apple.com-on. Saját bundle ID-vel a csoport neve is vele változik.
 
 A `project.yml` módosítása után futtasd újra az `xcodegen`-t. A generált `.xcodeproj` és `Kinora/Info.plist` nincs verziókezelve.
 
@@ -54,8 +59,13 @@ Távoli szerverhez HTTPS kell (reverse proxy, Cloudflare, Tailscale): az App Tra
 
 - **v0.1** (kész): szerver hozzáadása, keresés a helyi hálózaton, belépés jelszóval vagy kóddal (Quick Connect), profilválasztó PIN-nel.
 - **v0.2** (kész): kezdőlap, könyvtárak rendezéssel, részletek, sorozatok évadokkal, keresés, kedvenc és megnézett jelölés.
-- **v0.3:** AVPlayer, haladás mentése, következő rész, intro átugrása, kép a képben, AirPlay.
-- **v0.4:** widgetek (App Group, közös Keychain).
+- **v0.3** (kész): saját AVPlayer-lejátszó (direct play, remux és átkódolt HLS, tekerés a még el nem készült részre új
+  munkamenettel), haladás mentése, következő rész visszaszámlálással, intro/összefoglaló/stáblista átugrása, kép a képben,
+  AirPlay, vezérlés a zárolási képernyőről. Feliratok még nincsenek.
+- **v0.4** (kész): widgetek. „Folytatás” (kicsi, közepes, nagy, és a zárolási képernyőre is): koppintásra ott folytatja,
+  ahol abbahagytad. „Új a könyvtárban” (kicsi, közepes, nagy): a legújabb címek, koppintásra a részletek. Ha a szerver
+  nem érhető el, az utolsó adatot mutatják. Linkek: `kinora://item/<id>` és `kinora://play/<id>`. Fekvő telefonon a
+  nagy borítókép nem tölti ki a képernyőt.
 - Később: offline letöltés, watch party, tvOS.
 
 ## Licenc

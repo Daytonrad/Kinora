@@ -8,3 +8,6 @@ DerivedData/
 xcuserdata/
 .swiftpm/
 Kinora/Info.plist
+Kinora/Kinora.entitlements
+KinoraWidgets/Info.plist
+KinoraWidgets/KinoraWidgets.entitlements
