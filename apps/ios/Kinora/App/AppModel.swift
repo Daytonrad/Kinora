@@ -223,4 +223,10 @@ final class AppModel {
         do { return try await work() }
         catch KinoraError.unauthorized { sessionLost(); throw KinoraError.unauthorized }
     }
+
+    /// A guarded call on the current server's client (browse screens).
+    func api<T: Sendable>(_ work: (KinoraClient) async throws -> T) async throws -> T {
+        guard let client else { throw KinoraError.network }
+        return try await guarded { try await work(client) }
+    }
 }

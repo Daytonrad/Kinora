@@ -53,11 +53,11 @@ Távoli szerverhez HTTPS kell (reverse proxy, Cloudflare, Tailscale): az App Tra
 ## Ütemterv
 
 - **v0.1** (kész): szerver hozzáadása, keresés a helyi hálózaton, belépés jelszóval vagy kóddal (Quick Connect), profilválasztó PIN-nel.
-- **v0.2:** kezdőlap, könyvtárak, részletek, sorozatok, keresés.
+- **v0.2** (kész): kezdőlap, könyvtárak rendezéssel, részletek, sorozatok évadokkal, keresés, kedvenc és megnézett jelölés.
 - **v0.3:** AVPlayer, haladás mentése, következő rész, intro átugrása, kép a képben, AirPlay.
 - **v0.4:** widgetek (App Group, közös Keychain).
 - Később: offline letöltés, watch party, tvOS.
 
 ## Licenc
 
-MIT, mint a Kinora. A [Swiftfin](https://github.com/jellyfin/swiftfin) (MPL-2.0) inspiráció, kódot nem veszünk át belőle.
+MIT, mint a Kinora.

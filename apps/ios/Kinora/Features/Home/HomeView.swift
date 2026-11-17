@@ -1,46 +1,128 @@
 import SwiftUI
 import KinoraKit
 
-/// v0.1 placeholder: proves the session works. Browsing arrives in v0.2.
+/// Signed in with a profile: home, libraries and search tabs.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    BrandMark(size: 30)
-                    if let me = model.me, let p = me.profile {
-                        HStack(spacing: 16) {
-                            ProfileFace(profile: p, size: 64, showsName: false)
-                            VStack(alignment: .leading) {
-                                Text("Szia, \(p.name)!").font(Theme.display(34, weight: .bold))
-                                Text("\(me.serverName) · Kinora \(me.version)").foregroundStyle(Theme.muted)
-                            }
-                        }
+        TabView {
+            NavigationStack { HomeTab().browseDestinations() }
+                .tabItem { Label("Kezdőlap", systemImage: "house") }
+            NavigationStack { LibrariesView().browseDestinations() }
+                .tabItem { Label("Könyvtárak", systemImage: "square.grid.2x2") }
+            NavigationStack { SearchView().browseDestinations() }
+                .tabItem { Label("Keresés", systemImage: "magnifyingglass") }
+        }
+        // A new profile sees its own home: rebuild everything when it changes.
+        .id(model.me?.profile?.id)
+    }
+}
+
+struct HomeTab: View {
+    @Environment(AppModel.self) private var model
+    @State private var data: HomeData?
+    @State private var error: String?
+
+    var body: some View {
+        ScrollView {
+            if let data {
+                LazyVStack(alignment: .leading, spacing: 28) {
+                    if let hero = data.hero { HeroCard(item: hero) }
+                    ForEach(data.rows) { row in
+                        if !row.items.isEmpty { Shelf(row: row) }
                     }
-                    Text("A böngészés és a lejátszás a következő lépésben érkezik.")
-                        .foregroundStyle(Theme.plaster)
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.panel, in: .rect(cornerRadius: 10))
+                    if data.hero == nil && data.rows.allSatisfy({ $0.items.isEmpty }) {
+                        ContentUnavailableView("Még üres a könyvtár",
+                                               systemImage: "film.stack",
+                                               description: Text("Az adminisztrátor a webes felületen adhat hozzá könyvtárat."))
+                            .padding(.top, 60)
+                    }
                 }
-                .padding(24)
+                .padding(.bottom, 24)
+            } else {
+                LoadingState(error: error) { Task { await load() } }
             }
-            .background(Theme.black)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Profilváltás", systemImage: "person.2") { model.switchProfile() }
-                        Button("Másik szerver", systemImage: "server.rack") { model.showServers() }
-                        Button("Kijelentkezés", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
-                            Task { await model.logout() }
-                        }
-                    } label: {
-                        Image(systemName: "person.crop.circle").font(.title2)
+        }
+        .refreshable { await load() }
+        .task { if data == nil { await load() } }
+        .kinoraScreen()
+        .navigationTitle("Kezdőlap")
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .top) { header }
+    }
+
+    private var header: some View {
+        HStack {
+            BrandMark(size: 28)
+            Spacer()
+            AccountMenu()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Theme.black.opacity(0.92))
+    }
+
+    private func load() async {
+        error = nil
+        do { data = try await model.api { try await $0.home() } }
+        catch is CancellationError {}
+        catch { if data == nil { self.error = error.localizedDescription } }
+    }
+}
+
+/// The featured title at the top of home.
+private struct HeroCard: View {
+    var item: Item
+
+    var body: some View {
+        NavigationLink(value: item) {
+            ZStack(alignment: .bottomLeading) {
+                ArtworkView(item: item, kind: .backdrop)
+                    .aspectRatio(16 / 10, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                LinearGradient(colors: [.clear, Theme.black.opacity(0.95)], startPoint: .center, endPoint: .bottom)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(item.title)
+                        .font(Theme.display(34, weight: .bold))
+                        .lineLimit(2)
+                    Text(Format.meta(item)).font(.footnote).foregroundStyle(Theme.plaster)
+                    if let o = item.overview, !o.isEmpty {
+                        Text(o).font(.footnote).foregroundStyle(Theme.muted).lineLimit(2)
                     }
-                    .accessibilityLabel("Fiók")
                 }
+                .padding(20)
+            }
+            .clipShape(.rect(cornerRadius: 14))
+            .padding(.horizontal, 16)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// A titled horizontal row of cards.
+private struct Shelf: View {
+    var row: HomeRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(row.title)
+                .font(Theme.display(22, weight: .bold))
+                .padding(.horizontal, 20)
+                .accessibilityAddTraits(.isHeader)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 14) {
+                    ForEach(row.items) { item in
+                        NavigationLink(value: item) {
+                            if row.style == .landscape { WideCard(item: item) } else { PosterCard(item: item) }
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            if let why = row.reasons?[String(item.id)] { Text(why) }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
             }
         }
     }

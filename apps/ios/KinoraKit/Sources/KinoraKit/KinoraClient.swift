@@ -42,6 +42,11 @@ public actor KinoraClient {
         _ = try await send("DELETE", path, body: Optional<Empty>.none)
     }
 
+    /// GET returning the raw body (images).
+    public func data(_ path: String) async throws -> Data {
+        try await send("GET", path, body: Optional<Empty>.none)
+    }
+
     /// Absolute URL of a server path, with the media token when given (images, streams).
     public func url(_ path: String, mediaToken: String? = nil) -> URL? {
         var s = path.hasPrefix("http") ? path : server.url + path
