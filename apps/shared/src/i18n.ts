@@ -171,7 +171,7 @@ export const T = {
   exitConfirm: 'Kilépsz a Kinorából?',
   exit: 'Kilépés',
   stay: 'Maradok',
-  platforms: { web: 'Böngésző', android: 'Android', androidtv: 'Android TV', ios: 'iOS', tizen: 'Samsung TV', webos: 'LG TV' } as Record<string, string>,
+  platforms: { web: 'Böngésző', android: 'Android', androidtv: 'Android TV', ios: 'iOS', tizen: 'Samsung TV', tvos: 'Apple TV', webos: 'LG TV' } as Record<string, string>,
   ago: (s: number) => {
     const m = Math.round(s / 60);
     if (m < 1) return 'most';

@@ -1,0 +1,612 @@
+import SwiftUI
+import KinoraKit
+
+/// Tabs along the top, as on every Apple TV app; the player covers everything.
+struct TVMainView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        TabView(selection: $model.tab) {
+            NavigationStack(path: $model.homePath) { TVHomeTab().tvDestinations() }
+                .tabItem { Label("Kezdőlap", systemImage: "house") }
+                .tag(AppModel.Tab.home)
+            NavigationStack { TVLibrariesTab().tvDestinations() }
+                .tabItem { Label("Könyvtárak", systemImage: "square.grid.2x2") }
+                .tag(AppModel.Tab.libraries)
+            NavigationStack { TVSearchTab().tvDestinations() }
+                .tabItem { Label("Keresés", systemImage: "magnifyingglass") }
+                .tag(AppModel.Tab.search)
+            NavigationStack { TVSettingsTab() }
+                .tabItem { Label("Beállítások", systemImage: "gearshape") }
+                .tag(AppModel.Tab.downloads)
+        }
+        .onAppear { model.handlePendingLink() }
+        .id(model.me?.profile?.id)
+        .fullScreenCover(isPresented: Binding(get: { model.playerVisible && model.player != nil },
+                                              set: { if !$0 { model.player?.close() } })) {
+            if let p = model.player { TVPlayerView(player: p) }
+        }
+    }
+}
+
+extension View {
+    func tvDestinations() -> some View {
+        navigationDestination(for: Item.self) { TVDetailView(item: $0) }
+            .navigationDestination(for: Library.self) { TVLibraryGrid(library: $0) }
+    }
+}
+
+// MARK: - cards and rows
+
+/// Poster (2:3) or landscape (16:9) card that opens the title, or plays it for episodes.
+struct TVItemCard: View {
+    @Environment(AppModel.self) private var model
+    var item: Item
+    var landscape = false
+    var width: CGFloat = 250
+    /// Movies and episodes start playing instead of opening their page.
+    var playsDirectly = false
+
+    var body: some View {
+        Group {
+            if playsDirectly {
+                Button { model.play(item) } label: { label }
+            } else {
+                NavigationLink(value: item) { label }
+            }
+        }
+        .buttonStyle(TVCardStyle())
+        .contextMenu {
+            if item.kind == .movie || item.kind == .episode {
+                Button("Lejátszás", systemImage: "play.fill") { model.play(item) }
+                if item.progress != nil {
+                    Button("Lejátszás elölről", systemImage: "arrow.counterclockwise") { model.play(item, from: 0) }
+                }
+            }
+            if playsDirectly {
+                NavigationLink(value: item) { Label("Adatlap", systemImage: "info.circle") }
+            }
+        }
+    }
+
+    private var label: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TVArtwork(item: item, kind: landscape ? (item.kind == .episode ? .thumb : .backdrop) : .poster,
+                      ratio: landscape ? 16 / 9 : 2 / 3)
+            TVCardCaption(item: item, landscape: landscape)
+        }
+        .frame(width: width)
+    }
+}
+
+private struct TVCardCaption: View {
+    @Environment(\.tvCardFocused) private var focused
+    var item: Item
+    var landscape: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(landscape && item.kind == .episode ? (item.seriesTitle ?? item.title) : item.title)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(focused ? Theme.plasterBright : Theme.plaster)
+            Text(landscape && item.kind == .episode
+                 ? [item.episodeLabel, item.title].compactMap { $0 }.joined(separator: " · ")
+                 : Format.subtitle(item))
+                .font(.caption).foregroundStyle(Theme.muted)
+        }
+        .lineLimit(1)
+    }
+}
+
+/// A titled horizontal row of cards.
+struct TVShelf: View {
+    var title: String
+    var items: [Item]
+    var landscape = false
+    var playsDirectly = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            TVHeading(text: title).padding(.horizontal, 80)
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 44) {
+                    ForEach(items) { item in
+                        TVItemCard(item: item, landscape: landscape, width: landscape ? 420 : 250,
+                                   playsDirectly: playsDirectly && (item.kind == .movie || item.kind == .episode))
+                    }
+                }
+                .padding(.horizontal, 80)
+                .padding(.vertical, 30)
+            }
+            .scrollClipDisabled()
+        }
+        .focusSection()
+    }
+}
+
+/// Full-bleed backdrop behind a screen, fading into the foyer black.
+struct TVBackdrop: View {
+    var item: Item
+    var body: some View {
+        ArtworkView(item: item, kind: .backdrop)
+            .overlay {
+                LinearGradient(colors: [Theme.black.opacity(0.2), Theme.black.opacity(0.85), Theme.black],
+                               startPoint: .top, endPoint: .bottom)
+            }
+            .overlay {
+                LinearGradient(colors: [Theme.black.opacity(0.9), .clear], startPoint: .leading, endPoint: .trailing)
+            }
+            .ignoresSafeArea()
+    }
+}
+
+// MARK: - home
+
+struct TVHomeTab: View {
+    @Environment(AppModel.self) private var model
+    @State private var data: HomeData?
+    @State private var error: String?
+
+    var body: some View {
+        ScrollView {
+            if let data {
+                LazyVStack(alignment: .leading, spacing: 50) {
+                    if let hero = data.hero { TVHero(item: hero) }
+                    ForEach(data.rows) { row in
+                        if !row.items.isEmpty {
+                            TVShelf(title: row.title, items: row.items, landscape: row.style == .landscape,
+                                    playsDirectly: row.style == .landscape)
+                        }
+                    }
+                    if data.hero == nil && data.rows.allSatisfy({ $0.items.isEmpty }) {
+                        ContentUnavailableView("Még üres a könyvtár", systemImage: "film.stack",
+                                               description: Text("Az adminisztrátor a webes felületen adhat hozzá könyvtárat."))
+                            .padding(.top, 120)
+                    }
+                }
+                .padding(.bottom, 80)
+            } else {
+                LoadingState(error: error) { Task { await load() } }
+            }
+        }
+        .scrollClipDisabled()
+        .background(Theme.black)
+        .task { if data == nil { await load() } }
+        .onChange(of: model.playbackGeneration) { Task { await load() } }
+    }
+
+    private func load() async {
+        error = nil
+        do { data = try await model.api { try await $0.home() } }
+        catch is CancellationError {}
+        catch { if data == nil { self.error = error.localizedDescription } }
+    }
+}
+
+/// The featured title: backdrop, title, overview and two buttons.
+private struct TVHero: View {
+    @Environment(AppModel.self) private var model
+    var item: Item
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            ArtworkView(item: item, kind: .backdrop)
+                .frame(height: 640)
+                .frame(maxWidth: .infinity)
+                .overlay {
+                    LinearGradient(colors: [.clear, Theme.black.opacity(0.6), Theme.black], startPoint: .top, endPoint: .bottom)
+                }
+                .overlay {
+                    LinearGradient(colors: [Theme.black.opacity(0.85), .clear], startPoint: .leading, endPoint: .center)
+                }
+            VStack(alignment: .leading, spacing: 18) {
+                Text(item.title).font(Theme.display(76)).lineLimit(2)
+                Text(Format.meta(item)).font(.callout).foregroundStyle(Theme.plaster)
+                if let o = item.overview, !o.isEmpty {
+                    Text(o).font(.callout).foregroundStyle(Theme.plaster).lineLimit(3).frame(maxWidth: 900, alignment: .leading)
+                }
+                HStack(spacing: 24) {
+                    if item.kind == .movie || item.kind == .episode {
+                        Button { model.play(item) } label: {
+                            Label(item.progress != nil ? "Folytatás" : "Lejátszás", systemImage: "play.fill")
+                        }
+                        .buttonStyle(TVPillStyle(prominent: true))
+                    }
+                    NavigationLink(value: item) { Label("Részletek", systemImage: "info.circle") }
+                        .buttonStyle(TVPillStyle())
+                }
+                .padding(.top, 10)
+            }
+            .padding(.horizontal, 80)
+            .padding(.bottom, 20)
+        }
+        .focusSection()
+    }
+}
+
+// MARK: - detail
+
+struct TVDetailView: View {
+    @Environment(AppModel.self) private var model
+    var item: Item
+
+    @State private var detail: ItemDetail?
+    @State private var userData = UserData()
+    @State private var error: String?
+    @State private var season: Int?
+    @State private var episodes: [Int: [Item]] = [:]
+
+    private var current: Item { detail?.item ?? item }
+
+    private var playTarget: Item? {
+        switch current.kind {
+        case .movie, .episode: current
+        default: detail?.playNext
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            TVBackdrop(item: current)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 50) {
+                    header
+                    if let error { TVErrorText(message: error).padding(.horizontal, 80) }
+                    if current.kind == .series || current.kind == .season { seasonsSection }
+                    if let similar = detail?.similar, !similar.isEmpty {
+                        TVShelf(title: "Hasonlók", items: similar)
+                    }
+                }
+                .padding(.top, 60)
+                .padding(.bottom, 80)
+            }
+            .scrollClipDisabled()
+        }
+        .task { await load() }
+        .onChange(of: model.playbackGeneration) { Task { await load() } }
+        .task(id: season) { await loadEpisodes() }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if current.kind == .episode, let s = current.seriesTitle {
+                Text(s).font(.title3.weight(.semibold)).foregroundStyle(Theme.amber)
+            }
+            Text(current.title).font(Theme.display(84)).lineLimit(2)
+            Text([current.kind == .episode ? current.episodeLabel : nil, Format.meta(current)]
+                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.callout).foregroundStyle(Theme.plaster)
+            if let g = current.genres, !g.isEmpty {
+                Text(g.prefix(4).joined(separator: " · ")).font(.callout).foregroundStyle(Theme.muted)
+            }
+            if let o = current.overview, !o.isEmpty {
+                Text(o).font(.callout).foregroundStyle(Theme.plaster).lineLimit(5).frame(maxWidth: 1100, alignment: .leading)
+            }
+            if let t = playTarget, let p = t.progress {
+                HStack(spacing: 16) {
+                    ProgressView(value: p).tint(Theme.amber).frame(width: 260)
+                    if let left = Format.runtime((t.runtimeSec ?? 0) - (t.userData?.position ?? 0)) {
+                        Text("Még \(left)").font(.callout).foregroundStyle(Theme.muted)
+                    }
+                }
+            }
+            HStack(spacing: 24) {
+                Button { if let t = playTarget { model.play(t) } } label: {
+                    Label(playLabel, systemImage: "play.fill")
+                }
+                .buttonStyle(TVPillStyle(prominent: true))
+                .disabled(playTarget == nil)
+                if let t = playTarget, t.progress != nil {
+                    Button { model.play(t, from: 0) } label: { Label("Elölről", systemImage: "arrow.counterclockwise") }
+                        .buttonStyle(TVPillStyle())
+                }
+                Button { Task { await setPlayed(!userData.played) } } label: {
+                    Label(userData.played ? "Megnézve" : "Megnézettnek jelöl",
+                          systemImage: userData.played ? "checkmark.circle.fill" : "checkmark.circle")
+                }
+                .buttonStyle(TVPillStyle())
+                Button { Task { await setFavorite(!userData.favorite) } } label: {
+                    Label(userData.favorite ? "Kedvenc" : "Kedvencekhez", systemImage: userData.favorite ? "heart.fill" : "heart")
+                }
+                .buttonStyle(TVPillStyle())
+            }
+            .padding(.top, 16)
+            .focusSection()
+        }
+        .padding(.horizontal, 80)
+    }
+
+    private var playLabel: String {
+        guard let t = playTarget else { return "Lejátszás" }
+        if t.progress != nil { return "Folytatás" }
+        if t.kind == .episode, current.kind != .episode, let l = t.episodeLabel { return "\(l) lejátszása" }
+        return "Lejátszás"
+    }
+
+    @ViewBuilder private var seasonsSection: some View {
+        if current.kind == .series, let seasons = detail?.seasons, seasons.count > 1 {
+            ScrollView(.horizontal) {
+                HStack(spacing: 20) {
+                    ForEach(seasons) { s in
+                        Button { season = s.id } label: { Text(s.title) }
+                            .buttonStyle(TVPillStyle(prominent: s.id == season))
+                    }
+                }
+                .padding(.horizontal, 80)
+                .padding(.vertical, 20)
+            }
+            .scrollClipDisabled()
+            .focusSection()
+        }
+        if let season, let list = episodes[season] {
+            TVShelf(title: "Részek", items: list, landscape: true, playsDirectly: true)
+        } else if season != nil {
+            ProgressView().padding(.horizontal, 80)
+        }
+    }
+
+    private func load() async {
+        error = nil
+        do {
+            let d = try await model.api { [id = item.id] in try await $0.item(id) }
+            detail = d
+            userData = d.item.userData ?? UserData()
+            if current.kind == .season {
+                season = d.item.id
+            } else if season == nil, let seasons = d.seasons, !seasons.isEmpty {
+                season = seasons.first { $0.id == d.playNext?.parentId }?.id ?? seasons.first?.id
+            }
+            if let season, let list = try? await model.api({ try await $0.children(of: season) }) {
+                episodes = [season: list]
+            }
+        } catch is CancellationError {
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func loadEpisodes() async {
+        guard let season, episodes[season] == nil else { return }
+        if let list = try? await model.api({ try await $0.children(of: season) }) { episodes[season] = list }
+    }
+
+    private func setFavorite(_ on: Bool) async {
+        if let u = try? await model.api({ [id = current.id] in try await $0.setFavorite(id, on) }) { userData = u }
+    }
+
+    private func setPlayed(_ on: Bool) async {
+        guard let u = try? await model.api({ [id = current.id] in try await $0.setPlayed(id, on) }) else { return }
+        userData = u
+        if current.kind == .series || current.kind == .season { await load() }
+    }
+}
+
+// MARK: - libraries
+
+struct TVLibrariesTab: View {
+    @Environment(AppModel.self) private var model
+    @State private var libraries: [Library]?
+    @State private var error: String?
+
+    var body: some View {
+        ScrollView {
+            if let libraries {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 50), count: 3), spacing: 50) {
+                    ForEach(libraries) { lib in
+                        NavigationLink(value: lib) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Image(systemName: icon(lib.kind)).font(.system(size: 56)).foregroundStyle(Theme.amber)
+                                Text(lib.name).font(.title3.weight(.semibold))
+                                if let n = lib.count { Text("\(n) cím").font(.callout).opacity(0.75) }
+                            }
+                            .padding(.vertical, 18)
+                        }
+                        .buttonStyle(TVRowStyle())
+                    }
+                }
+                .padding(80)
+            } else {
+                LoadingState(error: error) { Task { await load() } }
+            }
+        }
+        .scrollClipDisabled()
+        .background(Theme.black)
+        .task { if libraries == nil { await load() } }
+    }
+
+    private func icon(_ kind: String) -> String {
+        switch kind {
+        case "shows", "series", "tvshows": "tv"
+        case "music": "music.note"
+        default: "film"
+        }
+    }
+
+    private func load() async {
+        error = nil
+        do { libraries = try await model.api { try await $0.libraries() } }
+        catch is CancellationError {}
+        catch { self.error = error.localizedDescription }
+    }
+}
+
+struct TVLibraryGrid: View {
+    @Environment(AppModel.self) private var model
+    var library: Library
+    @State private var items: [Item] = []
+    @State private var total = 0
+    @State private var sort: ItemSort = .title
+    @State private var loaded = false
+    @State private var loadingMore = false
+    @State private var error: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 30) {
+                HStack(spacing: 20) {
+                    Text(library.name).font(Theme.display(64))
+                    Spacer()
+                    ForEach(ItemSort.allCases) { s in
+                        Button(s.label) { sort = s }
+                            .buttonStyle(TVPillStyle(prominent: s == sort))
+                    }
+                }
+                .focusSection()
+                if loaded {
+                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(250), spacing: 44), count: 6), alignment: .leading, spacing: 60) {
+                        ForEach(items) { item in
+                            TVItemCard(item: item)
+                                .onAppear { if item.id == items.last?.id { Task { await more() } } }
+                        }
+                    }
+                } else {
+                    LoadingState(error: error) { Task { await load() } }
+                }
+            }
+            .padding(80)
+        }
+        .scrollClipDisabled()
+        .background(Theme.black)
+        .task(id: sort) { await load() }
+        .onChange(of: model.playbackGeneration) { Task { await load() } }
+    }
+
+    private func load() async {
+        error = nil
+        do {
+            let page = try await model.api { [library, sort] in try await $0.items(library: library.id, sort: sort) }
+            items = page.items
+            total = page.total
+            loaded = true
+        } catch is CancellationError {
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func more() async {
+        guard !loadingMore, items.count < total else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        let offset = items.count
+        if let page = try? await model.api({ [library, sort] in try await $0.items(library: library.id, sort: sort, offset: offset) }) {
+            items += page.items.filter { n in !items.contains { $0.id == n.id } }
+            total = page.total
+        }
+    }
+}
+
+// MARK: - search
+
+struct TVSearchTab: View {
+    @Environment(AppModel.self) private var model
+    @State private var query = ""
+    @State private var results: [Item] = []
+    @State private var searching = false
+
+    var body: some View {
+        ScrollView {
+            if results.isEmpty {
+                Text(query.count < 2 ? "Írj be legalább két betűt." : (searching ? "Keresés…" : "Nincs találat."))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(250), spacing: 44), count: 6), alignment: .leading, spacing: 60) {
+                    ForEach(results) { TVItemCard(item: $0) }
+                }
+                .padding(80)
+            }
+        }
+        .scrollClipDisabled()
+        .searchable(text: $query, prompt: "Filmek, sorozatok, részek")
+        .task(id: query) { await search() }
+    }
+
+    private func search() async {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else { results = []; return }
+        searching = true
+        defer { searching = false }
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled else { return }
+        if let r = try? await model.api({ try await $0.search(q) }), !Task.isCancelled { results = r }
+    }
+}
+
+// MARK: - settings
+
+struct TVSettingsTab: View {
+    @Environment(AppModel.self) private var model
+    @State private var subtitleSize = AppSettings.subtitleStyle.size
+    @State private var confirmLogout = false
+
+    var body: some View {
+        ScrollView {
+            HStack(alignment: .top, spacing: 80) {
+                VStack(alignment: .leading, spacing: 22) {
+                    if let p = model.me?.profile {
+                        HStack(spacing: 30) {
+                            TVProfileFace(profile: p, size: 120)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(model.me?.user.username ?? "").font(.title3)
+                                if let s = model.server { Text(s.name).foregroundStyle(Theme.muted) }
+                            }
+                        }
+                        .padding(.bottom, 20)
+                    }
+                    if model.me?.profileLocked != true {
+                        Button { model.switchProfile() } label: { Label("Profilváltás", systemImage: "person.2") }
+                            .buttonStyle(TVRowStyle())
+                    }
+                    Button { model.showServers() } label: { Label("Másik szerver", systemImage: "server.rack") }
+                        .buttonStyle(TVRowStyle())
+                    Button { confirmLogout = true } label: { Label("Kijelentkezés", systemImage: "rectangle.portrait.and.arrow.right") }
+                        .buttonStyle(TVRowStyle())
+
+                    TVHeading(text: "Felirat mérete").padding(.top, 30)
+                    HStack(spacing: 20) {
+                        ForEach(SubtitleStyle.Size.allCases, id: \.self) { s in
+                            Button(sizeLabel(s)) {
+                                subtitleSize = s
+                                var style = AppSettings.subtitleStyle
+                                style.size = s
+                                AppSettings.subtitleStyle = style
+                            }
+                            .buttonStyle(TVPillStyle(prominent: s == subtitleSize))
+                        }
+                    }
+                    .focusSection()
+                }
+                .frame(width: 820)
+
+                VStack(alignment: .leading, spacing: 26) {
+                    TVHeading(text: "Vezérlés iPhone-ról")
+                    Text("Lejátszás közben az iPhone zárolási képernyőjén és a Vezérlőközpontban megjelenik, mi megy az Apple TV-n: onnan megállíthatod, tekerheted, és 10 másodpercet ugorhatsz előre vagy vissza, a telefon feloldása nélkül.")
+                        .foregroundStyle(Theme.plaster)
+                    Text("A Vezérlőközpont Apple TV Remote gombjával a teljes távirányító is a telefonodon van, a szövegmezőkbe pedig a telefon billentyűzetével is írhatsz.")
+                        .foregroundStyle(Theme.muted)
+                    Text("Kinora \(AppModel.appVersion)")
+                        .font(.callout).foregroundStyle(Theme.muted).padding(.top, 30)
+                }
+                .font(.callout)
+            }
+            .padding(80)
+        }
+        .background(Theme.black)
+        .alert("Kijelentkezel?", isPresented: $confirmLogout) {
+            Button("Kijelentkezés", role: .destructive) { Task { await model.logout() } }
+            Button("Mégse", role: .cancel) {}
+        }
+    }
+
+    private func sizeLabel(_ s: SubtitleStyle.Size) -> String {
+        switch s {
+        case .small: "Kicsi"
+        case .medium: "Közepes"
+        case .large: "Nagy"
+        case .huge: "Óriási"
+        }
+    }
+}

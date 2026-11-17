@@ -2,6 +2,17 @@ import Foundation
 import Network
 import KinoraKit
 
+/// Settings on this device only (not stored on the server).
+enum AppSettings {
+    private static let backgroundAudioKey = "kinora.backgroundAudio"
+
+    /// Keep the sound going when the app leaves the screen (and picture in picture did not start).
+    static var backgroundAudio: Bool {
+        get { UserDefaults.standard.bool(forKey: backgroundAudioKey) }
+        set { UserDefaults.standard.set(newValue, forKey: backgroundAudioKey) }
+    }
+}
+
 /// Device-only player preferences (the profile's own settings live on the server).
 extension AppSettings {
     private static let styleKey = "kinora.subtitleStyle"

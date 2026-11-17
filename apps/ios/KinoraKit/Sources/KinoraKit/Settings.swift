@@ -40,12 +40,13 @@ public struct Device: Codable, Sendable, Equatable, Identifiable, Hashable {
         case "androidtv": "Android TV"
         case "webos": "LG TV"
         case "tizen": "Samsung TV"
+        case "tvos": "Apple TV"
         case "web": "Böngésző"
         default: platform
         }
     }
 
-    public var isTV: Bool { ["tizen", "webos", "androidtv"].contains(platform) }
+    public var isTV: Bool { ["tizen", "webos", "androidtv", "tvos"].contains(platform) }
 }
 
 public struct DeviceList: Codable, Sendable {

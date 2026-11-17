@@ -1,6 +1,6 @@
 # Kinora iOS
 
-Natív SwiftUI kliens iPhone-ra és iPadre (iOS 17+). Nem a közös webes felületet csomagolja: a lejátszás AVPlayerrel,
+Natív SwiftUI kliens iPhone-ra és iPadre (iOS 17+), valamint Apple TV-re (tvOS 17+). Nem a közös webes felületet csomagolja: a lejátszás AVPlayerrel,
 később kép a képben, AirPlay és widgetek is natívan.
 
 ```
@@ -11,6 +11,9 @@ ios/
     Local.example.xcconfig → másold Local.xcconfig néven, ide jön a saját Team ID-d
   Kinora/              az app (SwiftUI): App/ (állapot, téma), Features/ (képernyők), Assets.xcassets
   KinoraWidgets/       WidgetKit-bővítmény: Folytatás és Új a könyvtárban
+  KinoraTV/            Apple TV app: saját, Siri Remote-ra és fókuszra írt képernyők; a modellt, a lejátszó logikáját
+                       és a borítókép-gyorsítótárat a Kinora/ mappából fordítja (ugyanaz a bundle ID: universal purchase)
+  KinoraTopShelf/      tvOS Top Shelf-bővítmény: Folytatás és Új a könyvtárban a kezdőképernyő tetején
   KinoraKit/           Swift csomag: API-kliens, modellek, szerverlista + Keychain, felderítés – UI nélkül, Macen tesztelhető
 ```
 
@@ -41,7 +44,13 @@ swift test --package-path KinoraKit
 xcodebuild -project Kinora.xcodeproj -scheme Kinora -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build build
 ```
 
-A CI ugyanezt futtatja `CODE_SIGNING_ALLOWED=NO`-val.
+Apple TV:
+
+```bash
+xcodebuild -project Kinora.xcodeproj -scheme KinoraTV -sdk appletvsimulator -destination 'generic/platform=tvOS Simulator' -derivedDataPath build build
+```
+
+A CI mindkettőt futtatja `CODE_SIGNING_ALLOWED=NO`-val.
 
 **Keychain a simulatoron:** aláírás nélküli builddel (`CODE_SIGNING_ALLOWED=NO`) az appnak nincs Keychain-jogosultsága, így a token nem
 mentődik, és újraindítás után újra be kell lépni. A belépés megmaradásának kipróbálásához normál (aláírt) builddel futtasd.
@@ -55,6 +64,24 @@ A repó gyökerében egy helyi szerver (`go run ./cmd/kinora …` vagy a Docker 
 Az app bármilyen címre enged sima HTTP-t (`NSAllowsArbitraryLoads`), mert a szervert a felhasználó adja meg, és
 sok otthoni szerver nyilvános címen is HTTP-n válaszol. Interneten át viszont ilyenkor a jelszó és a token titkosítatlanul
 megy, ezért távoli eléréshez HTTPS ajánlott (reverse proxy, Cloudflare, Tailscale).
+
+## Apple TV
+
+- Képernyők: szerverválasztó (helyi keresés vagy cím), belépés kóddal vagy jelszóval, profilok PIN-nel, majd
+  Kezdőlap (kiemelt cím, sorok), Könyvtárak (rendezés, rács), Keresés, Beállítások (profilváltás, feliratméret, kilépés).
+  Hosszú kattintás egy kártyán: lejátszás, elölről, adatlap.
+- Lejátszó a Siri Remote-ra: kattintás vagy play/pause = szünet, balra/jobbra ±10 mp, Menu = vezérlők elrejtése, majd
+  kilépés. Az intro/stáblista átugrása és a következő rész gomb megjelenéskor fókuszt kap. Menük: felirat (és időzítés),
+  hangsáv, fejezetek, sebesség és minőség.
+- **Vezérlés iPhone-ról, zárolt képernyőn is:** a lejátszó Now Playing adatot (cím, borítókép, idő) tesz közzé és
+  fogadja a távoli parancsokat. Az iPhone a zárolási képernyőn és a Vezérlőközpontban felajánlja a tévé lejátszását,
+  az Apple TV Remote pedig ugyanúgy vezérli, mint a Siri Remote. A telefonra ehhez nem kell semmi külön.
+- **Top Shelf:** ha a kezdőképernyőn a Kinora ikonján áll a fókusz, felül nagyban látszik a „Folytatás” (állóképek
+  haladássávval, kattintásra ott folytatja) és az „Új a könyvtárban” (plakátok, kattintásra az adatlap). A bővítmény az
+  App Groupon át az app belépését használja, a képeket letölti a közös tárolóba, és szerver nélkül az utolsó állapotot
+  mutatja. Az app ugyanott frissíti, ahol az iPhone a widgeteket.
+- Letöltés, kép a képben és widget tvOS-en nincs.
+- Az ikon rétegei és a Top Shelf képek az `apps/branding/brand.mjs`-ből készülnek.
 
 ## Ütemterv
 
@@ -70,7 +97,9 @@ megy, ezért távoli eléréshez HTTPS ajánlott (reverse proxy, Cloudflare, Tai
 - **v0.5**: beállítások a fiókmenüből, mint a webes `/settings`: lejátszás (feliratok, nyelvek, maximális minőség,
   következő rész), intró átugrása, hang a háttérben, bejelentkezett eszközök kiléptetése, tévé jóváhagyása kóddal
   („Eszköz csatlakoztatása”), külső szervercím hozzáadása.
-- Később: offline letöltés, watch party, tvOS.
+- **v0.6** (kész): hang- és feliratválasztás, felirat stílusa és késleltetése, offline letöltés, sebesség, minőségkorlát,
+  fejezetek, sorozatonkénti nyelvek, Spotlight; Apple TV app.
+- Később: watch party.
 
 ## Licenc
 

@@ -11,3 +11,7 @@ Kinora/Info.plist
 Kinora/Kinora.entitlements
 KinoraWidgets/Info.plist
 KinoraWidgets/KinoraWidgets.entitlements
+KinoraTV/Info.plist
+KinoraTV/KinoraTV.entitlements
+KinoraTopShelf/Info.plist
+KinoraTopShelf/KinoraTopShelf.entitlements

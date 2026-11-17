@@ -1,6 +1,10 @@
 import SwiftUI
 import UIKit
+#if os(iOS)
 import WidgetKit
+#elseif os(tvOS)
+import TVServices
+#endif
 import KinoraKit
 
 /// App-wide state: which server, which session, which screen.
@@ -46,7 +50,11 @@ final class AppModel {
     static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
 
     var device: DeviceInfo {
+        #if os(tvOS)
+        DeviceInfo(deviceName: UIDevice.current.name, platform: "tvos", appVersion: Self.appVersion)
+        #else
         DeviceInfo(deviceName: UIDevice.current.name, platform: "ios", appVersion: Self.appVersion)
+        #endif
     }
 
     // MARK: - start
@@ -128,7 +136,9 @@ final class AppModel {
     }
 
     private func use(_ s: SavedServer) {
+        #if os(iOS)
         if let old = server, old.id != s.id { Spotlight.clear() }
+        #endif
         server = s
         let c = KinoraClient(server: s, token: store.token(for: s.id))
         let store = self.store
@@ -139,7 +149,9 @@ final class AppModel {
         }
         client = c
         me = nil
+        #if os(iOS)
         DownloadStore.shared.attach(c)
+        #endif
     }
 
     private func refreshStatus() async {
@@ -223,7 +235,9 @@ final class AppModel {
     func switchProfile() {
         settingsVisible = false
         player?.close()
+        #if os(iOS)
         Spotlight.clear()
+        #endif
         homePath = NavigationPath()
         tab = .home
         screen = .profiles
@@ -238,7 +252,9 @@ final class AppModel {
         await client?.setToken(nil)
         me = nil
         screen = .login
+        #if os(iOS)
         Spotlight.clear()
+        #endif
         reloadWidgets()
     }
 
@@ -290,7 +306,11 @@ final class AppModel {
         player?.close()
         let resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
         // A downloaded copy plays from the device: no server load, works without a connection.
+        #if os(iOS)
         let local = DownloadStore.shared.localInfo(for: item)
+        #else
+        let local: PlaybackInfo? = nil
+        #endif
         let p = PlayerModel(item: item, start: start ?? resume, client: client, profile: me?.profile, local: local)
         p.onClose = { [weak self, weak p] in
             guard let self, self.player === p else { return }
@@ -326,7 +346,11 @@ final class AppModel {
     func reloadWidgets(after delay: Duration = .zero) {
         Task {
             if delay > .zero { try? await Task.sleep(for: delay) }
+            #if os(iOS)
             WidgetCenter.shared.reloadAllTimelines()
+            #elseif os(tvOS)
+            TVTopShelfContentProvider.topShelfContentDidChange()
+            #endif
         }
     }
 

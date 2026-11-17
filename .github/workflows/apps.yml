@@ -96,3 +96,7 @@ jobs:
           xcodebuild -project Kinora.xcodeproj -scheme Kinora
           -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
           -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - run: >
+          xcodebuild -project Kinora.xcodeproj -scheme KinoraTV
+          -sdk appletvsimulator -destination 'generic/platform=tvOS Simulator'
+          -derivedDataPath build CODE_SIGNING_ALLOWED=NO build

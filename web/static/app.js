@@ -78,7 +78,7 @@ const T = {
   approve: 'Jóváhagyás', deny: 'Elutasítás', qcApproved: 'Kész! Az eszköz pár másodpercen belül belép.', qcDenied: 'Elutasítva.', qcKids: 'Gyerekprofilból nem lehet eszközt csatlakoztatni.',
   myDevices: 'Bejelentkezett eszközök', thisDevice: 'ez az eszköz', signOutDevice: 'Kiléptetés', signOutOthers: 'Kiléptetés mindenhonnan (ezen kívül)',
   signedOutN: n => `${n} eszköz kiléptetve.`, lastActive: 'Utoljára aktív', aDevices: 'Eszközök',
-  platforms: { web: 'Böngésző', android: 'Android', androidtv: 'Android TV', ios: 'iOS', tizen: 'Samsung TV', webos: 'LG TV' },
+  platforms: { web: 'Böngésző', android: 'Android', androidtv: 'Android TV', ios: 'iOS', tizen: 'Samsung TV', tvos: 'Apple TV', webos: 'LG TV' },
   // branding
   aLook: 'Megjelenés', logoDark: 'Logó sötét háttérre', logoLight: 'Logó világos háttérre', uploadLogo: 'Logó feltöltése…', removeLogo: 'Logó törlése',
   logoHint: 'PNG, JPG, WebP vagy SVG, legfeljebb 2 MB. A faviconét és az app-ikonokat a Kinora készíti el belőle.', accent: 'Akcentszín',

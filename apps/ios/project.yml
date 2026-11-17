@@ -1,4 +1,4 @@
-# Kinora for iPhone and iPad – native SwiftUI app.
+# Kinora for iPhone, iPad and Apple TV – native SwiftUI apps.
 # The Xcode project is generated from this file and is not committed:
 #   cd apps/ios && xcodegen        (brew install xcodegen)
 # Signing: copy Config/Local.example.xcconfig to Config/Local.xcconfig and set your team.
@@ -7,6 +7,7 @@ options:
   bundleIdPrefix: io.github.scotylucas
   deploymentTarget:
     iOS: "17.0"
+    tvOS: "17.0"
   developmentLanguage: hu
   createIntermediateGroups: true
   groupSortPosition: top
@@ -78,6 +79,47 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: A Kinora a helyi hálózaton keresi és éri el a médiaszerveredet.
+        KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
+    # The App Group carries the saved servers and the login token to the Top Shelf extension.
+    entitlements:
+      path: KinoraTV/KinoraTV.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
+  # Top Shelf of the Apple TV home screen: Continue watching and new titles above the apps
+  # while the Kinora icon has the focus.
+  KinoraTopShelf:
+    type: app-extension
+    platform: tvOS
+    sources:
+      - path: KinoraTopShelf
+    dependencies:
+      - package: KinoraKit
+      - sdk: TVServices.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(KINORA_BUNDLE_ID).topshelf
+        PRODUCT_NAME: KinoraTopShelf
+        TARGETED_DEVICE_FAMILY: "3"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+    entitlements:
+      path: KinoraTopShelf/KinoraTopShelf.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
+    info:
+      path: KinoraTopShelf/Info.plist
+      properties:
+        CFBundleDisplayName: Kinora
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: hu
+        KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.tv-top-shelf
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
   KinoraWidgets:
     type: app-extension
     platform: iOS
@@ -111,11 +153,104 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+  # Apple TV app. Same bundle ID as the iPhone app (universal purchase: one App Store
+  # record). It shares the model, player logic and artwork code with the iPhone app; the
+  # screens in KinoraTV/ are built for the Siri Remote and focus.
+  KinoraTV:
+    type: application
+    platform: tvOS
+    sources:
+      - path: KinoraTV
+      - Kinora/App/AppModel.swift
+      - Kinora/App/Preferences.swift
+      - Kinora/App/ProgressQueue.swift
+      - Kinora/App/Theme.swift
+      - Kinora/Features/Browse/Artwork.swift
+      - Kinora/Features/Player/PlayerModel.swift
+    dependencies:
+      - package: KinoraKit
+      - target: KinoraTopShelf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(KINORA_BUNDLE_ID)
+        PRODUCT_NAME: Kinora
+        TARGETED_DEVICE_FAMILY: "3"
+        ASSETCATALOG_COMPILER_APPICON_NAME: App Icon & Top Shelf Image
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: YES
+    info:
+      path: KinoraTV/Info.plist
+      properties:
+        CFBundleDisplayName: Kinora
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: hu
+        ITSAppUsesNonExemptEncryption: false
+        UIRequiredDeviceCapabilities: [arm64]
+        UIUserInterfaceStyle: Dark
+        CFBundleURLTypes:
+          - CFBundleURLName: $(KINORA_BUNDLE_ID)
+            CFBundleURLSchemes: [kinora]
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: A Kinora a helyi hálózaton keresi és éri el a médiaszerveredet.
+        KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
+    # The App Group carries the saved servers and the login token to the Top Shelf extension.
+    entitlements:
+      path: KinoraTV/KinoraTV.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
+  # Top Shelf of the Apple TV home screen: Continue watching and new titles above the apps
+  # while the Kinora icon has the focus.
+  KinoraTopShelf:
+    type: app-extension
+    platform: tvOS
+    sources:
+      - path: KinoraTopShelf
+    dependencies:
+      - package: KinoraKit
+      - sdk: TVServices.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(KINORA_BUNDLE_ID).topshelf
+        PRODUCT_NAME: KinoraTopShelf
+        TARGETED_DEVICE_FAMILY: "3"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+    entitlements:
+      path: KinoraTopShelf/KinoraTopShelf.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
+    info:
+      path: KinoraTopShelf/Info.plist
+      properties:
+        CFBundleDisplayName: Kinora
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: hu
+        KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.tv-top-shelf
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
 schemes:
   Kinora:
     build:
       targets:
         Kinora: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  KinoraTV:
+    build:
+      targets:
+        KinoraTV: all
     run:
       config: Debug
     archive:

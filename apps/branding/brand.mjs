@@ -90,6 +90,71 @@ if (existsSync(xc)) {
   await out(join(xc, 'AppIcon.appiconset', 'AppIcon.png'), sharp(src).flatten({ background: bg }).removeAlpha().resize(1024, 1024));
 }
 
+// ---------------------------------------------------------------- Apple TV
+// tvOS wants a layered (parallax) icon and Top Shelf images: the back layer is the
+// background, the front layer the mark alone, so the focus tilt lifts it off.
+const tvxc = join(apps, 'ios', 'KinoraTV', 'Assets.xcassets');
+if (existsSync(join(apps, 'ios', 'KinoraTV'))) {
+  const brand = join(tvxc, 'App Icon & Top Shelf Image.brandassets');
+  const json = (path, obj) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, JSON.stringify(obj, null, 2) + '\n'); };
+  const info = { author: 'xcode', version: 1 };
+  // Default mark: the amber K stroke without its square, so it floats over the back layer.
+  const mark = args.includes('--logo') ? null : Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="1024" height="1024">'
+    + '<path d="M10 7v18M10 16l10-9M13 14l8 11" stroke="#f0b44c" stroke-width="3.4" fill="none" stroke-linecap="round"/></svg>');
+  const front = async (w, h) => {
+    const s = Math.round(h * (mark ? 0.78 : 0.6));
+    const l = await sharp(mark ?? src, { density: 512 }).resize(s, s).png().toBuffer();
+    return sharp({ create: { width: w, height: h, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite([{ input: l, gravity: 'center' }]);
+  };
+  const back = (w, h) => sharp(Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><radialGradient id="g" cx="50%" cy="40%" r="75%">`
+    + `<stop offset="0" stop-color="#2b2520"/><stop offset="1" stop-color="${bg}"/></radialGradient></defs>`
+    + `<rect width="${w}" height="${h}" fill="${args.includes('--bg') ? bg : 'url(#g)'}"/></svg>`)).flatten({ background: bg }).removeAlpha();
+  const stack = async (name, w, h, scales) => {
+    const dir = join(brand, `${name}.imagestack`);
+    for (const [layer, make] of [['Front', front], ['Back', back]]) {
+      const set = join(dir, `${layer}.imagestacklayer`, 'Content.imageset');
+      const images = [];
+      for (const sc of scales) {
+        const file = `${layer.toLowerCase()}${sc > 1 ? `@${sc}x` : ''}.png`;
+        await out(join(set, file), await make(w * sc, h * sc));
+        images.push({ filename: file, idiom: 'tv', scale: `${sc}x` });
+      }
+      json(join(set, 'Contents.json'), { images, info });
+      json(join(dir, `${layer}.imagestacklayer`, 'Contents.json'), { info });
+    }
+    json(join(dir, 'Contents.json'), { info, layers: [{ filename: 'Front.imagestacklayer' }, { filename: 'Back.imagestacklayer' }] });
+  };
+  const shelf = async (name, w, h) => {
+    const set = join(brand, `${name}.imageset`);
+    const images = [];
+    for (const sc of [1, 2]) {
+      const file = `shelf${sc > 1 ? `@${sc}x` : ''}.png`;
+      const img = bannerSrc
+        ? sharp(await sharp(bannerSrc, { density: 300 * sc }).resize(Math.round(h * sc * 16 / 9), h * sc).png().toBuffer())
+          .resize(w * sc, h * sc, { fit: 'contain', background: bg }).flatten({ background: bg })
+        : await onCanvas(w * sc, h * sc, 0.5);
+      await out(join(set, file), img);
+      images.push({ filename: file, idiom: 'tv', scale: `${sc}x` });
+    }
+    json(join(set, 'Contents.json'), { images, info });
+  };
+  await stack('App Icon', 400, 240, [1, 2]);
+  await stack('App Icon - App Store', 1280, 768, [1]);
+  await shelf('Top Shelf Image', 1920, 720);
+  await shelf('Top Shelf Image Wide', 2320, 720);
+  json(join(brand, 'Contents.json'), {
+    assets: [
+      { filename: 'App Icon - App Store.imagestack', idiom: 'tv', role: 'primary-app-icon', size: '1280x768' },
+      { filename: 'App Icon.imagestack', idiom: 'tv', role: 'primary-app-icon', size: '400x240' },
+      { filename: 'Top Shelf Image Wide.imageset', idiom: 'tv', role: 'top-shelf-image-wide', size: '2320x720' },
+      { filename: 'Top Shelf Image.imageset', idiom: 'tv', role: 'top-shelf-image', size: '1920x720' },
+    ],
+    info,
+  });
+}
+
 // ---------------------------------------------------------------- Samsung Tizen & LG webOS
 await out(join(apps, 'tizen', 'icon.png'), icon(512));
 await out(join(apps, 'webos', 'icon.png'), icon(80));

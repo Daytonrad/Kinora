@@ -39,7 +39,7 @@ route('settings', async () => {
   const loadDevices = async () => {
     const r = await api().get<{ devices: any[] }>('/api/devices');
     put(devicesBox, r.devices.map(d => h('div.dev-row', null,
-      icon(d.platform === 'tizen' || d.platform === 'webos' || d.platform === 'androidtv' ? 'tv' : d.platform === 'web' ? 'server' : 'phone'),
+      icon(d.platform === 'tizen' || d.platform === 'tvos' || d.platform === 'webos' || d.platform === 'androidtv' ? 'tv' : d.platform === 'web' ? 'server' : 'phone'),
       h('div.dev-text', null, h('strong', null, d.name || T.platforms[d.platform] || d.platform, d.current ? ' · ' + T.thisDevice : ''),
         h('span.muted.small', null, [T.platforms[d.platform] || d.platform, d.app_version && 'v' + d.app_version, d.ip, T.ago(Date.now() / 1000 - d.last_seen)].filter(Boolean).join(' · '))),
       !d.current && canEdit && h('button.btn.danger', { onclick: async () => { await api().del('/api/devices/' + d.id); loadDevices(); } }, T.signOut))),

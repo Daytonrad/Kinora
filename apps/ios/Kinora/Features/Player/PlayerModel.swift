@@ -75,6 +75,7 @@ final class PlayerModel: NSObject {
     private var endObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
     private var appObservers: [NSObjectProtocol] = []
+    private var nowPlayingArtwork: (id: Int, art: MPMediaItemArtwork)?
 
     init(item: Item, start: Double, client: KinoraClient, profile: Profile?, local: PlaybackInfo? = nil) {
         self.item = item
@@ -89,6 +90,7 @@ final class PlayerModel: NSObject {
         layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspect
         super.init()
+        #if os(iOS)
         player.allowsExternalPlayback = true
         player.usesExternalPlaybackWhileExternalScreenIsActive = true
         if AVPictureInPictureController.isPictureInPictureSupported(),
@@ -97,6 +99,7 @@ final class PlayerModel: NSObject {
             pip.canStartPictureInPictureAutomaticallyFromInline = true
             self.pip = pip
         }
+        #endif
     }
 
     // MARK: - derived
@@ -210,6 +213,7 @@ final class PlayerModel: NSObject {
                 next = try? await client.nextEpisode(after: item.id)
             }
             updateNowPlaying()
+            loadNowPlayingArtwork()
         } catch is CancellationError {
         } catch {
             self.error = error.localizedDescription
@@ -385,6 +389,7 @@ final class PlayerModel: NSObject {
                 self.didEnd()
             }
         }
+        #if os(iOS)
         // Settings → "Hang folytatása a háttérben": without a layer AVPlayer keeps the sound
         // going in the background. Picture in picture, when it started, takes precedence.
         let center = NotificationCenter.default
@@ -404,6 +409,7 @@ final class PlayerModel: NSObject {
                 }
             },
         ]
+        #endif
     }
 
     private func watch(_ playerItem: AVPlayerItem) {
@@ -444,8 +450,11 @@ final class PlayerModel: NSObject {
         let now = player.currentTime().seconds
         if now.isFinite, player.currentItem != nil, !loading { position = offset + now }
         updateCaption()
+        let wasPlaying = isPlaying
         isPlaying = player.timeControlStatus == .playing
         buffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+        // Rate and elapsed time keep the lock screen's clock right (and an iPhone's, for the Apple TV).
+        if wasPlaying != isPlaying { updateNowPlaying() }
         if isPlaying, Date.now.timeIntervalSince(lastReport) > 10 { report() }
 
         if skipMode == "auto", let s = currentSegment, s.type != .credits, !skipped.contains(s.start) {
@@ -492,7 +501,9 @@ final class PlayerModel: NSObject {
         guard p >= 1 || ended else { return }
         Task {
             await ProgressQueue.report(id, position: p, ended: ended, client: c)
+            #if os(iOS)
             if ended { DownloadStore.shared.watched(id) }
+            #endif
         }
     }
 
@@ -509,7 +520,25 @@ final class PlayerModel: NSObject {
         if item.kind == .episode {
             info[MPMediaItemPropertyArtist] = [item.seriesTitle, item.episodeLabel].compactMap { $0 }.joined(separator: " · ")
         }
+        if let nowPlayingArtwork, nowPlayingArtwork.id == item.id { info[MPMediaItemPropertyArtwork] = nowPlayingArtwork.art }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    /// Still or backdrop of the title on the lock screen and in Control Center.
+    private func loadNowPlayingArtwork() {
+        let id = item.id, kind: ImageKind = item.kind == .episode ? .thumb : .backdrop, c = client
+        guard nowPlayingArtwork?.id != id else { return }
+        Task {
+            guard let img = await ArtworkCache.shared.load(client: c, server: "nowplaying", id: id, kind: kind),
+                  !closed, item.id == id else { return }
+            nowPlayingArtwork = (id, Self.artwork(img))
+            updateNowPlaying()
+        }
+    }
+
+    /// MediaPlayer asks for the image on its own queue, so the handler must not be main-actor isolated.
+    private nonisolated static func artwork(_ image: UIImage) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
     }
 
     private func setUpRemoteCommands() {

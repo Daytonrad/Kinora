@@ -243,6 +243,7 @@ struct LoadingState: View {
     }
 }
 
+#if os(iOS)
 /// Profile switch / server / logout, in every tab's toolbar.
 struct AccountMenu: View {
     @Environment(AppModel.self) private var model
@@ -295,3 +296,4 @@ extension View {
         }
     }
 }
+#endif
