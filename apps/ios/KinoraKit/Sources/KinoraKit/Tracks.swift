@@ -9,9 +9,11 @@ public struct MediaStream: Decodable, Sendable, Hashable {
     public var title: String?
     public var channels: Int?
     public var isDefault: Bool?
+    public var forced: Bool?
+    public var textBased: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case type, typeIndex, codec, lang, title, channels
+        case type, typeIndex, codec, lang, title, channels, forced, textBased
         case isDefault = "default"
     }
 
@@ -19,6 +21,29 @@ public struct MediaStream: Decodable, Sendable, Hashable {
                 channels: Int? = nil, isDefault: Bool? = nil) {
         self.type = type; self.typeIndex = typeIndex; self.codec = codec; self.lang = lang
         self.title = title; self.channels = channels; self.isDefault = isDefault
+    }
+}
+
+/// A chapter mark of the file.
+public struct Chapter: Codable, Sendable, Hashable {
+    public var start: Double
+    public var title: String?
+
+    public init(start: Double, title: String? = nil) { self.start = start; self.title = title }
+
+    // The server sends the Go field names as they are ("Start", "Title").
+    enum CodingKeys: String, CodingKey { case start, title, Start, Title }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        start = try c.decodeIfPresent(Double.self, forKey: .Start) ?? c.decode(Double.self, forKey: .start)
+        title = try c.decodeIfPresent(String.self, forKey: .Title) ?? c.decodeIfPresent(String.self, forKey: .title)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(start, forKey: .start)
+        try c.encodeIfPresent(title, forKey: .title)
     }
 }
 
@@ -80,7 +105,7 @@ public func defaultSubtitle(_ tracks: [SubtitleTrack], mode: String?, langs: Str
 }
 
 /// "hu" matches "hun" and "hu-HU"; ISO 639-1 and 639-2 codes.
-func languageMatches(_ a: String, _ b: String) -> Bool {
+public func languageMatches(_ a: String, _ b: String) -> Bool {
     func norm(_ s: String) -> String {
         let base = String(s.lowercased().split(separator: "-").first ?? "")
         return Locale.LanguageCode(base).identifier(.alpha2) ?? base

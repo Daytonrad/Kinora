@@ -18,6 +18,7 @@ struct PlaybackTests {
         #expect(p.session == nil)
         #expect(p.segments?.map(\.type) == [.intro, .credits, .unknown])
         #expect(p.creditsAt == 52)
+        #expect(p.chapters == [Chapter(start: 0, title: "Intro")])
         #expect(p.subtitles?.first?.lang == "hun")
         #expect(p.item.kind == .movie)
     }

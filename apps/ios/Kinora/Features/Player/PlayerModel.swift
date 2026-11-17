@@ -25,11 +25,20 @@ final class PlayerModel: NSObject {
     private(set) var pipActive = false
     private(set) var triedTranscode = false
     var nextDismissed = false
+    /// A controls menu is open (set by the view); the controls stay while it is.
+    var menuOpen = false
     /// Audio track (type index) the server is playing.
     private(set) var audioIdx: Int?
     private(set) var subtitle: SubtitleTrack?
     /// The subtitle line showing now.
     private(set) var caption: String?
+    /// Seconds the subtitles are shifted; positive shows them later.
+    private(set) var subtitleDelay: Double = 0
+    private(set) var speed: Float = 1
+    /// kbps cap picked in the player; nil follows the network (see `effectiveMaxBitrate`).
+    private(set) var qualityCap: Int?
+    /// Playing a downloaded file from the device.
+    let isOffline: Bool
     var fill = false { didSet { layer.videoGravity = fill ? .resizeAspectFill : .resizeAspect } }
 
     /// The full-screen player is on screen (set by the view).
@@ -47,6 +56,9 @@ final class PlayerModel: NSObject {
     private var cues: [Cue] = []
     private var subtitlesChosen = false
     private var subtitleLoad: Task<Void, Never>?
+    private let localInfo: PlaybackInfo?
+    /// The series' remembered languages were applied to this item.
+    private var languagesApplied = false
 
     private var pip: AVPictureInPictureController?
     private var offset: Double = 0
@@ -64,8 +76,10 @@ final class PlayerModel: NSObject {
     private var statusObservation: NSKeyValueObservation?
     private var appObservers: [NSObjectProtocol] = []
 
-    init(item: Item, start: Double, client: KinoraClient, profile: Profile?) {
+    init(item: Item, start: Double, client: KinoraClient, profile: Profile?, local: PlaybackInfo? = nil) {
         self.item = item
+        self.localInfo = local
+        self.isOffline = local != nil
         self.firstStart = start
         self.client = client
         skipMode = profile?.skipIntro ?? "manual"
@@ -152,14 +166,36 @@ final class PlayerModel: NSObject {
         let prev = session
         session = nil
         do {
-            let info = try await client.playback(item.id, PlaybackRequest(start: t, audioIdx: audioIdx, force: force, prevSession: prev))
+            let info: PlaybackInfo
+            if let localInfo {
+                info = localInfo
+            } else {
+                info = try await client.playback(item.id, PlaybackRequest(start: t, audioIdx: audioIdx, maxBitrate: effectiveMaxBitrate,
+                                                                          force: force, prevSession: prev))
+            }
             guard !closed else { return }
-            guard let url = await client.url(info.url) else { throw KinoraError.network }
+            guard let url = info.url.hasPrefix("file:") ? URL(string: info.url) : await client.url(info.url)
+            else { throw KinoraError.network }
             self.info = info
             audioIdx = info.audioIdx.flatMap { $0 >= 0 ? $0 : nil }
+            let remembered = item.seriesId.flatMap { AppSettings.languages(series: $0) }
+            if !languagesApplied, localInfo == nil {
+                languagesApplied = true
+                // The series was last watched in another audio language: ask for that track instead.
+                if let a = remembered?.audioTrack(in: info.audioTracks), a.typeIndex != audioIdx {
+                    audioIdx = a.typeIndex
+                    if let s = info.session { session = s }
+                    await start(at: t)
+                    return
+                }
+            }
             if !subtitlesChosen {
                 subtitlesChosen = true
-                selectSubtitle(defaultSubtitle(info.textSubtitles, mode: subMode, langs: subLangs))
+                if let pick = remembered?.subtitleTrack(in: info.textSubtitles) {
+                    selectSubtitle(pick, remember: false)
+                } else {
+                    selectSubtitle(defaultSubtitle(info.textSubtitles, mode: subMode, langs: subLangs), remember: false)
+                }
             }
             session = info.session
             offset = info.mode == .direct ? 0 : (info.startOffset ?? 0)
@@ -168,6 +204,7 @@ final class PlayerModel: NSObject {
             let playerItem = AVPlayerItem(url: url)
             watch(playerItem)
             player.replaceCurrentItem(with: playerItem)
+            player.defaultRate = speed
             player.play()
             if item.kind == .episode, next == nil {
                 next = try? await client.nextEpisode(after: item.id)
@@ -182,32 +219,34 @@ final class PlayerModel: NSObject {
 
     // MARK: - tracks
 
-    var hasTrackChoice: Bool {
-        (info?.audioTracks.count ?? 0) > 1 || !(info?.textSubtitles.isEmpty ?? true)
-    }
 
     /// Switching audio needs a new stream from the server (another track is remuxed in).
     func selectAudio(_ idx: Int) {
-        guard idx != audioIdx else { return }
+        guard idx != audioIdx, !isOffline else { return }
         audioIdx = idx
+        rememberLanguages()
         Task { await start(at: position) }
     }
 
     /// Subtitles are fetched as WebVTT and drawn over the video, so they work in every mode.
-    func selectSubtitle(_ track: SubtitleTrack?) {
+    func selectSubtitle(_ track: SubtitleTrack?, remember: Bool = true) {
         subtitleLoad?.cancel()
+        defer { if remember { rememberLanguages() } }
         subtitle = track
         cues = []
         caption = nil
         guard let track else { return }
         subtitleLoad = Task {
             do {
-                guard let url = await client.url(track.url) else { throw KinoraError.network }
+                guard let url = track.url.hasPrefix("file:") ? URL(string: track.url) : await client.url(track.url)
+                else { throw KinoraError.network }
                 let (data, resp) = try await URLSession.shared.data(from: url)
-                guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw KinoraError.network }
+                // A downloaded title's file has no HTTP response.
+                if let http = resp as? HTTPURLResponse, http.statusCode != 200 { throw KinoraError.network }
                 let parsed = WebVTT.parse(String(decoding: data, as: UTF8.self))
                 guard !Task.isCancelled, subtitle == track else { return }
                 cues = parsed
+                updateCaption()
             } catch is CancellationError {
             } catch {
                 guard subtitle == track else { return }
@@ -215,6 +254,44 @@ final class PlayerModel: NSObject {
             }
         }
     }
+
+    /// The series starts with these languages next time.
+    private func rememberLanguages() {
+        guard let series = item.seriesId else { return }
+        let audio = info?.audioTracks.first { $0.typeIndex == audioIdx }?.lang
+        AppSettings.setLanguages(LanguageChoice(audio: audio, subtitle: subtitle?.lang ?? (subtitle == nil ? "" : nil),
+                                                subtitleForced: subtitle?.forced), series: series)
+    }
+
+    func shiftSubtitles(by delta: Double) {
+        subtitleDelay = delta == 0 ? 0 : ((subtitleDelay + delta) * 10).rounded() / 10
+        updateCaption()
+    }
+
+    func setSpeed(_ rate: Float) {
+        speed = rate
+        player.defaultRate = rate
+        if player.timeControlStatus != .paused { player.rate = rate }
+        updateNowPlaying()
+    }
+
+    // MARK: - quality and chapters
+
+    /// nil: automatic (the mobile data limit applies on metered connections).
+    func setQuality(_ kbps: Int?) {
+        guard kbps != qualityCap, !isOffline else { return }
+        qualityCap = kbps
+        Task { await start(at: position) }
+    }
+
+    var effectiveMaxBitrate: Int? {
+        if let qualityCap { return qualityCap > 0 ? qualityCap : nil }
+        let cell = AppSettings.cellularMaxBitrate
+        return NetworkStatus.shared.isExpensive && cell > 0 ? cell : nil
+    }
+
+    var chapters: [Chapter] { (info?.chapters ?? []).sorted { $0.start < $1.start } }
+    var currentChapter: Chapter? { chapters.current(at: position) }
 
     private func stopSession() {
         guard let s = session else { return }
@@ -286,7 +363,9 @@ final class PlayerModel: NSObject {
         position = 0
         audioIdx = nil
         subtitlesChosen = false
-        selectSubtitle(nil)
+        languagesApplied = false
+        subtitleDelay = 0
+        selectSubtitle(nil, remember: false)
         let resume = n.progress != nil ? (n.userData?.position ?? 0) : 0
         Task { await start(at: resume) }
     }
@@ -354,12 +433,17 @@ final class PlayerModel: NSObject {
         }
     }
 
+    /// The cue showing now; also called while paused, when the periodic observer is quiet.
+    private func updateCaption() {
+        let line = cues.isEmpty ? nil : WebVTT.text(at: position - subtitleDelay, in: cues)
+        if line != caption { caption = line }
+    }
+
     private func tick() {
         guard !closed else { return }
         let now = player.currentTime().seconds
         if now.isFinite, player.currentItem != nil, !loading { position = offset + now }
-        let line = cues.isEmpty ? nil : WebVTT.text(at: position, in: cues)
-        if line != caption { caption = line }
+        updateCaption()
         isPlaying = player.timeControlStatus == .playing
         buffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
         if isPlaying, Date.now.timeIntervalSince(lastReport) > 10 { report() }

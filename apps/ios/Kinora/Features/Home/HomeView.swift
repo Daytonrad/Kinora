@@ -17,6 +17,9 @@ struct HomeView: View {
             NavigationStack { SearchView().browseDestinations() }
                 .tabItem { Label("Keresés", systemImage: "magnifyingglass") }
                 .tag(AppModel.Tab.search)
+            NavigationStack { DownloadsView() }
+                .tabItem { Label("Letöltések", systemImage: "arrow.down.circle") }
+                .tag(AppModel.Tab.downloads)
         }
         // A widget link that arrived while signing in.
         .onAppear { model.handlePendingLink() }

@@ -31,7 +31,7 @@ final class AppModel {
     /// Bumped when a playback ends, so screens refresh progress and watched marks.
     private(set) var playbackGeneration = 0
 
-    enum Tab: Hashable { case home, libraries, search }
+    enum Tab: Hashable { case home, libraries, search, downloads }
     /// The selected tab and the home tab's stack, so links from widgets can open a title.
     var tab: Tab = .home
     var homePath = NavigationPath()
@@ -136,6 +136,7 @@ final class AppModel {
         }
         client = c
         me = nil
+        DownloadStore.shared.attach(c)
     }
 
     private func refreshStatus() async {
@@ -283,7 +284,9 @@ final class AppModel {
         guard let client else { return }
         player?.close()
         let resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
-        let p = PlayerModel(item: item, start: start ?? resume, client: client, profile: me?.profile)
+        // A downloaded copy plays from the device: no server load, works without a connection.
+        let local = DownloadStore.shared.localInfo(for: item)
+        let p = PlayerModel(item: item, start: start ?? resume, client: client, profile: me?.profile, local: local)
         p.onClose = { [weak self, weak p] in
             guard let self, self.player === p else { return }
             self.player = nil

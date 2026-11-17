@@ -74,6 +74,10 @@ public struct SubtitleTrack: Codable, Sendable, Hashable, Identifiable {
     public var textBased: Bool?
     public var url: String
     public var id: Int { idx }
+
+    public init(idx: Int, lang: String?, title: String?, forced: Bool?, textBased: Bool?, url: String) {
+        self.idx = idx; self.lang = lang; self.title = title; self.forced = forced; self.textBased = textBased; self.url = url
+    }
 }
 
 /// The server's answer to "play this": where the stream is and how it was decided.
@@ -110,9 +114,25 @@ public struct PlaybackInfo: Decodable, Sendable {
     public var subtitles: [SubtitleTrack]?
     public var audioIdx: Int?
     public var streams: [MediaStream]?
+    public var chapters: [Chapter]?
     public var streamToken: String?
     public var item: PlayItem
     public var encoderLabel: String?
+
+    /// A downloaded file played from the device: direct play, no server session.
+    public static func local(url: String, item: Item, subtitles: [SubtitleTrack], segments: [Segment]? = nil,
+                             chapters: [Chapter]? = nil) -> PlaybackInfo {
+        PlaybackInfo(url: url, mode: .direct, duration: item.runtimeSec, segments: segments, subtitles: subtitles,
+                     chapters: chapters,
+                     item: PlayItem(id: item.id, title: item.title, kind: item.kind, seriesTitle: item.seriesTitle,
+                                    seriesId: item.seriesId, seasonNum: item.seasonNum, episodeNum: item.episodeNum))
+    }
+
+    init(url: String, mode: Mode, duration: Double?, segments: [Segment]?, subtitles: [SubtitleTrack]?,
+         chapters: [Chapter]?, item: PlayItem) {
+        self.url = url; self.mode = mode; self.duration = duration; self.segments = segments
+        self.subtitles = subtitles; self.chapters = chapters; self.item = item
+    }
 
     /// Where the closing credits start: marked credits, then the server's guess.
     public var creditsAt: Double? {

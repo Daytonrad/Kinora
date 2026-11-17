@@ -1,0 +1,172 @@
+import SwiftUI
+import KinoraKit
+
+/// Titles saved on the device and the downloads still in progress.
+struct DownloadsView: View {
+    @Environment(AppModel.self) private var model
+    private var store: DownloadStore { .shared }
+
+    var body: some View {
+        Group {
+            if store.saved.isEmpty && store.phases.isEmpty {
+                ContentUnavailableView("Nincs letöltés", systemImage: "arrow.down.circle",
+                                       description: Text("Filmet vagy részt a címlapján a letöltés gombbal menthetsz offline nézéshez."))
+            } else {
+                List {
+                    if !store.phases.isEmpty {
+                        Section("Folyamatban") {
+                            ForEach(store.phases.keys.sorted(), id: \.self) { id in
+                                if let phase = store.phases[id] {
+                                    ActiveRow(title: store.pendingTitle(id), phase: phase) { store.cancel(id) }
+                                }
+                            }
+                        }
+                        .listRowBackground(Theme.panel)
+                    }
+                    if !store.saved.isEmpty {
+                        Section {
+                            ForEach(store.saved) { d in
+                                Button { model.play(d.item) } label: { SavedRow(download: d) }
+                                    .buttonStyle(.plain)
+                                    .swipeActions {
+                                        Button("Törlés", systemImage: "trash", role: .destructive) { store.delete(d.id) }
+                                    }
+                            }
+                        } header: {
+                            Text("Az eszközön")
+                        } footer: {
+                            Text("Összesen \(ByteCountFormatter.string(fromByteCount: store.usedBytes, countStyle: .file)). Törléshez húzd balra a sort.")
+                        }
+                        .listRowBackground(Theme.panel)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+        }
+        .kinoraScreen()
+        .navigationTitle("Letöltések")
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountMenu() } }
+    }
+}
+
+private struct SavedRow: View {
+    var download: SavedDownload
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ArtworkView(item: download.item, kind: download.item.kind == .episode ? .thumb : .backdrop)
+                .frame(width: 112, height: 63)
+                .clipShape(.rect(cornerRadius: 6))
+            VStack(alignment: .leading, spacing: 3) {
+                if let s = download.item.seriesTitle { Text(s).font(.caption).foregroundStyle(Theme.muted) }
+                Text(download.item.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                Text([download.item.episodeLabel, download.quality,
+                      ByteCountFormatter.string(fromByteCount: download.size, countStyle: .file)]
+                        .compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "play.circle.fill").font(.title2).foregroundStyle(Theme.amber)
+        }
+        .padding(.vertical, 4)
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Lejátszás az eszközről")
+    }
+}
+
+private struct ActiveRow: View {
+    var title: String
+    var phase: DownloadStore.Phase
+    var cancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                switch phase {
+                case .preparing(let p):
+                    ProgressView(value: p).tint(Theme.muted)
+                    Text("Előkészítés a szerveren · \(Int(p * 100))%").font(.caption).foregroundStyle(Theme.muted)
+                case .transferring(let p):
+                    ProgressView(value: p).tint(Theme.amber)
+                    Text("Letöltés · \(Int(p * 100))%").font(.caption).foregroundStyle(Theme.muted)
+                case .failed(let m):
+                    Text(m).font(.caption).foregroundStyle(Theme.danger)
+                }
+            }
+            Button(action: cancel) {
+                Image(systemName: "xmark.circle.fill").font(.title3).foregroundStyle(Theme.muted)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Letöltés megszakítása")
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// Download button of a movie or episode: pick a quality, then follow the progress.
+struct DownloadButton: View {
+    @Environment(AppModel.self) private var model
+    var item: Item
+    @State private var error: String?
+    @State private var asking = false
+    private var store: DownloadStore { .shared }
+
+    static let qualities: [(String, String)] = [
+        ("1080p", "1080p (~6 Mbps)"), ("720p", "720p (~3 Mbps)"), ("480p", "480p (~1,2 Mbps)"), ("360p", "360p (~600 kbps)"),
+    ]
+
+    var body: some View {
+        Button {
+            if store.download(for: item.id) == nil, store.phases[item.id] == nil { asking = true }
+            else { model.tab = .downloads }
+        } label: {
+            icon
+                .font(.title3)
+                .frame(width: 50, height: 50)
+                .background(Theme.panel, in: .rect(cornerRadius: 10))
+        }
+        .accessibilityLabel(label)
+        .confirmationDialog("Letöltés offline nézéshez", isPresented: $asking, titleVisibility: .visible) {
+            ForEach(Self.qualities, id: \.0) { q in
+                Button(q.1) { start(q.0) }
+            }
+        } message: {
+            Text("A szerver előbb átalakítja a fájlt, utána a letöltés a háttérben is folytatódik.")
+        }
+        .alert("Nem sikerült a letöltés", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(error ?? "")
+        }
+    }
+
+    @ViewBuilder private var icon: some View {
+        if store.download(for: item.id) != nil {
+            Image(systemName: "arrow.down.circle.fill").foregroundStyle(Theme.amber)
+        } else if let phase = store.phases[item.id] {
+            switch phase {
+            case .preparing(let p), .transferring(let p):
+                ProgressView(value: max(p, 0.02)).progressViewStyle(.circular).tint(Theme.amber)
+            case .failed:
+                Image(systemName: "exclamationmark.circle").foregroundStyle(Theme.danger)
+            }
+        } else {
+            Image(systemName: "arrow.down.circle").foregroundStyle(Theme.plaster)
+        }
+    }
+
+    private var label: String {
+        if store.download(for: item.id) != nil { return "Letöltve" }
+        if store.phases[item.id] != nil { return "Letöltés folyamatban" }
+        return "Letöltés"
+    }
+
+    private func start(_ quality: String) {
+        Task {
+            do { try await model.api { try await DownloadStore.shared.start(item, quality: quality, client: $0) } }
+            catch { self.error = error.localizedDescription }
+        }
+    }
+}

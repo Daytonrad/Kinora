@@ -6,7 +6,7 @@ import KinoraKit
 struct PlayerView: View {
     let player: PlayerModel
     @State private var chrome = true
-    @State private var scrub: Double?
+    @State private var scrubbing = false
     @State private var hideTask: Task<Void, Never>?
 
     var body: some View {
@@ -23,16 +23,15 @@ struct PlayerView: View {
                 ProgressView().controlSize(.large).tint(.white).allowsHitTesting(false)
             }
 
-            if let caption = player.caption, player.error == nil {
-                CaptionView(text: caption, raised: chrome)
-                    .animation(.easeInOut(duration: 0.2), value: chrome)
+            if player.error == nil {
+                CaptionLayer(player: player, raised: chrome)
             }
 
             if let error = player.error {
                 errorPanel(error)
             } else {
                 if chrome { controls.transition(.opacity) }
-                prompts
+                PromptsView(player: player)
             }
         }
         .foregroundStyle(.white)
@@ -44,6 +43,9 @@ struct PlayerView: View {
             player.presented = false
             // Swiped away or closed; in picture in picture it keeps playing.
             if !player.pipActive { player.close() }
+        }
+        .onChange(of: player.menuOpen) { _, open in
+            if open { hideTask?.cancel() } else { scheduleHide() }
         }
         .onChange(of: player.isPlaying) { _, playing in
             if playing { scheduleHide() } else { show() }
@@ -61,7 +63,8 @@ struct PlayerView: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 6)
-                if player.hasTrackChoice { tracksMenu }
+                ChaptersMenu(player: player)
+                OptionsMenu(player: player)
                 AirPlayButton().frame(width: 44, height: 44)
                 if player.pipSupported {
                     RoundIcon("pip.enter", label: "Kép a képben") { player.startPiP() }
@@ -81,29 +84,8 @@ struct PlayerView: View {
 
             Spacer()
 
-            VStack(spacing: 4) {
-                Slider(value: Binding(get: { scrub ?? player.position },
-                                      set: { scrub = $0 }),
-                       in: 0...max(player.duration, 1)) { editing in
-                    if editing {
-                        hideTask?.cancel()
-                    } else if let t = scrub {
-                        player.seek(to: t)
-                        scrub = nil
-                        scheduleHide()
-                    }
-                }
-                .tint(Theme.amber)
-                .accessibilityLabel("Lejátszási pozíció")
-                .accessibilityValue(Self.clock(scrub ?? player.position))
-                HStack {
-                    Text(Self.clock(scrub ?? player.position))
-                    Spacer()
-                    Text("-" + Self.clock(max(0, player.duration - (scrub ?? player.position))))
-                }
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.8))
-            }
+            Scrubber(player: player, scrubbing: $scrubbing,
+                     began: { hideTask?.cancel() }, ended: { scheduleHide() })
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
         }
@@ -116,33 +98,6 @@ struct PlayerView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         }
-    }
-
-    /// Skip intro and next episode sit above the controls, also when those are hidden.
-    @ViewBuilder private var prompts: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                if player.showNext, let next = player.next {
-                    NextCard(next: next, countdown: player.nextCountdown,
-                             play: { player.playNext() }, dismiss: { player.dismissNext() })
-                } else if let seg = player.currentSegment {
-                    Button { player.skipSegment() } label: {
-                        Label(Self.skipLabel(seg.type), systemImage: "forward.end.fill")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .fixedSize()
-                }
-            }
-            .padding(.horizontal, 20)
-            // A fixed spot above the scrubber: a button that moves when the controls hide
-            // is easy to miss.
-            .padding(.bottom, 84)
-        }
-        .animation(.default, value: player.showNext)
-        .animation(.default, value: player.currentSegment)
     }
 
     private func errorPanel(_ message: String) -> some View {
@@ -167,50 +122,18 @@ struct PlayerView: View {
         .frame(maxWidth: 520)
     }
 
-    // MARK: - tracks
+    // MARK: - tracks, speed, quality
 
-    private var tracksMenu: some View {
-        let audio = player.info?.audioTracks ?? []
-        let subs = player.info?.textSubtitles ?? []
-        return Menu {
-            if audio.count > 1 {
-                Section("Hang") {
-                    ForEach(audio, id: \.typeIndex) { a in
-                        Button { player.selectAudio(a.typeIndex) } label: {
-                            if a.typeIndex == player.audioIdx {
-                                Label(TrackLabel.audio(a), systemImage: "checkmark")
-                            } else {
-                                Text(TrackLabel.audio(a))
-                            }
-                        }
-                    }
-                }
-            }
-            if !subs.isEmpty {
-                Section("Felirat") {
-                    Button { player.selectSubtitle(nil) } label: {
-                        if player.subtitle == nil { Label("Ki", systemImage: "checkmark") } else { Text("Ki") }
-                    }
-                    ForEach(subs) { t in
-                        Button { player.selectSubtitle(t) } label: {
-                            if t == player.subtitle {
-                                Label(TrackLabel.subtitle(t), systemImage: "checkmark")
-                            } else {
-                                Text(TrackLabel.subtitle(t))
-                            }
-                        }
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: player.subtitle == nil ? "captions.bubble" : "captions.bubble.fill")
-                .font(.system(size: 20, weight: .semibold))
-                .frame(width: 44, height: 44)
-                .contentShape(.circle)
-        }
-        .menuActionDismissBehavior(.automatic)
-        .accessibilityLabel("Hang és felirat")
-        .simultaneousGesture(TapGesture().onEnded { show() })
+    static func delayLabel(_ d: Double) -> String {
+        if d == 0 { return "Eredeti" }
+        let v = String(format: "%+.1f mp", d).replacingOccurrences(of: ".", with: ",")
+        return v
+    }
+
+    static func qualityLabel(_ cap: Int?, effective: Int?) -> String {
+        if let cap { return SettingChoices.bitrates.first { $0.0 == cap }?.1 ?? "\(cap) kbps" }
+        if let effective { return "Automatikus (mobilnet: \(effective / 1000) Mbps)" }
+        return "Automatikus"
     }
 
     // MARK: - chrome timing
@@ -229,7 +152,7 @@ struct PlayerView: View {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(for: .seconds(3.5))
-            guard !Task.isCancelled, player.isPlaying, scrub == nil else { return }
+            guard !Task.isCancelled, player.isPlaying, !scrubbing, !player.menuOpen else { return }
             withAnimation(.easeInOut(duration: 0.3)) { chrome = false }
         }
     }
@@ -247,6 +170,80 @@ struct PlayerView: View {
         case .recap: "Összefoglaló átugrása"
         case .credits: "Stáblista átugrása"
         default: "Intro átugrása"
+        }
+    }
+}
+
+/// Skip intro and next episode sit above the controls, also when those are hidden.
+/// Its own view: it follows the position, which must not re-render the menus.
+private struct PromptsView: View {
+    var player: PlayerModel
+
+    var body: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                if player.showNext, let next = player.next {
+                    NextCard(next: next, countdown: player.nextCountdown,
+                             play: { player.playNext() }, dismiss: { player.dismissNext() })
+                } else if let seg = player.currentSegment {
+                    Button { player.skipSegment() } label: {
+                        Label(PlayerView.skipLabel(seg.type), systemImage: "forward.end.fill")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .fixedSize()
+                }
+            }
+            .padding(.horizontal, 20)
+            // A fixed spot above the scrubber: a button that moves when the controls hide
+            // is easy to miss.
+            .padding(.bottom, 84)
+        }
+        .animation(.default, value: player.showNext)
+        .animation(.default, value: player.currentSegment)
+    }
+}
+
+/// Scrubber with chapter marks and times; its own view so the position ticks
+/// don't re-render the top bar (an open menu would close).
+private struct Scrubber: View {
+    var player: PlayerModel
+    @Binding var scrubbing: Bool
+    var began: () -> Void
+    var ended: () -> Void
+    @State private var scrub: Double?
+
+    var body: some View {
+        let pos = scrub ?? player.position
+        VStack(spacing: 4) {
+            Slider(value: Binding(get: { pos }, set: { scrub = $0 }),
+                   in: 0...max(player.duration, 1)) { editing in
+                scrubbing = editing
+                if editing {
+                    began()
+                } else if let t = scrub {
+                    player.seek(to: t)
+                    scrub = nil
+                    ended()
+                }
+            }
+            .tint(Theme.amber)
+            .overlay { ChapterTicks(chapters: player.chapters, duration: player.duration) }
+            .accessibilityLabel("Lejátszási pozíció")
+            .accessibilityValue(PlayerView.clock(pos))
+            HStack {
+                Text(PlayerView.clock(pos))
+                if let c = player.chapters.current(at: pos), let t = c.title, !t.isEmpty {
+                    Spacer()
+                    Text(t).lineLimit(1)
+                }
+                Spacer()
+                Text("-" + PlayerView.clock(max(0, player.duration - pos)))
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.white.opacity(0.8))
         }
     }
 }
@@ -306,25 +303,179 @@ private struct RoundIcon: View {
     }
 }
 
+/// The caption, kept clear of the scrubber and of a skip or next-episode prompt.
+/// Its own view: the prompt check follows the position.
+private struct CaptionLayer: View {
+    var player: PlayerModel
+    var raised: Bool
+
+    var body: some View {
+        if let caption = player.caption {
+            // The prompt sits 84 pt above the bottom and is about 50 pt tall.
+            let prompt = player.showNext || player.currentSegment != nil
+            CaptionView(text: caption, bottom: raised ? (prompt ? 146 : 110) : 28,
+                        style: AppSettings.subtitleStyle)
+                .animation(.easeInOut(duration: 0.2), value: raised)
+                .animation(.easeInOut(duration: 0.2), value: prompt)
+        }
+    }
+}
+
 private struct CaptionView: View {
     var text: String
-    var raised: Bool
+    var bottom: CGFloat
+    var style: SubtitleStyle
 
     var body: some View {
         VStack {
             Spacer()
             Text(text)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: style.points, weight: .semibold))
+                .foregroundStyle(style.color == .yellow ? Color(red: 1, green: 0.88, blue: 0.3) : .white)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(.black.opacity(0.55), in: .rect(cornerRadius: 6))
-                .shadow(color: .black, radius: 2)
+                .padding(.horizontal, style.background == .box ? 10 : 0)
+                .padding(.vertical, style.background == .box ? 4 : 0)
+                .background(style.background == .box ? Color.black.opacity(0.6) : .clear, in: .rect(cornerRadius: 6))
+                .shadow(color: .black, radius: style.background == .none ? 0 : 2)
+                .shadow(color: .black.opacity(style.background == .shadow ? 1 : 0), radius: 4)
                 .padding(.horizontal, 24)
-                .padding(.bottom, raised ? 110 : 28)
+                .padding(.bottom, bottom)
         }
         .allowsHitTesting(false)
         .accessibilityLabel(text)
+    }
+}
+
+private struct OptionsMenu: View {
+    var player: PlayerModel
+
+    var body: some View {
+        let audio = player.info?.audioTracks ?? []
+        let subs = player.info?.textSubtitles ?? []
+        return Menu {
+            Group {
+            if audio.count > 1, !player.isOffline {
+                Picker(selection: Binding(get: { player.audioIdx ?? -1 }, set: { player.selectAudio($0) })) {
+                    ForEach(audio, id: \.typeIndex) { Text(TrackLabel.audio($0)).tag($0.typeIndex) }
+                } label: {
+                    Label("Hang", systemImage: "speaker.wave.2")
+                    Text(audio.first { $0.typeIndex == player.audioIdx }.map { TrackLabel.audio($0) } ?? "")
+                }
+                .pickerStyle(.menu)
+            }
+            if !subs.isEmpty {
+                Picker(selection: Binding(get: { player.subtitle?.idx ?? -1 },
+                                          set: { i in player.selectSubtitle(subs.first { $0.idx == i }) })) {
+                    Text("Ki").tag(-1)
+                    ForEach(subs) { Text(TrackLabel.subtitle($0)).tag($0.idx) }
+                } label: {
+                    Label("Felirat", systemImage: "captions.bubble")
+                    Text(player.subtitle.map { TrackLabel.subtitle($0) } ?? "Ki")
+                }
+                .pickerStyle(.menu)
+            }
+            if player.subtitle != nil {
+                Menu {
+                    Button("Korábban (−0,5 mp)", systemImage: "minus") { player.shiftSubtitles(by: -0.5) }
+                    Button("Később (+0,5 mp)", systemImage: "plus") { player.shiftSubtitles(by: 0.5) }
+                    if player.subtitleDelay != 0 {
+                        Button("Visszaállítás", systemImage: "arrow.counterclockwise") { player.shiftSubtitles(by: 0) }
+                    }
+                } label: {
+                    Label("Felirat időzítése", systemImage: "timer")
+                    Text(PlayerView.delayLabel(player.subtitleDelay))
+                }
+                .menuActionDismissBehavior(.disabled)
+            }
+            Picker(selection: Binding(get: { player.speed }, set: { player.setSpeed($0) })) {
+                ForEach(PlaybackSpeeds.all, id: \.self) { Text(PlaybackSpeeds.label($0)).tag($0) }
+            } label: {
+                Label("Sebesség", systemImage: "gauge.with.dots.needle.67percent")
+                Text(PlaybackSpeeds.label(player.speed))
+            }
+            .pickerStyle(.menu)
+            if !player.isOffline {
+                Picker(selection: Binding(get: { player.qualityCap ?? -1 }, set: { player.setQuality($0 < 0 ? nil : $0) })) {
+                    Text("Automatikus").tag(-1)
+                    ForEach(SettingChoices.bitrates, id: \.0) { Text($0.1).tag($0.0) }
+                } label: {
+                    Label("Minőség", systemImage: "dial.medium")
+                    Text(PlayerView.qualityLabel(player.qualityCap, effective: player.effectiveMaxBitrate))
+                }
+                .pickerStyle(.menu)
+            }
+            }
+            .modifier(MenuPresence(player: player))
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 20, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .contentShape(.circle)
+        }
+        .accessibilityLabel("Hang, felirat, sebesség és minőség")
+    }
+
+}
+
+private struct ChaptersMenu: View {
+    var player: PlayerModel
+
+    var body: some View {
+        let chapters = player.chapters
+        if chapters.count > 1 {
+            Menu {
+                Group {
+                ForEach(Array(chapters.enumerated()), id: \.offset) { i, c in
+                    Button {
+                        player.seek(to: c.start)
+                    } label: {
+                        let name = c.title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(i + 1). fejezet"
+                        Text("\(name) · \(PlayerView.clock(c.start))")
+                    }
+                }
+                }
+                .modifier(MenuPresence(player: player))
+            } label: {
+                Image(systemName: "list.bullet")
+                    .font(.system(size: 20, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .contentShape(.circle)
+            }
+            .accessibilityLabel("Fejezetek")
+            }
+    }
+}
+
+/// Tracks whether a menu's content is on screen.
+private struct MenuPresence: ViewModifier {
+    var player: PlayerModel
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { player.menuOpen = true }
+            .onDisappear { player.menuOpen = false }
+    }
+}
+
+/// Small marks on the scrubber where chapters start.
+private struct ChapterTicks: View {
+    var chapters: [Chapter]
+    var duration: Double
+
+    var body: some View {
+        GeometryReader { g in
+            // The slider's track is inset by about the thumb radius on both ends.
+            let inset: CGFloat = 14
+            let w = max(0, g.size.width - inset * 2)
+            ForEach(chapters.filter { $0.start > 1 && $0.start < duration - 1 }, id: \.start) { c in
+                Capsule()
+                    .fill(.white.opacity(0.85))
+                    .frame(width: 2, height: 8)
+                    .position(x: inset + w * CGFloat(c.start / max(duration, 1)), y: g.size.height / 2)
+            }
+        }
+        .allowsHitTesting(false)
+        .opacity(duration > 0 && chapters.count > 1 ? 1 : 0)
     }
 }
 

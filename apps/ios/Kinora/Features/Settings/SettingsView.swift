@@ -23,6 +23,8 @@ struct SettingsView: View {
     @State private var subLangs = ""
     @State private var audioLangs = ""
     @State private var backgroundAudio = AppSettings.backgroundAudio
+    @State private var subtitleStyle = AppSettings.subtitleStyle
+    @State private var cellularMax = AppSettings.cellularMaxBitrate
     @State private var addingAddress = false
     @State private var newAddress = ""
     @State private var addressBusy = false
@@ -45,6 +47,7 @@ struct SettingsView: View {
                 account
                 if canEdit { playback }
                 app
+                subtitleSection
                 devicesSection
                 serverSection
                 Section {
@@ -142,6 +145,43 @@ struct SettingsView: View {
         }
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
+        .listRowBackground(Theme.panel)
+    }
+
+    private var subtitleSection: some View {
+        Section {
+            Picker("Feliratméret", selection: $subtitleStyle.size) {
+                ForEach(SubtitleStyle.Size.allCases, id: \.self) { Text(SubtitleStyle.label($0)).tag($0) }
+            }
+            Picker("Felirat háttere", selection: $subtitleStyle.background) {
+                ForEach(SubtitleStyle.Background.allCases, id: \.self) { Text(SubtitleStyle.label($0)).tag($0) }
+            }
+            Picker("Felirat színe", selection: $subtitleStyle.color) {
+                ForEach(SubtitleStyle.Color.allCases, id: \.self) { Text(SubtitleStyle.label($0)).tag($0) }
+            }
+            Text("Így néz ki a felirat")
+                .font(.system(size: subtitleStyle.points, weight: .semibold))
+                .foregroundStyle(subtitleStyle.color == .yellow ? Color(red: 1, green: 0.88, blue: 0.3) : .white)
+                .padding(.horizontal, subtitleStyle.background == .box ? 10 : 0)
+                .padding(.vertical, subtitleStyle.background == .box ? 4 : 0)
+                .background(subtitleStyle.background == .box ? Color.black.opacity(0.6) : .clear, in: .rect(cornerRadius: 6))
+                .shadow(color: .black, radius: subtitleStyle.background == .none ? 0 : 3)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(LinearGradient(colors: [.gray.opacity(0.7), .blue.opacity(0.4)], startPoint: .top, endPoint: .bottom),
+                            in: .rect(cornerRadius: 8))
+                .accessibilityHidden(true)
+            Picker("Minőség mobilneten", selection: $cellularMax) {
+                Text("Nincs korlát").tag(0)
+                ForEach(SettingChoices.bitrates.filter { $0.0 > 0 }, id: \.0) { Text($0.1).tag($0.0) }
+            }
+        } header: {
+            Text("Felirat és minőség ezen az eszközön")
+        } footer: {
+            Text("Mobilneten és személyes hotspoton a lejátszás legfeljebb ekkora sávszélességet használ. A lejátszóban egy-egy videónál felülírhatod.")
+        }
+        .onChange(of: subtitleStyle) { _, s in AppSettings.subtitleStyle = s }
+        .onChange(of: cellularMax) { _, v in AppSettings.cellularMaxBitrate = v }
         .listRowBackground(Theme.panel)
     }
 

@@ -98,6 +98,9 @@ struct ItemDetailView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(playTarget == nil)
 
+                if current.kind == .movie || current.kind == .episode {
+                    DownloadButton(item: current)
+                }
                 IconToggle(on: userData.favorite, onIcon: "heart.fill", offIcon: "heart",
                            label: userData.favorite ? "Kedvenc – eltávolítás" : "Kedvencekhez") {
                     await setFavorite(!userData.favorite)
@@ -167,6 +170,12 @@ struct ItemDetailView: View {
                 ForEach(list) { ep in
                     NavigationLink(value: ep) { EpisodeRow(item: ep, isNext: ep.id == detail?.playNext?.id) }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Lejátszás", systemImage: "play.fill") { model.play(ep) }
+                            Button("Letöltés: 720p", systemImage: "arrow.down.circle") {
+                                Task { try? await model.api { try await DownloadStore.shared.start(ep, quality: "720p", client: $0) } }
+                            }
+                        }
                 }
             } else if detail != nil, !(current.kind == .series && seasons.isEmpty) {
                 ProgressView().frame(maxWidth: .infinity).padding()
