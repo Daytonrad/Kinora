@@ -81,13 +81,13 @@ if (name) {
 }
 
 // ---------------------------------------------------------------- iOS
-const xc = join(apps, 'ios', 'ios', 'App', 'App', 'Assets.xcassets');
+// native SwiftUI app: a single 1024 px universal icon, iOS rounds the corners itself.
+// Note: apps/ios/Kinora/AppIcon.icon (layered Icon Composer file, same name) takes
+// precedence when it exists; delete it to ship this flat PNG instead.
+const xc = join(apps, 'ios', 'Kinora', 'Assets.xcassets');
 if (existsSync(xc)) {
   // iOS app icons may not have transparency
-  await out(join(xc, 'AppIcon.appiconset', 'AppIcon-512@2x.png'), sharp(src).flatten({ background: bg }).resize(1024, 1024));
-  for (const n of ['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png']) {
-    await out(join(xc, 'Splash.imageset', n), await onCanvas(2732, 2732, 0.2));
-  }
+  await out(join(xc, 'AppIcon.appiconset', 'AppIcon.png'), sharp(src).flatten({ background: bg }).removeAlpha().resize(1024, 1024));
 }
 
 // ---------------------------------------------------------------- Samsung Tizen & LG webOS
