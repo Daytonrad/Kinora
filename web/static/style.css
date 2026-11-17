@@ -596,3 +596,15 @@ pre.code { background: var(--g1); border-left: var(--hair) solid var(--rule-hi);
   .float-react { animation-duration: var(--t-none); }
   .p-mid .spin { animation-duration: calc(var(--t-spin) * 2); }
 }
+
+/* ============================================================ branding (server logo) */
+.logo.has-img { display: inline-flex; align-items: center; }
+.logo.has-img img { max-height: 36px; max-width: 180px; object-fit: contain; display: block; }
+.auth .logo.has-img img { max-height: 56px; max-width: 240px; }
+.logo-slots { display: flex; flex-wrap: wrap; gap: var(--s5); }
+.logo-slot { display: flex; flex-direction: column; gap: var(--s2); min-width: 240px; }
+.logo-preview { display: flex; align-items: center; justify-content: center; height: 96px; border: var(--hair) solid var(--rule-hi); border-radius: var(--r1); padding: var(--s3); }
+.logo-preview.dark { background: var(--g0); }
+.logo-preview.light { background: var(--t0); }
+.logo-preview img { max-height: 100%; max-width: 100%; object-fit: contain; }
+.logo-preview.light .muted { color: var(--amber-ink); }

@@ -69,6 +69,9 @@ Minden beállítás megadható környezeti változóval is. Ilyenkor az admin fe
 | `KINORA_DISCOVERY_PORT` | `7359` | a felderítés UDP-portja (`0` = a figyelés sem indul el) |
 | `KINORA_CORS_ORIGINS` | – | további app-originek tokenes CORS-hoz, vesszővel elválasztva |
 | `KINORA_ACCENT` | – | akcentszín (`#rrggbb`), az appok is használják |
+| `KINORA_LOGO` | – | logófájl (pl. `/config/logo.png`); induláskor átveszi, ha változott (PNG/JPG/WebP/SVG, max. 2 MB) |
+| `KINORA_INITIAL_SERVER_NAME`, `KINORA_INITIAL_LOGO`, `KINORA_INITIAL_MEDIA` | – | csak az **első** induláskor: szervernév, logó, kezdő médiamappák (`Név=/út;/út2`); utána az adminfelületen módosíthatók – ezeket a telepítők állítják be |
+| `KINORA_INTRO_DETECTION`, `KINORA_INTRO_WINDOW_MIN` | `1`, `10` | intró-/stáblista-felismerés be/ki, és hány percben keresse az intrót |
 | `TZ`, `PUID`, `PGID` | `UTC`, `1000`, `1000` | időzóna, a fájlok tulajdonosa |
 
 ### Melyik image-et válaszd?
@@ -115,6 +118,21 @@ Van `.deb` és `.rpm` csomag is. Részletek, jogosultságok, SMB/NFS-csatolás: 
 
 **Dockerben utólag bármelyik mappa:** a `docker-compose.host.yml` csak olvashatóan becsatolja a `/home`, `/mnt`, `/media` és `/srv` mappát a `/host` alá
 (`docker compose -f docker-compose.yml -f docker-compose.host.yml up -d`). A biztonsági mérlegelés a [`docs/LINUX.md`](docs/LINUX.md)-ben van.
+
+### Windows
+
+Töltsd le a kiadásból a **`KinoraSetup.exe`**-t. A telepítő megkérdezi a szerver nevét, a portot, a logót (opcionális) és a kezdő médiamappákat,
+majd a Kinorát **Windows-szolgáltatásként** telepíti (a gép indulásakor magától elindul), megnyitja a portot a tűzfalon (magán- és tartományi
+hálózaton), és a Start menübe tesz egy „Kinora megnyitása” parancsikont. Az ffmpeg a csomagban van. Adatok: `C:\ProgramData\Kinora`,
+napló: `C:\ProgramData\Kinora\kinora.log`. Eltávolítás: Gépház → Alkalmazások; az adatokat csak külön megerősítésre törli.
+Parancssorból: `kinora.exe service install|uninstall|start|stop` (rendszergazdaként).
+
+### Saját logó és név
+
+Az **Admin → Beállítások → Megjelenés** oldalon tölthetsz fel logót sötét és világos háttérre (PNG, JPG, WebP vagy SVG, legfeljebb 2 MB).
+A faviconét és az app-ikonokat a Kinora készíti el belőle, és az appok is ezt mutatják a belépő- és a kezdőképernyőn. Az SVG-t csak szkript
+és külső hivatkozás nélkül fogadja el, és kizárólag képként szolgálja ki. Az első indítás varázslója is kér logót (nem kötelező).
+Dockerben: `KINORA_LOGO=/config/logo.png`. A natív telepítők (`install.sh --logo`, `KinoraSetup.exe`) az első induláskor adják át.
 
 ### Fordítás forrásból
 

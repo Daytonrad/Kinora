@@ -79,6 +79,10 @@ const T = {
   myDevices: 'Bejelentkezett eszközök', thisDevice: 'ez az eszköz', signOutDevice: 'Kiléptetés', signOutOthers: 'Kiléptetés mindenhonnan (ezen kívül)',
   signedOutN: n => `${n} eszköz kiléptetve.`, lastActive: 'Utoljára aktív', aDevices: 'Eszközök',
   platforms: { web: 'Böngésző', android: 'Android', androidtv: 'Android TV', ios: 'iOS', tizen: 'Samsung TV', webos: 'LG TV' },
+  // branding
+  aLook: 'Megjelenés', logoDark: 'Logó sötét háttérre', logoLight: 'Logó világos háttérre', uploadLogo: 'Logó feltöltése…', removeLogo: 'Logó törlése',
+  logoHint: 'PNG, JPG, WebP vagy SVG, legfeljebb 2 MB. A faviconét és az app-ikonokat a Kinora készíti el belőle.', accent: 'Akcentszín',
+  setupLogo: 'Logó (nem kötelező)', noLogo: 'Nincs saját logó – a Kinora felirat látszik.',
   // folders & permissions
   permCheck: 'Jogosultság ellenőrzése', permOk: 'Olvasható – rendben.', permFix: 'Javítás (futtasd a szerveren):', permGroup: 'Vagy csoporton keresztül:',
   locked: 'nincs jog', hostPath: p => `A hoston: ${p}`, shortcuts: 'Gyorsugrás',
@@ -239,7 +243,10 @@ async function route() {
   document.querySelectorAll('.modal-back').forEach(m => m.remove());
   const { parts, q } = parseHash();
   const [p0, p1, p2] = parts;
-  if (!state.status) state.status = await GET('/api/status', { quiet: true }).catch(() => ({}));
+  if (!state.status) {
+    [state.status, state.branding] = await Promise.all([GET('/api/status', { quiet: true }).catch(() => ({})), GET('/api/branding', { quiet: true }).catch(() => null)]);
+    applyBranding();
+  }
   if (state.status.setup_needed) { if (p0 !== 'setup') return go('#/setup'); return viewSetup(); }
   if (p0 === 'setup') return go('#/login');
   if (p0 === 'join' && p1) return viewJoin(p1);
@@ -331,7 +338,7 @@ function shell(active, ...content) {
   document.addEventListener('click', closeMenu);
   onCleanup(() => document.removeEventListener('click', closeMenu));
   const top = h('header.top' + (active === 'home' ? '' : '.solid'), null,
-    h('a.logo', { href: '#/home' }, T.appName),
+    brandMark('a'),
     h('nav.nav', { 'aria-label': 'Fő menü' },
       h('a' + (active === 'home' ? '.on' : ''), { href: '#/home' }, T.home),
       libsNav,
@@ -368,8 +375,25 @@ function confirmBox(text) {
 }
 
 // ===================================================================== auth views
+function brandMark(tag) {
+  const b = state.branding;
+  const name = (b && b.server_name) || T.appName;
+  if (b && b.logo_dark) return h(tag + '.logo.has-img', tag === 'a' ? { href: '#/home', 'aria-label': name } : { 'aria-label': name }, h('img', { src: b.logo_dark, alt: name }));
+  return h(tag + '.logo', tag === 'a' ? { href: '#/home' } : null, T.appName);
+}
+
+// favicon, apple-touch icon and accent colour from the server branding
+function applyBranding() {
+  const b = state.branding;
+  if (!b) return;
+  if (b.favicon) document.querySelector('link[rel="icon"]')?.setAttribute('href', b.favicon);
+  if (b.icon_192) document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', b.icon_192);
+  if (b.accent && /^#[0-9a-f]{6}$/i.test(b.accent)) document.documentElement.style.setProperty('--amber', b.accent);
+  else document.documentElement.style.removeProperty('--amber');
+}
+
 function authPage(title, lede, form) {
-  put(app(), h('div.center', null, h('div.auth', null, h('span.logo', null, T.appName), h('h1', null, title), h('p.lede', null, lede), form)));
+  put(app(), h('div.center', null, h('div.auth', null, brandMark('span'), h('h1', null, title), h('p.lede', null, lede), form)));
   setTimeout(() => form.querySelector('input')?.focus(), 30);
 }
 function field(label, input, hint) { return h('label.field', null, h('span', null, label), input, hint && h('div.hint', { class: 'mt1' }, hint)); }
@@ -379,12 +403,16 @@ function viewSetup() {
   const user = h('input', { type: 'text', autocomplete: 'username' });
   const pw = h('input', { type: 'password', autocomplete: 'new-password' });
   const pw2 = h('input', { type: 'password', autocomplete: 'new-password' });
+  const logo = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml' });
   const form = h('form', { onsubmit: async e => {
     e.preventDefault();
     if (pw.value !== pw2.value) return toast(T.pwMismatch, true);
     await POST('/api/setup', { server_name: name.value, username: user.value, password: pw.value });
+    if (logo.files[0]) {
+      for (const v of ['dark', 'light']) await uploadLogo(v, logo.files[0]).catch(err => toast(err.message, true));
+    }
     state.status = null; await loadMe(); go('#/profiles');
-  } }, field(T.serverName, name), field(T.username, user), field(T.password, pw), field(T.password2, pw2),
+  } }, field(T.serverName, name), field(T.username, user), field(T.password, pw), field(T.password2, pw2), field(T.setupLogo, logo, T.logoHint),
   h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.createAdmin));
   authPage(T.setupTitle, T.setupLede, form);
 }
@@ -1870,11 +1898,43 @@ async function adminDevices(body) {
   put(body, h('div.panel', null, h('h2', null, T.aDevices), r.devices.map(d => deviceRow(d, () => adminDevices(body), true))));
 }
 
+async function uploadLogo(variant, file) {
+  const res = await fetch('/api/admin/branding/logo?variant=' + variant, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+  state.branding = data;
+  applyBranding();
+  return data;
+}
+
+function lookPanel(values, env, rerender) {
+  const b = state.branding || {};
+  const slot = (variant, label) => {
+    const url = variant === 'dark' ? b.logo_dark : b.logo_light;
+    const file = h('input.hidden', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml', onchange: async e => {
+      try { await uploadLogo(variant, e.target.files[0]); toast(T.saved); rerender(); } catch (err) { toast(err.message, true); }
+    } });
+    return h('div.logo-slot', null, h('span.small.muted', null, label),
+      h('div.logo-preview.' + variant, null, url ? h('img', { src: url + '?v=' + Date.now(), alt: label }) : h('span.muted.small', null, T.noLogo)),
+      h('div.row-gap', null, h('button.btn', { onclick: () => file.click() }, T.uploadLogo), file,
+        url && h('button.btn.danger', { onclick: async () => { state.branding = await api('DELETE', '/api/admin/branding/logo?variant=' + variant); applyBranding(); rerender(); } }, T.removeLogo)));
+  };
+  const accent = h('input', { type: 'color', value: values.brand_accent || '#f0b44c', disabled: !!env.brand_accent, 'aria-label': T.accent });
+  return h('div.panel', null, h('h2', null, T.aLook), h('p.muted', null, T.logoHint),
+    h('div.logo-slots', null, slot('dark', T.logoDark), slot('light', T.logoLight)),
+    h('label.field', { class: 'mt3' }, h('span', null, T.accent), h('div.row-gap', null, accent,
+      h('button.btn', { disabled: !!env.brand_accent, onclick: async () => { await api('PATCH', '/api/admin/settings', { brand_accent: accent.value }); state.branding = await GET('/api/branding'); applyBranding(); toast(T.saved); } }, T.save),
+      h('button.btn.ghost', { disabled: !!env.brand_accent, onclick: async () => { await api('PATCH', '/api/admin/settings', { brand_accent: '' }); state.branding = await GET('/api/branding'); applyBranding(); rerender(); } }, 'Alapszín')),
+      env.brand_accent && h('div.env-lock', null, T.envLocked(env.brand_accent))));
+}
+
 async function adminSettings(body) {
   const s = await GET('/api/admin/settings');
+  state.branding = await GET('/api/branding').catch(() => state.branding);
   const onoff = [['1', T.on], ['0', T.off]];
   put(body, 
     h('div.panel', null, h('h2', null, T.aSettings), settingsForm(s.values, s.env, [['server_name', T.serverName], ['public_url', T.publicUrl, 'url'], ['scan_interval_min', T.scanInterval, 'number'],
       ['quickconnect_enabled', T.qcEnabled, 'select', onoff], ['discovery_enabled', T.discEnabled, 'select', onoff]], () => { state.status = null; })),
+    lookPanel(s.values, s.env, () => adminSettings(body)),
     h('div.panel', null, h('h2', null, 'Mentés'), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
 }

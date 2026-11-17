@@ -1,0 +1,88 @@
+name: windows
+
+# Builds kinora.exe (cgo/sqlite with MinGW) and the KinoraSetup.exe installer (Inno Setup).
+# The release workflow calls it with a version; on main it produces a test build.
+on:
+  push:
+    branches: [main]
+    paths: ["cmd/**", "internal/**", "web/**", "go.mod", "go.sum", "packaging/windows/**", ".github/workflows/windows.yml"]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  # pinned third-party binaries bundled into the installer
+  FFMPEG_URL: https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-essentials_build.zip
+  FPCALC_URL: https://github.com/acoustid/chromaprint/releases/download/v1.5.1/chromaprint-fpcalc-1.5.1-windows-x86_64.zip
+
+jobs:
+  installer:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: version
+        run: |
+          v="${{ inputs.version }}"
+          [ -n "$v" ] || v="0.0.0-dev.${GITHUB_SHA::7}"
+          echo "VERSION=${v#v}" >> "$GITHUB_ENV"
+      - name: kinora.exe (cgo, MinGW)
+        env:
+          CGO_ENABLED: "1"
+          CC: gcc
+        run: |
+          mkdir -p dist/windows
+          go build -trimpath -ldflags "-s -w -X github.com/ScotyLucas/kinora/internal/server.Version=$VERSION" -o dist/windows/kinora.exe ./cmd/kinora
+          ./dist/windows/kinora.exe version
+      - name: bundle ffmpeg + fpcalc
+        run: |
+          mkdir -p dist/windows/ffmpeg tmp
+          curl -fsSL "$FFMPEG_URL" -o tmp/ffmpeg.zip
+          curl -fsSL "$FPCALC_URL" -o tmp/fpcalc.zip
+          unzip -q tmp/ffmpeg.zip -d tmp/ff && cp tmp/ff/*/bin/ffmpeg.exe tmp/ff/*/bin/ffprobe.exe dist/windows/ffmpeg/
+          cp tmp/ff/*/LICENSE* dist/windows/ffmpeg/ 2>/dev/null || true
+          unzip -q tmp/fpcalc.zip -d tmp/fp && cp tmp/fp/*/fpcalc.exe dist/windows/ffmpeg/
+          ./dist/windows/ffmpeg/ffmpeg.exe -hide_banner -version | head -1
+      - name: icon + license
+        run: |
+          ./dist/windows/ffmpeg/ffmpeg.exe -hide_banner -loglevel error -y -i web/static/icons/icon-512.png -vf scale=256:256 dist/windows/kinora.ico
+          cp LICENSE dist/windows/LICENSE
+      - name: KinoraSetup.exe (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Q "/DVersion=$env:VERSION" "/DSrc=..\..\dist\windows" packaging\windows\kinora.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Item dist\KinoraSetup.exe | Format-List Name,Length
+      # smoke: install silently, the service answers on 8096, uninstall again
+      - name: silent install test
+        shell: pwsh
+        run: |
+          Start-Process dist\KinoraSetup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          $ok = $false
+          for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
+            try { $r = Invoke-RestMethod http://127.0.0.1:8096/api/status; $ok = $r.product -eq 'kinora' } catch { Start-Sleep 1 }
+          }
+          Get-Service Kinora | Format-List Name,Status,StartType
+          if (-not $ok) { Get-Content "$env:ProgramData\Kinora\kinora.log" -Tail 40; exit 1 }
+          Write-Host "service answers: $($r.server_name) $($r.version)"
+          Start-Process "${env:ProgramFiles}\Kinora\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -Wait
+          if (Get-Service Kinora -ErrorAction SilentlyContinue) { Write-Error "service left behind"; exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kinora-windows
+          path: |
+            dist/KinoraSetup.exe
+            dist/windows/kinora.exe

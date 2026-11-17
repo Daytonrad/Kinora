@@ -214,6 +214,23 @@ try {
   }
   ok('admin pages render');
 
+  step('branding: logo upload');
+  await page.goto(`${BASE}/#/admin/settings`);
+  await page.waitForSelector('.logo-slots');
+  const logoPng = fs.readFileSync(new URL('../web/static/icons/icon-512.png', import.meta.url)); // a real PNG from the repo
+  const fileInput = page.locator('.logo-slot input[type=file]').first();
+  await fileInput.setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: logoPng });
+  await page.waitForSelector('.logo-preview.dark img', { timeout: 15000 }).then(() => ok('logo uploaded and previewed'), () => bad('logo preview missing'));
+  await page.goto(`${BASE}/#/home`);
+  await page.reload();
+  await page.waitForSelector('header .logo.has-img img', { timeout: 10000 }).then(() => ok('top bar shows the server logo'), () => bad('logo not in top bar'));
+  const fav = await page.evaluate(() => document.querySelector('link[rel="icon"]').getAttribute('href'));
+  fav === '/api/branding/favicon.png' ? ok('favicon from branding') : bad('favicon: ' + fav);
+  await page.goto(`${BASE}/#/admin/settings`);
+  await page.waitForSelector('.logo-slots');
+  await page.waitForTimeout(400);
+  await shot(page, '15b-admin-branding');
+
   step('watch party with two tabs');
   const big = await page.evaluate(() => fetch('/api/search?q=Big').then(r => r.json()).then(j => j[0].id));
   const party = await page.evaluate(id => fetch('/api/party', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: id }) }).then(r => r.json()), big);

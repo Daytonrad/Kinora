@@ -252,12 +252,12 @@ func (s *Store) MarkAnalysed(itemID int64, sig, errMsg string) error {
 
 // SegmentStats summarises detection coverage for the admin page.
 type SegmentStats struct {
-	Episodes      int `json:"episodes"`
-	Analysed      int `json:"analysed"`
-	WithIntro     int `json:"with_intro"`
-	WithCredits   int `json:"with_credits"`
-	Manual        int `json:"manual"`
-	Errors        int `json:"errors"`
+	Episodes    int `json:"episodes"`
+	Analysed    int `json:"analysed"`
+	WithIntro   int `json:"with_intro"`
+	WithCredits int `json:"with_credits"`
+	Manual      int `json:"manual"`
+	Errors      int `json:"errors"`
 }
 
 // SegmentStats counts episodes, analysed episodes and found segments.

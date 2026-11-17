@@ -48,6 +48,15 @@ func Detect(ffmpeg string) *Fingerprinter {
 	}
 	if p, err := exec.LookPath("fpcalc"); err == nil {
 		f.Fpcalc, f.Mode = p, "fpcalc"
+		return f
+	}
+	// bundled next to ffmpeg (Windows installer: <app>fmpegpcalc.exe)
+	for _, name := range []string{"fpcalc.exe", "fpcalc"} {
+		p := filepath.Join(filepath.Dir(ffmpeg), name)
+		if _, err := os.Stat(p); err == nil && filepath.IsAbs(ffmpeg) {
+			f.Fpcalc, f.Mode = p, "fpcalc"
+			break
+		}
 	}
 	return f
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -42,6 +43,9 @@ func main() {
 		fmt.Println("kinora", server.Version)
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "service" {
+		os.Exit(serviceCommand(os.Args[2:])) // Windows: install / uninstall / start / stop
+	}
 
 	cfg := server.Config{}
 	flag.StringVar(&cfg.Addr, "addr", env("KINORA_ADDR", ":8096"), "listen address (KINORA_ADDR)")
@@ -52,34 +56,52 @@ func main() {
 	flag.StringVar(&cfg.CORSOrigins, "cors-origins", env("KINORA_CORS_ORIGINS", ""), "extra app origins allowed for token CORS, comma separated (KINORA_CORS_ORIGINS)")
 	discPort, _ := strconv.Atoi(env("KINORA_DISCOVERY_PORT", strconv.Itoa(server.DefaultDiscoveryPort)))
 	flag.IntVar(&cfg.DiscoveryPort, "discovery-port", discPort, "UDP port for LAN server discovery, 0 = off (KINORA_DISCOVERY_PORT)")
+	// installers pass the first-start branding as flags (Windows service arguments)
+	initialName := flag.String("initial-name", "", "server name applied on the first start only (KINORA_INITIAL_SERVER_NAME)")
+	initialLogo := flag.String("initial-logo", "", "logo file applied on the first start only (KINORA_INITIAL_LOGO)")
+	initialMedia := flag.String("initial-media", "", "media folders added on the first start, ';' separated, optionally Name=path (KINORA_INITIAL_MEDIA)")
 	flag.Parse()
+	for k, v := range map[string]string{"KINORA_INITIAL_SERVER_NAME": *initialName, "KINORA_INITIAL_LOGO": *initialLogo, "KINORA_INITIAL_MEDIA": *initialMedia} {
+		if v != "" {
+			os.Setenv(k, v)
+		}
+	}
 	if cfg.CacheDir == "" {
 		cfg.CacheDir = filepath.Join(cfg.DataDir, "cache")
 	}
 
-	log := newLogger()
+	if isWindowsService() {
+		os.Setenv("KINORA_INSTALL", "windows")
+		if err := runAsService(cfg); err != nil {
+			os.Exit(1)
+		}
+		return
+	}
+	log := newLogger(os.Stdout)
 	slog.SetDefault(log)
-	if err := run(cfg, log); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx, cfg, log); err != nil {
 		log.Error("kinora stopped", "err", err)
 		os.Exit(1)
 	}
 }
 
-func newLogger() *slog.Logger {
+func newLogger(w io.Writer) *slog.Logger {
 	lvl := slog.LevelInfo
 	if strings.EqualFold(os.Getenv("KINORA_LOG_LEVEL"), "debug") {
 		lvl = slog.LevelDebug
 	}
 	opts := &slog.HandlerOptions{Level: lvl}
 	if strings.EqualFold(os.Getenv("KINORA_LOG_FORMAT"), "json") {
-		return slog.New(slog.NewJSONHandler(os.Stdout, opts))
+		return slog.New(slog.NewJSONHandler(w, opts))
 	}
-	return slog.New(slog.NewTextHandler(os.Stdout, opts))
+	return slog.New(slog.NewTextHandler(w, opts))
 }
 
-func run(cfg server.Config, log *slog.Logger) error {
-	ffmpeg := env("KINORA_FFMPEG", "ffmpeg")
-	ffprobe := env("KINORA_FFPROBE", "ffprobe")
+func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
+	ffmpeg := env("KINORA_FFMPEG", bundledTool("ffmpeg"))
+	ffprobe := env("KINORA_FFPROBE", bundledTool("ffprobe"))
 	for _, bin := range []string{ffmpeg, ffprobe} {
 		if _, err := exec.LookPath(bin); err != nil {
 			return fmt.Errorf("%q nem található a PATH-on – telepítsd az ffmpeg csomagot (vagy add meg: KINORA_FFMPEG / KINORA_FFPROBE): %w", bin, err)
@@ -101,9 +123,6 @@ func run(cfg server.Config, log *slog.Logger) error {
 			st.SetOverride(key, v)
 		}
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	media.FFmpeg, media.FFprobe = ffmpeg, ffprobe
 	imgDir := filepath.Join(cfg.DataDir, "images")
@@ -200,6 +219,19 @@ func run(cfg server.Config, log *slog.Logger) error {
 	waitOrTimeout(shCtx, sc.Wait)
 	log.Info("bye")
 	return nil
+}
+
+// bundledTool prefers an ffmpeg shipped next to the executable (Windows installer:
+// <app>fmpegfmpeg.exe), else the name is looked up on the PATH.
+func bundledTool(name string) string {
+	if exe, err := os.Executable(); err == nil {
+		for _, p := range []string{filepath.Join(filepath.Dir(exe), "ffmpeg", name+".exe"), filepath.Join(filepath.Dir(exe), name+".exe")} {
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
+	}
+	return name
 }
 
 // healthcheck is used by the Docker HEALTHCHECK (no curl needed in the image).

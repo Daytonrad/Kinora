@@ -72,16 +72,16 @@ type LocalMeta struct {
 
 // StreamRow is a stream to persist.
 type StreamRow struct {
-	Idx       int
-	Type      string
-	TypeIdx   int
-	Codec     string
-	Lang      string
-	Title     string
-	Channels  int
-	Default   bool
-	Forced    bool
-	External  string
+	Idx      int
+	Type     string
+	TypeIdx  int
+	Codec    string
+	Lang     string
+	Title    string
+	Channels int
+	Default  bool
+	Forced   bool
+	External string
 }
 
 // ChapterRow is a chapter marker to persist.
