@@ -109,6 +109,7 @@ public struct PlaybackInfo: Decodable, Sendable {
     public var segments: [Segment]?
     public var subtitles: [SubtitleTrack]?
     public var audioIdx: Int?
+    public var streams: [MediaStream]?
     public var streamToken: String?
     public var item: PlayItem
     public var encoderLabel: String?

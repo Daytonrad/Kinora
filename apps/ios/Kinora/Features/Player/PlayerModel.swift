@@ -25,6 +25,11 @@ final class PlayerModel: NSObject {
     private(set) var pipActive = false
     private(set) var triedTranscode = false
     var nextDismissed = false
+    /// Audio track (type index) the server is playing.
+    private(set) var audioIdx: Int?
+    private(set) var subtitle: SubtitleTrack?
+    /// The subtitle line showing now.
+    private(set) var caption: String?
     var fill = false { didSet { layer.videoGravity = fill ? .resizeAspectFill : .resizeAspect } }
 
     /// The full-screen player is on screen (set by the view).
@@ -37,6 +42,11 @@ final class PlayerModel: NSObject {
     private let skipMode: String
     private let autoplayNext: Bool
     private let firstStart: Double
+    private let subMode: String?
+    private let subLangs: String?
+    private var cues: [Cue] = []
+    private var subtitlesChosen = false
+    private var subtitleLoad: Task<Void, Never>?
 
     private var pip: AVPictureInPictureController?
     private var offset: Double = 0
@@ -60,6 +70,8 @@ final class PlayerModel: NSObject {
         self.client = client
         skipMode = profile?.skipIntro ?? "manual"
         autoplayNext = profile?.autoplayNext ?? true
+        subMode = profile?.subMode
+        subLangs = profile?.subLangs
         layer = AVPlayerLayer(player: player)
         layer.videoGravity = .resizeAspect
         super.init()
@@ -115,6 +127,7 @@ final class PlayerModel: NSObject {
         report(ended: ended)
         stopSession()
         countdown?.cancel()
+        subtitleLoad?.cancel()
         player.pause()
         player.replaceCurrentItem(with: nil)
         if let timeObserver { player.removeTimeObserver(timeObserver) }
@@ -139,10 +152,15 @@ final class PlayerModel: NSObject {
         let prev = session
         session = nil
         do {
-            let info = try await client.playback(item.id, PlaybackRequest(start: t, force: force, prevSession: prev))
+            let info = try await client.playback(item.id, PlaybackRequest(start: t, audioIdx: audioIdx, force: force, prevSession: prev))
             guard !closed else { return }
             guard let url = await client.url(info.url) else { throw KinoraError.network }
             self.info = info
+            audioIdx = info.audioIdx.flatMap { $0 >= 0 ? $0 : nil }
+            if !subtitlesChosen {
+                subtitlesChosen = true
+                selectSubtitle(defaultSubtitle(info.textSubtitles, mode: subMode, langs: subLangs))
+            }
             session = info.session
             offset = info.mode == .direct ? 0 : (info.startOffset ?? 0)
             position = t
@@ -159,6 +177,42 @@ final class PlayerModel: NSObject {
         } catch {
             self.error = error.localizedDescription
             loading = false
+        }
+    }
+
+    // MARK: - tracks
+
+    var hasTrackChoice: Bool {
+        (info?.audioTracks.count ?? 0) > 1 || !(info?.textSubtitles.isEmpty ?? true)
+    }
+
+    /// Switching audio needs a new stream from the server (another track is remuxed in).
+    func selectAudio(_ idx: Int) {
+        guard idx != audioIdx else { return }
+        audioIdx = idx
+        Task { await start(at: position) }
+    }
+
+    /// Subtitles are fetched as WebVTT and drawn over the video, so they work in every mode.
+    func selectSubtitle(_ track: SubtitleTrack?) {
+        subtitleLoad?.cancel()
+        subtitle = track
+        cues = []
+        caption = nil
+        guard let track else { return }
+        subtitleLoad = Task {
+            do {
+                guard let url = await client.url(track.url) else { throw KinoraError.network }
+                let (data, resp) = try await URLSession.shared.data(from: url)
+                guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw KinoraError.network }
+                let parsed = WebVTT.parse(String(decoding: data, as: UTF8.self))
+                guard !Task.isCancelled, subtitle == track else { return }
+                cues = parsed
+            } catch is CancellationError {
+            } catch {
+                guard subtitle == track else { return }
+                subtitle = nil
+            }
         }
     }
 
@@ -230,6 +284,9 @@ final class PlayerModel: NSObject {
         ended = false
         skipped = []
         position = 0
+        audioIdx = nil
+        subtitlesChosen = false
+        selectSubtitle(nil)
         let resume = n.progress != nil ? (n.userData?.position ?? 0) : 0
         Task { await start(at: resume) }
     }
@@ -239,7 +296,7 @@ final class PlayerModel: NSObject {
     // MARK: - observing
 
     private func observe() {
-        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 2), queue: .main) { [weak self] _ in
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 4), queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
         endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: nil, queue: .main) { [weak self] note in
@@ -301,6 +358,8 @@ final class PlayerModel: NSObject {
         guard !closed else { return }
         let now = player.currentTime().seconds
         if now.isFinite, player.currentItem != nil, !loading { position = offset + now }
+        let line = cues.isEmpty ? nil : WebVTT.text(at: position, in: cues)
+        if line != caption { caption = line }
         isPlaying = player.timeControlStatus == .playing
         buffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
         if isPlaying, Date.now.timeIntervalSince(lastReport) > 10 { report() }

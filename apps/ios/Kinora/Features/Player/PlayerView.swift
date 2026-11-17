@@ -23,6 +23,11 @@ struct PlayerView: View {
                 ProgressView().controlSize(.large).tint(.white).allowsHitTesting(false)
             }
 
+            if let caption = player.caption, player.error == nil {
+                CaptionView(text: caption, raised: chrome)
+                    .animation(.easeInOut(duration: 0.2), value: chrome)
+            }
+
             if let error = player.error {
                 errorPanel(error)
             } else {
@@ -56,6 +61,7 @@ struct PlayerView: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 6)
+                if player.hasTrackChoice { tracksMenu }
                 AirPlayButton().frame(width: 44, height: 44)
                 if player.pipSupported {
                     RoundIcon("pip.enter", label: "Kép a képben") { player.startPiP() }
@@ -161,6 +167,52 @@ struct PlayerView: View {
         .frame(maxWidth: 520)
     }
 
+    // MARK: - tracks
+
+    private var tracksMenu: some View {
+        let audio = player.info?.audioTracks ?? []
+        let subs = player.info?.textSubtitles ?? []
+        return Menu {
+            if audio.count > 1 {
+                Section("Hang") {
+                    ForEach(audio, id: \.typeIndex) { a in
+                        Button { player.selectAudio(a.typeIndex) } label: {
+                            if a.typeIndex == player.audioIdx {
+                                Label(TrackLabel.audio(a), systemImage: "checkmark")
+                            } else {
+                                Text(TrackLabel.audio(a))
+                            }
+                        }
+                    }
+                }
+            }
+            if !subs.isEmpty {
+                Section("Felirat") {
+                    Button { player.selectSubtitle(nil) } label: {
+                        if player.subtitle == nil { Label("Ki", systemImage: "checkmark") } else { Text("Ki") }
+                    }
+                    ForEach(subs) { t in
+                        Button { player.selectSubtitle(t) } label: {
+                            if t == player.subtitle {
+                                Label(TrackLabel.subtitle(t), systemImage: "checkmark")
+                            } else {
+                                Text(TrackLabel.subtitle(t))
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: player.subtitle == nil ? "captions.bubble" : "captions.bubble.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .contentShape(.circle)
+        }
+        .menuActionDismissBehavior(.automatic)
+        .accessibilityLabel("Hang és felirat")
+        .simultaneousGesture(TapGesture().onEnded { show() })
+    }
+
     // MARK: - chrome timing
 
     private func toggleChrome() {
@@ -251,6 +303,28 @@ private struct RoundIcon: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+}
+
+private struct CaptionView: View {
+    var text: String
+    var raised: Bool
+
+    var body: some View {
+        VStack {
+            Spacer()
+            Text(text)
+                .font(.system(size: 20, weight: .semibold))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(.black.opacity(0.55), in: .rect(cornerRadius: 6))
+                .shadow(color: .black, radius: 2)
+                .padding(.horizontal, 24)
+                .padding(.bottom, raised ? 110 : 28)
+        }
+        .allowsHitTesting(false)
+        .accessibilityLabel(text)
     }
 }
 
