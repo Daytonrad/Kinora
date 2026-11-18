@@ -1718,14 +1718,36 @@ async function viewAdmin(tab) {
   const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['languages', T.aLangs], ['settings', T.aSettings]];
   const label = Object.fromEntries(tabs);
   const groups = [[T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], [T.aGroupAccess, ['users', 'invites', 'devices', 'connect']], [T.aGroupSystem, ['languages', 'settings']]];
-  const body = h('div');
-  main.append(h('div.page-head', null, h('h1', null, T.admin)), h('div.admin', null,
-    h('nav.admin-nav', { 'aria-label': T.admin }, groups.map(([g, ks]) => [h('div.admin-nav-h', { 'aria-hidden': 'true' }, g),
-      ks.map(k => h('a' + (k === tab ? '.on' : ''), { href: '#/admin/' + k, 'aria-current': k === tab && 'page' }, label[k]))])), body));
   const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, languages: adminLangs, settings: adminSettings }[tab];
-  if (fn) await fn(body);
+  if (!fn) return go('#/admin/dash');
+  const body = h('div.a-body', { 'aria-busy': 'true' }, aSkeleton());
+  main.append(h('div.admin', null,
+    h('nav.admin-nav', { 'aria-label': T.admin }, h('div.admin-nav-title', null, T.admin), groups.map(([g, ks]) => [h('div.admin-nav-h', { 'aria-hidden': 'true' }, g),
+      ks.map(k => h('a' + (k === tab ? '.on' : ''), { href: '#/admin/' + k, 'aria-current': k === tab && 'page' }, label[k]))])), body));
+  // phones: the nav is a scrolling strip; bring the current page into view
+  const nav = main.querySelector('.admin-nav'), on = nav.querySelector('a.on');
+  if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft += on.getBoundingClientRect().left - nav.getBoundingClientRect().left - (nav.clientWidth - on.offsetWidth) / 2;
+  try { await fn(body); }
+  catch (e) {
+    if (e.status === 401 || e.status === 428) return;
+    put(body, aHead(label[tab]), h('div.a-error', { role: 'alert' }, h('p', null, T.aLoadFailed), e.message && h('p.muted.small', null, e.message), h('button.btn', { onclick: () => route() }, T.retry)));
+  } finally { body.removeAttribute('aria-busy'); }
 }
 
+// shared admin building blocks: page head, sections, tables, states
+const aHead = (title, lede, ...acts) => h('header.a-head', null, h('div.a-head-t', null, h('h1', null, title), lede && h('p.a-lede', null, lede)),
+  acts.filter(Boolean).length > 0 && h('div.a-acts', null, acts));
+// a stacked section: heading (with an optional hint and actions) above its content
+const aSec = (title, hint, acts, ...kids) => h('section.a-sec', null,
+  h('div.a-sec-h', null, h('div', null, h('h2', null, title), hint && h('p.a-hint', null, hint)), acts && h('div.a-acts', null, acts)), ...kids);
+// a settings section: title and explanation on the left, the controls on the right
+const aSplit = (title, hint, ...kids) => h('section.a-split', null, h('div.a-split-h', null, h('h2', null, title), hint && h('p.a-hint', null, hint)), h('div.a-split-b', null, ...kids));
+// a table with a header row; ".a-stack" turns rows into labelled blocks on phones
+const aTable = (cols, rows, cls = '') => h('div.scroll-x', null, h('table.tbl.a-tbl' + cls, null,
+  h('thead', null, h('tr', null, cols.map(c => h('th', null, c)))), h('tbody', null, rows)));
+const tdl = (cls, label, ...kids) => h('td' + cls, { 'data-label': label || null }, label ? h('div', null, ...kids) : kids);
+const aBar = (done, total) => h('div.bar', null, h('i', { style: { width: (total ? done / total * 100 : 5) + '%' } }));
+const aSkeleton = () => h('div.a-skel', { role: 'status', 'aria-label': T.loading }, h('i.w30'), h('i.w60'), h('i'), h('i'), h('i.w80'));
 const emptyNote = (title, hint, action) => h('div.empty-note', null, h('p', null, title), hint && h('p.muted.small', null, hint), action);
 
 async function adminDash(body) {
@@ -1734,24 +1756,29 @@ async function adminDash(body) {
     const d = await GET('/api/admin/dashboard');
     const up = d.uptime_sec, uptime = up < 60 ? T.uptimeUnder1 : up < 3600 ? T.min(Math.floor(up / 60)) : up > 86400 ? T.uptimeDH(Math.floor(up / 86400), Math.floor(up / 3600) % 24) : T.uptimeHM(Math.floor(up / 3600), Math.floor(up / 60) % 60);
     const stat = (v, l) => h('div.stat', null, h('b', null, v), h('span', null, l));
-    put(body, 
-      h('div.ledger', null, h('div.ledger-group', null, stat(d.library.movies, T.statMovies), stat(d.library.series, T.statSeries), stat(d.library.episodes, T.statEpisodes), stat(fmtBytes(d.library.bytes), T.size)),
-        h('div.ledger-group', null, stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime), stat(d.version, T.version))),
-      d.library.missing > 0 && h('p.muted', null, T.missingFiles(d.library.missing)),
-      h('div.panel', null, h('h2', null, T.activeTranscodes), d.transcodes.length ? h('table.tbl', null, h('tbody', null, d.transcodes.map(s => h('tr', null, h('td', null, s.title), h('td', null, s.mode), h('td', null, s.encoder), h('td', null, fmtTime(s.seconds)))))) : h('p.muted', null, T.noActiveTranscodes)),
-      h('div.panel', null, h('h2', null, T.scans), scanTable(d.scans)),
-      h('div.panel', null, h('h2', null, T.selectedEnc), h('p', null, srv(d.encoder_selected.label)), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))));
+    const group = (title, ...stats) => h('div.a-ledger-g', null, h('h2.a-eyebrow', null, title), h('div.a-stats', null, stats));
+    put(body, aHead(T.aDash, T.aLedeDash),
+      h('div.a-ledger', null,
+        group(T.aGroupLibrary, stat(d.library.movies, T.statMovies), stat(d.library.series, T.statSeries), stat(d.library.episodes, T.statEpisodes), stat(fmtBytes(d.library.bytes), T.size)),
+        group(T.aServer, stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime), stat(d.version, T.version))),
+      d.library.missing > 0 && h('p.a-warn', null, T.missingFiles(d.library.missing)),
+      aSec(T.activeTranscodes, null, null, d.transcodes.length
+        ? aTable([T.title, T.aColMode, T.encoder, T.time], d.transcodes.map(s => h('tr', null, tdl('', T.title, h('b', null, s.title)), tdl('', T.aColMode, s.mode), tdl('.mono.small', T.encoder, s.encoder), tdl('', T.time, fmtTime(s.seconds)))), '.a-stack')
+        : h('p.a-quiet', null, T.noActiveTranscodes)),
+      aSec(T.scans, null, h('a.btn.ghost', { href: '#/admin/libraries' }, T.aLibs + ' →'), scanTable(d.scans)),
+      aSec(T.selectedEnc, null, h('a.btn.ghost', { href: '#/admin/transcode' }, T.aTranscode + ' →'),
+        h('p', null, h('b', null, srv(d.encoder_selected.label))), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))));
     t = setTimeout(render, 5000);
   };
   onCleanup(() => clearTimeout(t));
   await render();
 }
 function scanTable(scans) {
-  if (!scans || !scans.length) return h('p.muted', null, T.noScans);
+  if (!scans || !scans.length) return h('p.a-quiet', null, T.noScans);
   const libName = id => (state.libs || []).find(l => l.id === id)?.name || '#' + id;
-  return h('table.tbl', null, h('tbody', null, scans.map(s => h('tr', null, h('td', null, libName(s.library_id)),
-    h('td', null, s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, h('div.bar', null, h('i', { style: { width: (s.total ? s.done / s.total * 100 : 5) + '%' } }))) : s.error ? h('span.bad', null, T.scanErr + ': ' + srv(s.error)) : T.scanSummary(s.changed, s.removed, s.moved, num(s.took_ms / 1000, 1))),
-    h('td', null, s.errors ? h('span.bad', { title: srv(s.last_error) }, T.badFiles(s.errors)) : '')))));
+  return aTable([T.aColLibrary, T.status, T.aColProblems], scans.map(s => h('tr', null, tdl('', T.aColLibrary, h('b', null, libName(s.library_id))),
+    tdl('.td-progress', T.status, s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, aBar(s.done, s.total)) : s.error ? h('span.bad', null, T.scanErr + ': ' + srv(s.error)) : T.scanSummary(s.changed, s.removed, s.moved, num(s.took_ms / 1000, 1))),
+    tdl('', T.aColProblems, s.errors ? h('span.bad', { title: srv(s.last_error) }, T.badFiles(s.errors)) : h('span.muted', null, '–')))), '.a-stack');
 }
 
 async function adminLibs(body) {
@@ -1761,18 +1788,17 @@ async function adminLibs(body) {
     const [libs, scans] = await Promise.all([GET('/api/libraries'), GET('/api/admin/scan')]);
     state.libs = libs;
     const scanOf = id => scans.find(s => s.library_id === id);
-    put(body, h('div.panel', null, h('div.row-gap', { class: 'spread mb3' }, h('h2', { class: 'm0' }, T.aLibs), h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary)),
-      libs.length ? h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.libName), h('th', null, T.libPath), h('th', null, T.libKind), h('th', null, T.lastScan), h('th', null, ''))),
-        h('tbody', null, libs.map(l => {
-          const s = scanOf(l.id);
-          return h('tr', null, h('td', null, h('b', null, l.name), h('div.small.muted', null, T.titlesN(l.count))), h('td.mono.path', null, l.path), h('td', null, T.kinds[l.kind]),
-            h('td', { class: 'td-progress' }, s && s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, h('div.bar', null, h('i', { style: { width: (s.total ? s.done / s.total * 100 : 5) + '%' } })))
-              : s && s.error ? h('span.bad', null, srv(s.error)) : l.last_scan_at ? ago(Date.now() / 1000 - l.last_scan_at) : T.never,
-              s && s.errors ? h('div.small.bad', { title: srv(s.last_error) }, `${T.badFiles(s.errors)}: ${srv(s.last_error)}`) : null),
-            h('td.acts', null, h('div.row-gap', null, h('button.btn', { onclick: async () => { await POST(`/api/libraries/${l.id}/scan`); render(); } }, T.scan),
-              h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?library=' + l.id)) }, T.permCheck),
-              h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(l.name))) { await api('DELETE', '/api/libraries/' + l.id); state.libs = null; render(); } } }, T.delete))));
-        })))) : emptyNote(T.homeEmptyAdmin, null, h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary))));
+    put(body, aHead(T.aLibs, T.aLedeLibs, libs.length > 0 && h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary)),
+      libs.length ? aTable([T.libName, T.libPath, T.libKind, T.lastScan, ''], libs.map(l => {
+        const s = scanOf(l.id);
+        return h('tr', null, tdl('', T.libName, h('b', null, l.name), h('div.small.muted', null, T.titlesN(l.count))), tdl('.mono.path', T.libPath, l.path), tdl('', T.libKind, T.kinds[l.kind]),
+          tdl('.td-progress', T.lastScan, s && s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, aBar(s.done, s.total))
+            : s && s.error ? h('span.bad', null, srv(s.error)) : l.last_scan_at ? ago(Date.now() / 1000 - l.last_scan_at) : T.never,
+            s && s.errors ? h('div.small.bad', { title: srv(s.last_error) }, `${T.badFiles(s.errors)}: ${srv(s.last_error)}`) : null),
+          h('td.acts', null, h('div.row-gap', null, h('button.btn', { disabled: !!(s && s.running), onclick: async () => { await POST(`/api/libraries/${l.id}/scan`); render(); } }, T.scan),
+            h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?library=' + l.id)) }, T.permCheck),
+            h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(l.name))) { await api('DELETE', '/api/libraries/' + l.id); state.libs = null; render(); } } }, T.delete))));
+      }), '.a-stack') : emptyNote(T.homeEmptyAdmin, null, h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary)));
     clearTimeout(t);
     if (scans.some(s => s.running)) t = setTimeout(render, 1500);
   };
@@ -1825,14 +1851,16 @@ async function folderPicker(start, onPick) {
 
 async function adminUsers(body) {
   const users = await GET('/api/admin/users');
-  put(body, h('div.panel', null, h('div.row-gap', { class: 'spread mb3' }, h('h2', { class: 'm0' }, T.aUsers), h('button.btn.primary', { onclick: newUser }, icon('plus'), T.newUser)),
-    h('div.scroll-x', null, h('table.tbl', null, h('tbody', null, users.map(u => h('tr', null,
-      h('td', null, h('div.u-cell', null, h('span.u-ini', { 'aria-hidden': 'true' }, (u.username[0] || '?').toUpperCase()), h('b', null, u.username), u.id === state.me.user.id && h('span.muted', null, '\u00a0' + T.you))),
-      h('td.muted', null, T.profilesN(u.profiles)), h('td', null, u.is_admin && h('span.badge.amber', null, T.isAdmin)),
+  const me = state.me.user.id;
+  put(body, aHead(T.aUsers, T.aLedeUsers, h('button.btn.primary', { onclick: newUser }, icon('plus'), T.newUser)),
+    aTable([T.aColUser, T.aColProfiles, T.aColRole, ''], users.map(u => h('tr', null,
+      tdl('', null, h('div.u-cell', null, h('span.u-ini', { 'aria-hidden': 'true' }, (u.username[0] || '?').toUpperCase()), h('b', null, u.username), u.id === me && h('span.muted', null, ' ' + T.you))),
+      tdl('.muted', T.aColProfiles, T.profilesN(u.profiles)),
+      tdl('', T.aColRole, u.is_admin ? h('span.badge.amber', null, T.isAdmin) : h('span.muted', null, T.aRoleUser)),
       h('td.acts', null, h('div.row-gap', null,
         h('button.btn', { onclick: () => resetPw(u) }, T.resetPw),
-        u.id !== state.me.user.id && h('button.btn', { onclick: async () => { await api('PATCH', '/api/admin/users/' + u.id, { is_admin: !u.is_admin }); adminUsers(body); } }, u.is_admin ? T.revokeAdmin : T.grantAdmin),
-        u.id !== state.me.user.id && h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(u.username))) { await api('DELETE', '/api/admin/users/' + u.id); adminUsers(body); } } }, T.delete))))))))));
+        u.id !== me && h('button.btn', { onclick: async () => { await api('PATCH', '/api/admin/users/' + u.id, { is_admin: !u.is_admin }); adminUsers(body); } }, u.is_admin ? T.revokeAdmin : T.grantAdmin),
+        u.id !== me && h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(u.username))) { await api('DELETE', '/api/admin/users/' + u.id); adminUsers(body); } } }, T.delete))))), '.a-stack'));
   function newUser() {
     const un = h('input', { type: 'text' }), pw = h('input', { type: 'password' }), adm = h('input', { type: 'checkbox' });
     modal(T.newUser, h('div', null, field(T.username, un), field(T.password, pw), h('label.check', null, adm, T.isAdmin)), close => [h('button.btn', { onclick: close }, T.cancel),
@@ -1849,13 +1877,14 @@ async function adminInvites(body) {
   const invs = await GET('/api/admin/invites');
   const base = (await GET('/api/admin/settings')).values.public_url || location.origin;
   const linkOf = c => base + '/#/join/' + c;
-  put(body, h('div.panel', null, h('div.row-gap', { class: 'spread mb3' }, h('h2', { class: 'm0' }, T.aInvites), h('button.btn.primary', { onclick: newInv }, icon('plus'), T.newInvite)),
-    invs.length ? h('div', null, invs.map(i => h('div.entry', { style: { opacity: i.uses_left > 0 ? 1 : 0.55 } },
+  put(body, aHead(T.aInvites, T.aLedeInvites, invs.length > 0 && h('button.btn.primary', { onclick: newInv }, icon('plus'), T.newInvite)),
+    invs.length ? h('div.a-list', null, invs.map(i => h('div.entry.a-invite' + (i.uses_left > 0 ? '' : '.spent'), null,
       qrImg(linkOf(i.code)),
-      h('div', null, h('div.code', null, i.code), i.note && h('p', null, i.note),
+      h('div', null, h('div.code', null, i.code), i.note && h('p.a-invite-note', null, i.note),
         h('p.muted.small', null, T.usesLeft(i.uses_left), i.expires_at ? ` · ${T.expires}: ${new Date(i.expires_at * 1000).toLocaleString(T.locale)}` : ''),
-        h('p.mono.small', { class: 'break-all' }, linkOf(i.code)),
-        h('div.row-gap', null, h('button.btn', { onclick: () => copyText(linkOf(i.code)) }, T.copy), h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/admin/invites/' + i.code); adminInvites(body); } }, T.delete)))))) : emptyNote(T.noInvites, T.invitesEmptyHint)));
+        h('div.url-row', null, h('code.mono', null, linkOf(i.code)), h('button.btn', { onclick: () => copyText(linkOf(i.code)) }, T.copy),
+          h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/admin/invites/' + i.code); adminInvites(body); } }, T.delete))))))
+      : emptyNote(T.noInvites, T.invitesEmptyHint, h('button.btn.primary', { onclick: newInv }, icon('plus'), T.newInvite)));
   function newInv() {
     const note = h('input', { type: 'text', placeholder: T.egNote }), uses = h('input', { type: 'number', value: 1, min: 1, max: 100 }), hours = h('input', { type: 'number', value: 72, min: 0 });
     modal(T.newInvite, h('div', null, field(T.note, note), h('div.grid2', null, field(T.uses, uses), field(T.validHours, hours))), close => [h('button.btn', { onclick: close }, T.cancel),
@@ -1863,52 +1892,60 @@ async function adminInvites(body) {
   }
 }
 
+// keys: [key, label, kind, options, hint] rows; a string or { h, hint } starts a titled section (two-column layout)
 function settingsForm(values, env, keys, onSaved) {
   const inputs = {};
-  const fields = keys.filter(key => typeof key !== 'string');
-  const rows = keys.map(key => {
-    if (typeof key === 'string') return h('h3.form-h', null, key);
-    const [k, label, kind, opts] = key;
+  const isRow = Array.isArray;
+  const fields = keys.filter(isRow);
+  const row = ([k, label, kind, opts, hint]) => {
     const locked = env[k];
     let el;
     if (kind === 'toggle') {
       el = inputs[k] = h('input.switch', { type: 'checkbox', role: 'switch', checked: values[k] !== '0', disabled: !!locked });
-      return h('div.form-row', null, h('label.switch-row', null, h('span', null, label), el), locked && h('div.env-lock', null, T.envLocked(locked)));
+      return h('div.form-row', null, h('label.switch-row', null, h('span', null, label), el), hint && h('div.hint', null, hint), locked && h('div.env-lock', null, T.envLocked(locked)));
     }
     if (kind === 'select') el = h('select', { disabled: !!locked }, opts.map(([v, l]) => h('option', { value: v, selected: values[k] === v }, l)));
     else el = h('input', { type: kind || 'text', value: values[k] ?? '', disabled: !!locked });
     inputs[k] = el;
-    return h('label.field', null, h('span', null, label), el, locked && h('div.env-lock', null, T.envLocked(locked)));
-  });
-  const save = h('button.btn.primary', { onclick: async () => {
+    return h('label.field', null, h('span', null, label), el, hint && h('div.hint', null, hint), locked && h('div.env-lock', null, T.envLocked(locked)));
+  };
+  const save = h('button.btn.primary', { disabled: fields.every(([k]) => env[k]), onclick: async () => {
     const body = {};
     for (const [k, , kind] of fields) if (!env[k]) body[k] = kind === 'toggle' ? (inputs[k].checked ? '1' : '0') : inputs[k].value;
-    await api('PATCH', '/api/admin/settings', body); toast(T.saved); onSaved && onSaved();
+    save.disabled = true;
+    try { await api('PATCH', '/api/admin/settings', body); toast(T.saved); onSaved && onSaved(); } finally { save.disabled = false; }
   } }, T.save);
-  return h('div', null, rows, save);
+  if (keys.every(isRow)) return h('div.a-form', null, fields.map(row), h('div.a-form-foot', null, save));
+  const groups = [];
+  for (const key of keys) {
+    if (!isRow(key)) groups.push({ ...(typeof key === 'string' ? { h: key } : key), rows: [] });
+    else groups[groups.length - 1].rows.push(row(key));
+  }
+  return h('div.a-form', null, groups.map(g => aSplit(g.h, g.hint, g.rows)), h('div.a-form-foot.split', null, save));
 }
 
 async function adminTranscode(body) {
   const [d, s] = await Promise.all([GET('/api/admin/dashboard'), GET('/api/admin/settings')]);
   const missing = r => r.error === 'az ffmpeg nem tartalmazza ezt az encodert';
-  const table = (res, sel) => h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.encoder), h('th', null, T.result), h('th', null, T.time), h('th', null, T.details))),
-    h('tbody', null, res.map(r => h('tr', { class: r.name === sel && 'sel' }, h('td', null, h('b', null, srv(r.label)), r.name === sel && ['\u00a0', h('span.badge.amber', null, T.inUse)], h('div.small.muted.mono', null, r.name)),
-      h('td', { class: r.ok ? 'ok' : missing(r) ? 'off' : 'bad' }, r.ok ? T.works : missing(r) ? T.unavailable : T.encFailed), h('td', null, r.ok ? r.ms + ' ms' : ''), h('td.small.muted', null, srv(r.error) || ''))))));
+  const table = (res, sel) => aTable([T.encoder, T.result, T.time, T.details], res.map(r => h('tr', { class: r.name === sel && 'sel' },
+    tdl('', null, h('b', null, srv(r.label)), r.name === sel && [' ', h('span.badge.amber', null, T.inUse)], h('div.small.muted.mono', null, r.name)),
+    tdl('', T.result, h('span', { class: r.ok ? 'ok' : missing(r) ? 'off' : 'bad' }, r.ok ? T.works : missing(r) ? T.unavailable : T.encFailed)), tdl('', T.time, r.ok ? r.ms + ' ms' : ''), tdl('.small.muted', T.details, srv(r.error) || ''))), '.a-stack');
   const tbl = h('div', null, table(d.encoders || [], d.encoder_selected.name));
   const btn = h('button.btn', { onclick: async () => { btn.disabled = true; btn.textContent = T.hwTesting; try { const r = await POST('/api/admin/hwtest'); put(tbl, table(r.results, r.selected.name)); toast(T.selectedEnc + ': ' + r.selected.label); } finally { btn.disabled = false; btn.textContent = T.hwTest; } } }, T.hwTest);
   const encOpts = [['auto', T.encAuto], ...(d.encoders || []).filter(e => e.ok).map(e => [e.name, srv(e.label)])];
-  put(body, 
-    h('div.panel', null, h('h2', null, T.encTest), h('p.muted', null, T.encTestHint), btn, h('div', { class: 'mt3' }, tbl),
-      h('p', { class: 'mt3' }, h('span.muted', null, T.selectedEnc + ': '), srv(d.encoder_selected.label)), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))),
-    h('div.panel', null, h('h2', null, T.encSetting), settingsForm(s.values, s.env, [['encoder', T.encSetting, 'select', encOpts]], () => adminTranscode(body))),
-    await segmentsPanel(s));
+  put(body, aHead(T.aTranscode, T.aLedeTranscode),
+    aSplit(T.encSetting, T.encSettingHint,
+      h('dl.side-info.a-facts', null, h('dt', null, T.selectedEnc), h('dd', null, srv(d.encoder_selected.label)), h('dt', null, T.tonemap), h('dd', null, d.tonemap ? T.yes : T.no)),
+      settingsForm(s.values, s.env, [['encoder', T.encSetting, 'select', encOpts]], () => adminTranscode(body))),
+    await segmentsPanel(s),
+    aSec(T.encTest, T.encTestHint, btn, tbl));
 }
 
 async function segmentsPanel(s) {
   const st = await GET('/api/admin/segments').catch(() => null);
-  return h('div.panel', null, h('h2', null, T.aSegments),
-    st && h('dl.side-info', null,
-      h('dt', null, T.segBackend), h('dd', { class: st.available ? 'ok' : 'bad' }, srv(st.backend)),
+  return aSplit(T.aSegments, T.segHint,
+    st && h('dl.side-info.a-facts', null,
+      h('dt', null, T.segBackend), h('dd', null, h('span', { class: st.available ? 'ok' : 'bad' }, srv(st.backend))),
       st.stats && [h('dt', null, T.status), h('dd', null, T.segStats(st.stats.episodes, st.stats.analysed, st.stats.with_intro, st.stats.with_credits, st.stats.manual))],
       h('dt', null, T.segQueue), h('dd', null, String(st.queue || 0)),
       st.running && [h('dt', null, T.segRunning), h('dd', null, st.running)],
@@ -1921,13 +1958,15 @@ async function adminMeta(body) {
   const retry = h('input', { type: 'checkbox' });
   const st = m.status;
   let t;
-  put(body, 
-    h('div.panel', null, h('h2', null, 'TMDB'), h('p.muted', null, T.metaHint),
-      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]]]], () => setTimeout(() => adminMeta(body), 400)), h('p.muted.small', null, T.metaLangHint)),
-    h('div.panel', null, h('h2', null, T.refreshMeta), h('label.check', null, retry, T.retryNoMatch),
-      h('button.btn.primary', { disabled: !m.enabled, onclick: async () => { await POST('/api/admin/metadata/refresh', { retry_no_match: retry.checked }); adminMeta(body); } }, T.refreshMeta),
+  put(body, aHead(T.aMeta, T.aLedeMeta),
+    aSplit('TMDB', T.metaHint,
+      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]], T.metaLangHint]], () => setTimeout(() => adminMeta(body), 400))),
+    aSplit(T.refreshMeta, T.refreshMetaHint,
+      h('label.check', null, retry, T.retryNoMatch),
+      h('div.a-form-foot', null, h('button.btn.primary', { disabled: !m.enabled, onclick: async () => { await POST('/api/admin/metadata/refresh', { retry_no_match: retry.checked }); adminMeta(body); } }, T.refreshMeta)),
       !m.enabled && h('p.note-off', null, T.metaNeedsKey),
-      h('div.muted', { class: 'mt3' }, T.metaStatus + ': ', st.running ? [T.metaRunning(st.done, st.total), st.relang ? ' · ' + T.metaRelang(st.relang) : '', h('div.bar', { style: { maxWidth: '30rem' } }, h('i', { style: { width: (st.total ? st.done / st.total * 100 : 5) + '%' } }))] : st.finished_at ? T.metaDone(st.matched, st.no_match) : '–', st.last_error ? h('div.bad.small', null, srv(st.last_error)) : null)));
+      h('div.a-status', null, h('span.muted', null, T.metaStatus + ': '), st.running ? [T.metaRunning(st.done, st.total), st.relang ? ' · ' + T.metaRelang(st.relang) : '', aBar(st.done, st.total)] : st.finished_at ? T.metaDone(st.matched, st.no_match) : '–',
+        st.last_error ? h('div.bad.small', null, srv(st.last_error)) : null)));
   if (st.running) { t = setTimeout(() => adminMeta(body), 2000); onCleanup(() => clearTimeout(t)); }
 }
 
@@ -1936,23 +1975,25 @@ async function adminConnect(body) {
   const card = (title, url, sub) => h('div.conn-card', null, qrImg(url),
     h('div', null, h('b', null, title), sub && h('p.muted.small', null, sub), h('div.url-row', null, h('code.mono', null, url), h('button.btn', { onclick: () => copyText(url) }, T.copy))));
   const kindLabel = { lan: T.lan, tailscale: 'Tailscale', other: T.otherNet };
-  put(body, 
-    h('div.panel', null, h('h2', null, T.aConnect), h('p.muted', null, T.connectLede),
-      !c.public_url && h('p.muted', null, T.noPublic),
+  const opt = (title, ...kids) => h('details.a-opt', null, h('summary', null, title), h('div.a-opt-b', null, ...kids));
+  put(body, aHead(T.aConnect, T.connectLede),
+    aSec(T.aAddresses, !c.public_url && T.noPublic, !c.public_url && h('a.btn.ghost', { href: '#/admin/settings' }, T.aSettings + ' →'),
       h('div.conn-grid', null, c.public_url && card(T.publicUrl, c.public_url), c.addresses.map(a => card(kindLabel[a.kind] + ' (' + a.iface + ')', a.url))),
       c.in_container && h('p.muted.small', { class: 'mt3' }, T.inDocker)),
-    h('div.panel', null, h('h2', null, T.tsTitle), h('p', null, T.tsHint),
-      h('pre.code', null, 'TS_AUTHKEY=tskey-... docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d')),
-    h('div.panel', null, h('h2', null, T.cfTitle), h('p', null, T.cfHint),
-      h('pre.code', null, 'CF_TUNNEL_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d'), h('p.muted.small', null, T.cfPublic)),
-    h('div.panel', null, h('h2', null, T.proxyTitle), h('p', null, T.proxyHint),
-      h('pre.code', null, T.exampleHost + ' {\n  reverse_proxy 127.0.0.1:8096\n}'),
-      h('pre.code', null, 'location / {\n  proxy_pass http://127.0.0.1:8096;\n  proxy_http_version 1.1;\n  proxy_set_header Upgrade $http_upgrade;\n  proxy_set_header Connection "upgrade";\n  proxy_set_header Host $host;\n  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n  proxy_set_header X-Forwarded-Proto $scheme;\n  proxy_buffering off;\n  client_max_body_size 0;\n}')));
+    aSec(T.aRemote, T.aRemoteHint, null, h('div.a-opts', null,
+      opt(T.tsTitle, h('p', null, T.tsHint),
+        h('pre.code', null, 'TS_AUTHKEY=tskey-... docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d')),
+      opt(T.cfTitle, h('p', null, T.cfHint),
+        h('pre.code', null, 'CF_TUNNEL_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d'), h('p.muted.small', null, T.cfPublic)),
+      opt(T.proxyTitle, h('p', null, T.proxyHint),
+        h('pre.code', null, T.exampleHost + ' {\n  reverse_proxy 127.0.0.1:8096\n}'),
+        h('pre.code', null, 'location / {\n  proxy_pass http://127.0.0.1:8096;\n  proxy_http_version 1.1;\n  proxy_set_header Upgrade $http_upgrade;\n  proxy_set_header Connection "upgrade";\n  proxy_set_header Host $host;\n  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n  proxy_set_header X-Forwarded-Proto $scheme;\n  proxy_buffering off;\n  client_max_body_size 0;\n}')))));
 }
 
 async function adminDevices(body) {
   const r = await GET('/api/admin/devices');
-  put(body, h('div.panel', null, h('h2', null, T.aDevices), r.devices.map(d => deviceRow(d, () => adminDevices(body), true))));
+  put(body, aHead(T.aDevices, T.aLedeDevices),
+    r.devices.length ? h('div.a-list', null, h('p.a-count', null, T.aDevicesN(r.devices.length)), r.devices.map(d => deviceRow(d, () => adminDevices(body), true))) : emptyNote(T.aNoDevices));
 }
 
 // ------------------------------------------------------------------ languages (export, import, edit, add)
@@ -2019,9 +2060,9 @@ async function adminLangs(body) {
     const l = I18N[code], st = langStats(code);
     const kind = l.builtin ? (l.custom ? T.langModified : T.langBuiltin) : T.langAdded;
     return h('tr', null,
-      h('td', null, h('b', { lang: code }, l.name), h('div.small.muted.mono', null, code)),
-      h('td.small', null, kind),
-      h('td', null, h('div.pct' + (st.pct === 100 ? '.ok' : ''), null, h('div.bar', null, h('i', { style: { width: st.pct + '%' } })), T.langComplete(st.pct))),
+      tdl('', null, h('b', { lang: code }, l.name), h('div.small.muted.mono', null, code)),
+      tdl('.small', T.langType, kind),
+      tdl('', T.langProgress, h('div.pct' + (st.pct === 100 ? '.ok' : ''), null, h('div.bar', null, h('i', { style: { width: st.pct + '%' } })), T.langComplete(st.pct))),
       h('td.acts', null, h('div.row-gap', null,
         h('button.btn', { onclick: () => langEditor(body, code) }, T.edit),
         h('button.btn', { onclick: () => downloadJSON('kinora-' + code + '.json', langExport(code)) }, T.langExport),
@@ -2032,11 +2073,9 @@ async function adminLangs(body) {
           setTimeout(() => location.reload(), 600);
         } }, l.builtin ? T.langReset : T.delete))));
   };
-  put(body, h('div.panel', null, h('h2', null, T.aLangs), h('p.muted', null, T.langsLede),
-    h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.language), h('th', null, T.langType), h('th', null, T.langProgress), h('th'))),
-      h('tbody', null, LANGS.map(([c]) => row(c)))),
-    h('div.row-gap', { class: 'mt4' }, h('button.btn.primary', { onclick: () => newLangDialog(body) }, T.langNew), h('button.btn', { onclick: () => file.click() }, T.langImport), file),
-    h('p.small.muted', { class: 'mt3' }, T.langFormatHint('{0}', '{1}'))));
+  put(body, aHead(T.aLangs, T.langsLede, h('button.btn', { onclick: () => file.click() }, T.langImport), h('button.btn.primary', { onclick: () => newLangDialog(body) }, icon('plus'), T.langNew)), file,
+    aTable([T.language, T.langType, T.langProgress, ''], LANGS.map(([c]) => row(c)), '.a-stack'),
+    h('p.a-foot-note', null, T.langFormatHint('{0}', '{1}')));
 }
 
 function askYes(text, yes) {
@@ -2046,9 +2085,9 @@ function askYes(text, yes) {
 }
 
 function newLangDialog(body) {
-  const code = h('input', { required: true, maxlength: 12, placeholder: 'fr, pt-br', autocapitalize: 'off', spellcheck: 'false' });
-  const name = h('input', { required: true, maxlength: 40, placeholder: 'Français' });
-  const locale = h('input', { maxlength: 20, placeholder: 'fr-FR', autocapitalize: 'off', spellcheck: 'false' });
+  const code = h('input', { type: 'text', required: true, maxlength: 12, placeholder: 'fr, pt-br', autocapitalize: 'off', spellcheck: 'false' });
+  const name = h('input', { type: 'text', required: true, maxlength: 40, placeholder: 'Français' });
+  const locale = h('input', { type: 'text', maxlength: 20, placeholder: 'fr-FR', autocapitalize: 'off', spellcheck: 'false' });
   const from = h('select', null, h('option', { value: '' }, T.langFromEmpty), LANGS.map(([c, n]) => h('option', { value: c }, n)));
   const err = h('p.bad.small');
   modal(T.langNew, h('div', null,
@@ -2075,7 +2114,7 @@ function langEditor(body, code) {
   const refCode = code === 'en' ? 'hu' : 'en';
   const ref = langFull(refCode);
   const paths = langLeaves(full, own.locale || code);
-  const name = h('input', { value: l.name, maxlength: 40, 'aria-label': T.langName });
+  const name = h('input', { type: 'text', value: l.name, maxlength: 40, 'aria-label': T.langName });
   const q = h('input', { type: 'search', placeholder: T.langSearch, 'aria-label': T.langSearch });
   const onlyMissing = h('input', { type: 'checkbox' });
   const count = h('span.small.muted');
@@ -2086,7 +2125,7 @@ function langEditor(body, code) {
       : p[0] === 'app' ? (code === 'en' ? p[1] : (typeof getPath(ref, p) === 'string' ? getPath(ref, p) : p[1])) : getPath(ref, p);
     const fb = getPath(fallback, p);
     const long = String(refText || fb || '').length > 70;
-    const input = h(long ? 'textarea' : 'input', { value: typeof v === 'string' ? v : '', placeholder: typeof fb === 'string' ? fb : '', rows: long ? 2 : null, spellcheck: 'true', lang: code, 'aria-label': p.join('.') });
+    const input = h(long ? 'textarea' : 'input', { type: long ? null : 'text', value: typeof v === 'string' ? v : '', placeholder: typeof fb === 'string' ? fb : '', rows: long ? 2 : null, spellcheck: 'true', lang: code, 'aria-label': p.join('.') });
     const label = p[0] === 'srv' ? 'srv' : p[0] === 'srvRe' ? 'srvRe ' + p[1] : p[0] === 'app' ? (p.length > 2 ? 'app.' + p[2] : 'app') : p.join('.');
     const tr = h('tr', null, h('td.mono.small', null, label), h('td.small.muted', { lang: refCode }, refText == null ? '' : String(refText)), h('td', null, input));
     const form = String(p[p.length - 1]);
@@ -2131,16 +2170,15 @@ function langEditor(body, code) {
     for (const k of ['srv', 'app', 'sortLabels', 'ruleFields', 'kindOpts', 'langNames', 'platforms']) if (isObj(out[k]) && !Object.keys(out[k]).length) delete out[k];
     return out;
   };
-  put(body, h('div.panel', null,
-    h('div.row-gap', null, h('button.btn.ghost', { onclick: () => adminLangs(body) }, '← ' + T.back), h('h2', { style: { margin: 0 } }, l.name), h('span.mono.small.muted', null, code)),
-    h('p.small.muted', { class: 'mt3' }, T.langEditorHint('{0}', '{1}')),
-    h('div.row-gap', { class: 'mt3' }, h('label.field', { style: { margin: 0 } }, h('span', null, T.langName), name), q,
-      h('label.row-gap', null, onlyMissing, T.langOnlyMissing), count),
-    h('table.tbl.lang-tbl', { class: 'mt3' }, h('thead', null, h('tr', null, h('th', null, T.langKey), h('th', null, I18N[refCode] ? I18N[refCode].name : refCode), h('th', null, l.name))),
+  put(body, h('div.a-crumb', null, h('button.btn.ghost', { onclick: () => adminLangs(body) }, '← ' + T.aLangs)),
+    aHead([l.name, ' ', h('span.badge.a-code', null, code)], T.langEditorHint('{0}', '{1}')),
+    h('div.a-toolbar', null, h('label.field', null, h('span', null, T.langName), name), h('label.field.grow', null, h('span', null, T.langSearch), q),
+      h('label.check', null, onlyMissing, T.langOnlyMissing), count),
+    h('table.tbl.lang-tbl', null, h('thead', null, h('tr', null, h('th', null, T.langKey), h('th', null, I18N[refCode] ? I18N[refCode].name : refCode), h('th', null, l.name))),
       h('tbody', null, fields.map(f => f.tr))),
-    h('div.row-gap', { class: 'mt4 lang-save' },
+    h('div.row-gap.lang-save', null,
       h('button.btn.primary', { onclick: async e => { e.target.disabled = true; try { await saveLang(code, name.value.trim() || l.name, collect()); } catch (err) { toast(err.message, true); e.target.disabled = false; } } }, T.save),
-      h('button.btn', { onclick: () => downloadJSON('kinora-' + code + '.json', { kinora_language: 1, code, name: name.value.trim() || l.name, strings: collect() }) }, T.langExport))));
+      h('button.btn', { onclick: () => downloadJSON('kinora-' + code + '.json', { kinora_language: 1, code, name: name.value.trim() || l.name, strings: collect() }) }, T.langExport)));
   filter();
 }
 
@@ -2166,9 +2204,9 @@ function lookPanel(values, env, rerender) {
         url && h('button.btn.danger', { onclick: async () => { state.branding = await api('DELETE', '/api/admin/branding/logo?variant=' + variant); applyBranding(); rerender(); } }, T.removeLogo)));
   };
   const accent = h('input', { type: 'color', value: values.brand_accent || '#f0b44c', disabled: !!env.brand_accent, 'aria-label': T.accent });
-  return h('div.panel', null, h('h2', null, T.aLook), h('p.muted', null, T.logoHint),
+  return aSplit(T.aLook, T.logoHint,
     h('div.logo-slots', null, slot('dark', T.logoDark), slot('light', T.logoLight)),
-    h('label.field', { class: 'mt3' }, h('span', null, T.accent), h('div.row-gap', null, accent,
+    h('label.field.a-accent', null, h('span', null, T.accent), h('div.row-gap', null, accent,
       h('button.btn', { disabled: !!env.brand_accent, onclick: async () => { await api('PATCH', '/api/admin/settings', { brand_accent: accent.value }); state.branding = await GET('/api/branding'); applyBranding(); toast(T.saved); } }, T.save),
       h('button.btn.ghost', { disabled: !!env.brand_accent, onclick: async () => { await api('PATCH', '/api/admin/settings', { brand_accent: '' }); state.branding = await GET('/api/branding'); applyBranding(); rerender(); } }, T.defaultAccent)),
       env.brand_accent && h('div.env-lock', null, T.envLocked(env.brand_accent))));
@@ -2177,9 +2215,10 @@ function lookPanel(values, env, rerender) {
 async function adminSettings(body) {
   const s = await GET('/api/admin/settings');
   state.branding = await GET('/api/branding').catch(() => state.branding);
-  put(body, 
-    h('div.panel', null, h('h2', null, T.aSettings), settingsForm(s.values, s.env, [T.setGeneral, ['server_name', T.serverName], ['public_url', T.publicUrl, 'url'], T.setScanning, ['scan_interval_min', T.scanInterval, 'number'],
-      T.setNetwork, ['quickconnect_enabled', T.qcEnabled, 'toggle'], ['discovery_enabled', T.discEnabled, 'toggle']], () => { state.status = null; })),
+  put(body, aHead(T.aSettings, T.aLedeSettings),
+    settingsForm(s.values, s.env, [{ h: T.setGeneral, hint: T.setGeneralHint }, ['server_name', T.serverName], ['public_url', T.publicUrl, 'url'],
+      { h: T.setScanning, hint: T.setScanningHint }, ['scan_interval_min', T.scanInterval, 'number'],
+      { h: T.setNetwork, hint: T.setNetworkHint }, ['quickconnect_enabled', T.qcEnabled, 'toggle'], ['discovery_enabled', T.discEnabled, 'toggle']], () => { state.status = null; }),
     lookPanel(s.values, s.env, () => adminSettings(body)),
-    h('div.panel', null, h('h2', null, T.backupTitle), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
+    aSplit(T.backupTitle, T.backupHint, h('a.btn', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
 }

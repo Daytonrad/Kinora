@@ -1363,6 +1363,37 @@
   "setGeneral": "General",
   "setScanning": "Scanning",
   "setNetwork": "Network and sign-in",
-  "clearSearch": "Clear search"
+  "clearSearch": "Clear search",
+  "aLedeDash": "What is in the library and what the server is doing right now.",
+  "aLedeLibs": "The folders Kinora scans for movies and series.",
+  "aLedeTranscode": "How the server converts video for devices that cannot play the original.",
+  "aLedeMeta": "Posters, descriptions and cast from TMDB.",
+  "aLedeUsers": "The accounts that can sign in to this server.",
+  "aLedeInvites": "Links that let someone create their own account.",
+  "aLedeDevices": "Every signed-in app and browser, for all users.",
+  "aLedeSettings": "Server name, address, scanning, sign-in, appearance and backup.",
+  "aLoadFailed": "This page could not be loaded.",
+  "aServer": "Server",
+  "aAddresses": "Addresses",
+  "aRemote": "Access from outside your home",
+  "aRemoteHint": "One of these is enough: Tailscale is the simplest, a tunnel or a reverse proxy gives you your own domain.",
+  "aColUser": "User",
+  "aColRole": "Role",
+  "aColProfiles": "Profiles",
+  "aColMode": "Mode",
+  "aColLibrary": "Library",
+  "aColProblems": "Problem files",
+  "aRoleUser": "User",
+  "aDevicesN": {
+    "one": "{0} device",
+    "other": "{0} devices"
+  },
+  "aNoDevices": "No device is signed in yet.",
+  "setGeneralHint": "How the server presents itself; invite links use the public URL.",
+  "setScanningHint": "How often Kinora looks for new files in the libraries.",
+  "setNetworkHint": "Signing in with a code on another device (such as a TV), and finding the server on the local network.",
+  "encSettingHint": "The encoder used for transcoding. Only encoders that passed the self-test can be picked.",
+  "segHint": "Finds the intro and credits of episodes so they can be skipped.",
+  "refreshMetaHint": "Fetches the data from TMDB again for every title in the library."
  }
 };

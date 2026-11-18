@@ -1357,6 +1357,37 @@
   "setGeneral": "Allgemein",
   "setScanning": "Scannen",
   "setNetwork": "Netzwerk und Anmeldung",
-  "clearSearch": "Suche löschen"
+  "clearSearch": "Suche löschen",
+  "aLedeDash": "Was in der Bibliothek ist und was der Server gerade tut.",
+  "aLedeLibs": "Die Ordner, in denen Kinora nach Filmen und Serien sucht.",
+  "aLedeTranscode": "Wie der Server Videos für Geräte umwandelt, die das Original nicht abspielen können.",
+  "aLedeMeta": "Poster, Beschreibungen und Besetzung von TMDB.",
+  "aLedeUsers": "Die Konten, die sich an diesem Server anmelden können.",
+  "aLedeInvites": "Links, mit denen jemand ein eigenes Konto anlegen kann.",
+  "aLedeDevices": "Alle angemeldeten Apps und Browser aller Benutzer.",
+  "aLedeSettings": "Servername, Adresse, Scan, Anmeldung, Darstellung und Sicherung.",
+  "aLoadFailed": "Diese Seite konnte nicht geladen werden.",
+  "aServer": "Server",
+  "aAddresses": "Adressen",
+  "aRemote": "Zugriff von unterwegs",
+  "aRemoteHint": "Eins davon genügt: Tailscale ist am einfachsten, ein Tunnel oder ein Reverse Proxy gibt dir eine eigene Domain.",
+  "aColUser": "Benutzer",
+  "aColRole": "Rolle",
+  "aColProfiles": "Profile",
+  "aColMode": "Modus",
+  "aColLibrary": "Bibliothek",
+  "aColProblems": "Fehlerhafte Dateien",
+  "aRoleUser": "Benutzer",
+  "aDevicesN": {
+    "one": "{0} Gerät",
+    "other": "{0} Geräte"
+  },
+  "aNoDevices": "Noch kein Gerät ist angemeldet.",
+  "setGeneralHint": "So zeigt sich der Server; Einladungslinks verwenden die öffentliche URL.",
+  "setScanningHint": "Wie oft Kinora in den Bibliotheken nach neuen Dateien sucht.",
+  "setNetworkHint": "Anmeldung per Code auf einem anderen Gerät (etwa dem Fernseher) und Auffinden des Servers im lokalen Netzwerk.",
+  "encSettingHint": "Der Encoder für die Umwandlung. Nur Encoder, die den Selbsttest bestanden haben, sind wählbar.",
+  "segHint": "Erkennt Vorspann und Abspann von Folgen, damit man sie überspringen kann.",
+  "refreshMetaHint": "Lädt die Daten für alle Titel der Bibliothek erneut von TMDB."
  }
 };

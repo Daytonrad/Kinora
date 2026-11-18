@@ -206,9 +206,9 @@ try {
   step('admin pages');
   for (const [tab, name] of [['dash', '15-admin-dash'], ['transcode', '16-admin-transcode'], ['connect', '17-admin-connect'], ['invites', '18-admin-invites']]) {
     await page.goto(`${BASE}/#/admin/${tab}`);
-    await page.waitForSelector('.panel');
+    await page.waitForSelector('.a-body:not([aria-busy]) .a-head');
     if (tab === 'invites') { await page.click('text=Új meghívó'); await page.click('.modal button:has-text("Létrehozás")'); await page.waitForSelector('.qr img'); }
-    if (tab === 'transcode') { await page.click('text=Encoder-önteszt futtatása'); await page.waitForSelector('td.ok'); }
+    if (tab === 'transcode') { await page.click('text=Encoder-önteszt futtatása'); await page.waitForSelector('.a-tbl .ok'); }
     await page.waitForTimeout(400);
     await shot(page, name);
   }

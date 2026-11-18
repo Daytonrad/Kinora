@@ -547,6 +547,36 @@
   "setGeneral": "Általános",
   "setScanning": "Szkennelés",
   "setNetwork": "Hálózat és belépés",
-  "clearSearch": "Keresés törlése"
+  "clearSearch": "Keresés törlése",
+  "aLedeDash": "Mi van a könyvtárban, és mit csinál most a szerver.",
+  "aLedeLibs": "A mappák, amelyekben a Kinora filmeket és sorozatokat keres.",
+  "aLedeTranscode": "Hogyan alakítja át a szerver a videót azoknak az eszközöknek, amelyek nem tudják lejátszani az eredetit.",
+  "aLedeMeta": "Poszterek, leírások és szereplők a TMDB-ről.",
+  "aLedeUsers": "A fiókok, amelyekkel be lehet jelentkezni erre a szerverre.",
+  "aLedeInvites": "Linkek, amelyekkel valaki saját fiókot hozhat létre.",
+  "aLedeDevices": "Minden bejelentkezett alkalmazás és böngésző, az összes felhasználótól.",
+  "aLedeSettings": "Szervernév, cím, beolvasás, belépés, megjelenés és mentés.",
+  "aLoadFailed": "Ezt az oldalt nem sikerült betölteni.",
+  "aServer": "Szerver",
+  "aAddresses": "Címek",
+  "aRemote": "Elérés otthonon kívülről",
+  "aRemoteHint": "Elég az egyik: a Tailscale a legegyszerűbb, a tunnel vagy a reverse proxy saját domaint ad.",
+  "aColUser": "Felhasználó",
+  "aColRole": "Szerepkör",
+  "aColProfiles": "Profilok",
+  "aColMode": "Mód",
+  "aColLibrary": "Könyvtár",
+  "aColProblems": "Hibás fájlok",
+  "aRoleUser": "Felhasználó",
+  "aDevicesN": {
+    "other": "{0} eszköz"
+  },
+  "aNoDevices": "Még egy eszköz sincs bejelentkezve.",
+  "setGeneralHint": "Így jelenik meg a szerver; a nyilvános címet használják a meghívó linkek.",
+  "setScanningHint": "Milyen gyakran keressen a Kinora új fájlokat a könyvtárakban.",
+  "setNetworkHint": "Belépés kóddal egy másik eszközön (pl. tévén), és a szerver felderítése a helyi hálózaton.",
+  "encSettingHint": "Az átkódoláshoz használt encoder. Csak a próbán átment encoderek választhatók.",
+  "segHint": "Felismeri a sorozatok főcímét és stáblistáját, hogy át lehessen ugrani őket.",
+  "refreshMetaHint": "Újra lekéri az adatokat a TMDB-ről a könyvtár összes címéhez."
  }
 };
