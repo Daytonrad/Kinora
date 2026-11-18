@@ -645,6 +645,8 @@ struct TVSettingsTab: View {
                     }
                     Button { model.showServers() } label: { Label(L("Másik szerver"), systemImage: "server.rack") }
                         .buttonStyle(TVRowStyle())
+                    NavigationLink { TVHomeScenesView() } label: { Label(L("Otthon-jelenetek"), systemImage: "house") }
+                        .buttonStyle(TVRowStyle())
                     Button { confirmLogout = true } label: { Label(L("Kijelentkezés"), systemImage: "rectangle.portrait.and.arrow.right") }
                         .buttonStyle(TVRowStyle())
 

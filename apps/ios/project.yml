@@ -135,6 +135,7 @@ targets:
       - path: KinoraTV
       - Kinora/App/AppModel.swift
       - Kinora/App/Haptics.swift
+      - Kinora/App/HomeScenes.swift
       - Kinora/App/Preferences.swift
       - Kinora/App/ProgressQueue.swift
       - Kinora/App/Theme.swift
@@ -172,12 +173,15 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: A Kinora a helyi hálózaton keresi és éri el a médiaszerveredet.
+        NSHomeKitUsageDescription: A Kinora a lejátszás indulásakor, szünetekor és végén lefuttatja az általad választott Otthon-jelenetet, például lekapcsolja a lámpákat.
         KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
     # The App Group carries the saved servers and the login token to the Top Shelf extension.
     entitlements:
       path: KinoraTV/KinoraTV.entitlements
       properties:
         com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
+        # Home app scenes on playback start, pause and stop (Beállítások → Otthon-jelenetek).
+        com.apple.developer.homekit: true
   # Top Shelf of the Apple TV home screen: Continue watching and new titles above the apps
   # while the Kinora icon has the focus.
   KinoraTopShelf:

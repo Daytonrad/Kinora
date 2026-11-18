@@ -158,8 +158,8 @@ final class PlayerModel: NSObject {
         closed = true
         report(ended: ended)
         stopSession()
-        #if os(iOS)
         HomeScenes.shared.stopped()
+        #if os(iOS)
         Handoff.stop()
         LiveActivities.endParty()
         if let code = party?.code { SharePlay.shared.left(room: code) }
@@ -543,9 +543,7 @@ final class PlayerModel: NSObject {
         // Rate and elapsed time keep the lock screen's clock right (and an iPhone's, for the Apple TV).
         if wasPlaying != isPlaying {
             updateNowPlaying()
-            #if os(iOS)
             if isPlaying { HomeScenes.shared.playing() } else { HomeScenes.shared.paused() }
-            #endif
         }
         if isPlaying, Date.now.timeIntervalSince(lastReport) > 10 { report() }
 

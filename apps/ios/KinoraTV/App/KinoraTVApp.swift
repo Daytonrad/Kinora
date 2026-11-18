@@ -20,7 +20,7 @@ struct KinoraTVApp: App {
                 .environment(model)
                 .preferredColorScheme(.dark)
                 .tint(Theme.amber)
-                .task { _ = NetworkStatus.shared; await model.start() }
+                .task { _ = NetworkStatus.shared; HomeScenes.shared.warmUp(); await model.start() }
                 .onOpenURL { model.open($0) }
                 .onReceive(NotificationCenter.default.publisher(for: NetworkStatus.cameOnline)) { _ in model.syncOffline() }
         }
