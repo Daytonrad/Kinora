@@ -139,13 +139,15 @@ func BuildHLSArgs(sp HLSSpec, dir string) []string {
 	args = append(args, "-sn", "-dn", "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "2048",
 		"-f", "hls", "-hls_time", "4", "-hls_list_size", "0", "-hls_playlist_type", "event",
 		"-hls_flags", "independent_segments+temp_file")
+	// Output paths use forward slashes: ffmpeg's HLS muxer finds the playlist folder by the last '/',
+	// so with Windows backslashes it wrote init.mp4 into the working directory instead of the session.
 	if d.FMP4 {
 		args = append(args, "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4",
-			"-hls_segment_filename", filepath.Join(dir, "seg%05d.m4s"))
+			"-hls_segment_filename", filepath.ToSlash(filepath.Join(dir, "seg%05d.m4s")))
 	} else {
-		args = append(args, "-hls_segment_filename", filepath.Join(dir, "seg%05d.ts"))
+		args = append(args, "-hls_segment_filename", filepath.ToSlash(filepath.Join(dir, "seg%05d.ts")))
 	}
-	args = append(args, filepath.Join(dir, "index.m3u8"))
+	args = append(args, filepath.ToSlash(filepath.Join(dir, "index.m3u8")))
 	return args
 }
 

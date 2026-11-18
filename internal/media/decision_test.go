@@ -1,6 +1,7 @@
 package media
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -129,6 +130,13 @@ func TestDecideHEVCRemux(t *testing.T) {
 		if !strings.Contains(args, want) {
 			t.Fatalf("missing %q in %s", want, args)
 		}
+	}
+	// Output paths go to ffmpeg with '/' even on Windows: the HLS muxer puts init.mp4 next to
+	// the playlist only when it finds a '/' in the playlist path.
+	dir := filepath.Join(t.TempDir(), "sess")
+	out := BuildHLSArgs(HLSSpec{Item: &store.Item{Path: "/x.mkv"}, Decision: d}, dir)
+	if pl := out[len(out)-1]; pl != filepath.ToSlash(dir)+"/index.m3u8" || strings.Contains(pl, `\`) {
+		t.Fatalf("playlist path %q", pl)
 	}
 	// h264 remux stays on MPEG-TS
 	d = Decide(item("mkv", "h264", "aac", 4_000_000), PlaybackRequest{Caps: apple}, nil, 0, true)
