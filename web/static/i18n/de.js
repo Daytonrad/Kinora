@@ -378,6 +378,7 @@
   "permCheck": "Berechtigungen prüfen",
   "permOk": "Lesbar – alles in Ordnung.",
   "permFix": "Beheben (auf dem Server ausführen):",
+  "permAutoFix": "Jetzt beheben",
   "permGroup": "Oder über eine Gruppe:",
   "locked": "kein Zugriff",
   "hostPath": "Auf dem Host: {0}",
@@ -566,6 +567,10 @@
    "episode": "Folge"
   },
   "app": {
+   "{0}. évad {1}. rész": "S{0} · E{1}",
+   "Lejátszás: {0}. rész": "Folge {0} abspielen",
+   "Lejátszás: {0}. évad {1}. rész": "S{0} · E{1} abspielen",
+   "Hozzáadva": "Hinzugefügt",
    " Ez otthoni (belső) cím: csak az otthoni Wi-Fi-ről érhető el.": " Dies ist eine Heimadresse (intern): Sie funktioniert nur im WLAN zu Hause.",
    " · {0} mp": " · {0} s",
    "%+.1f mp": "%+.1f s",
@@ -1316,6 +1321,18 @@
    [
     "^A parancsokat rendszergazdaként futtatott parancssorban futtasd, utána szkenneld újra a könyvtárat\\. A szolgáltatás nem látja a hozzárendelt hálózati meghajtókat \\(pl\\. Z:\\) – hálózati megosztásnál az UNC útvonalat add meg \\((.+)\\)\\.$",
     "Führe die Befehle in einer als Administrator gestarteten Eingabeaufforderung aus und scanne die Bibliothek danach erneut. Der Dienst sieht keine verbundenen Netzlaufwerke (z. B. Z:) – gib für eine Netzwerkfreigabe den UNC-Pfad an ({0})."
+   ],
+   [
+    "^Ez ennek a gépnek a saját megosztása\\. A szolgáltatás a rendszerfiókkal \\(SYSTEM\\) fut, amely a hálózati megosztásokat nem éri el – add hozzá a könyvtárat a helyi mappájával \\(pl\\. F:\\\\filmek\\), ne a megosztáson át\\.$",
+    "Das ist eine Freigabe dieses Rechners. Der Dienst läuft unter dem Systemkonto (SYSTEM), das keine Netzwerkfreigaben erreicht – füge die Bibliothek über ihren lokalen Ordner hinzu (z. B. F:\\filmek), nicht über die Freigabe."
+   ],
+   [
+    "^A szolgáltatás a rendszerfiókkal \\(SYSTEM\\) fut, amely más gép megosztását munkacsoportban nem éri el\\. Állítsd be, hogy a Kinora szolgáltatás egy olyan felhasználóval fusson, aki megnyithatja a megosztást \\(services\\.msc → Kinora → Bejelentkezés\\), majd indítsd újra\\.$",
+    "Der Dienst läuft unter dem Systemkonto (SYSTEM), das in einer Arbeitsgruppe keine Freigabe eines anderen Rechners erreicht. Lass den Kinora-Dienst unter einem Benutzer laufen, der die Freigabe öffnen darf (services.msc → Kinora → Anmelden), und starte ihn neu."
+   ],
+   [
+    "^A megosztás jogait a megosztást adó gépen kell megadni a\\(z\\) (.+) felhasználónak \\(a megosztás és a mappa Biztonság lapján is\\)\\.$",
+    "Erteile dem Benutzer {0} die Rechte auf dem Rechner, der die Freigabe bereitstellt (bei der Freigabe und auf der Registerkarte Sicherheit des Ordners)."
    ]
   ],
   "aLangs": "Sprachen",

@@ -3,6 +3,7 @@
 package server
 
 import (
+	"errors"
 	"os"
 	"os/user"
 	"strconv"
@@ -30,3 +31,10 @@ func nativeRoots() []string { return []string{"/", "/home", "/mnt", "/media", "/
 
 // browseRoot is where the picker opens without a path and a media root: the whole file system.
 func browseRoot() string { return "/" }
+
+// canGrantRead: on Unix the admin runs the setfacl commands; the server has no right to change ACLs.
+const canGrantRead = false
+
+func grantRead(string, []PermProblem) error {
+	return errors.New("a jogok automatikus megadása csak Windowson működik")
+}

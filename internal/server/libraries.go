@@ -43,7 +43,8 @@ func (s *Server) handleLibraryCreate(w http.ResponseWriter, r *http.Request, c *
 		return
 	}
 	// an unreadable folder would just scan empty: say why and how to fix it
-	if rep, err := s.permReport(p); err == nil && !rep.OK {
+	// (on Windows the server first grants itself the rights)
+	if rep, err := s.fixPerms(p); err == nil && !rep.OK {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": rep.Message, "perm": rep})
 		return
 	}
@@ -81,9 +82,15 @@ func (s *Server) handleLibraryDelete(w http.ResponseWriter, r *http.Request, c *
 
 func (s *Server) handleLibraryScan(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	id := pathID(r, "id")
-	if _, err := s.st.Library(id); err != nil {
+	lib, err := s.st.Library(id)
+	if err != nil {
 		writeErr(w, http.StatusNotFound, "a könyvtár nem található")
 		return
+	}
+	if canGrantRead { // Windows: a folder the service cannot read gets the rights before the scan
+		if rep, err := s.fixPerms(lib.Path); err == nil && !rep.OK {
+			s.log.Warn("library not readable", "path", lib.Path, "user", rep.User)
+		}
 	}
 	started := s.Scanner.Trigger(s.bgCtx, id)
 	writeJSON(w, http.StatusAccepted, map[string]bool{"started": started})

@@ -79,6 +79,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/admin/connect", s.admin(s.handleConnect))
 	m.HandleFunc("GET /api/admin/browse", s.admin(s.handleBrowse))
 	m.HandleFunc("GET /api/admin/permcheck", s.admin(s.handlePermCheck))
+	m.HandleFunc("POST /api/admin/permfix", s.admin(s.handlePermFix))
 	m.HandleFunc("POST /api/admin/branding/logo", s.admin(s.handleLogoUpload))
 	m.HandleFunc("DELETE /api/admin/branding/logo", s.admin(s.handleLogoDelete))
 	m.HandleFunc("GET /manifest.json", s.public(s.handleManifest))

@@ -381,6 +381,7 @@
   "permCheck": "Check permissions",
   "permOk": "Readable – all good.",
   "permFix": "Fix (run on the server):",
+  "permAutoFix": "Fix it now",
   "permGroup": "Or through a group:",
   "locked": "no access",
   "hostPath": "On the host: {0}",
@@ -572,6 +573,10 @@
    "episode": "Episode"
   },
   "app": {
+   "{0}. évad {1}. rész": "S{0} · E{1}",
+   "Lejátszás: {0}. rész": "Play episode {0}",
+   "Lejátszás: {0}. évad {1}. rész": "Play S{0} · E{1}",
+   "Hozzáadva": "Date added",
    " Ez otthoni (belső) cím: csak az otthoni Wi-Fi-ről érhető el.": " This is a home (internal) address: it only works on your home Wi-Fi.",
    " · {0} mp": " · {0} s",
    "%+.1f mp": "%+.1f s",
@@ -1322,6 +1327,18 @@
    [
     "^A parancsokat rendszergazdaként futtatott parancssorban futtasd, utána szkenneld újra a könyvtárat\\. A szolgáltatás nem látja a hozzárendelt hálózati meghajtókat \\(pl\\. Z:\\) – hálózati megosztásnál az UNC útvonalat add meg \\((.+)\\)\\.$",
     "Run the commands in a Command Prompt started as administrator, then rescan the library. The service cannot see mapped network drives (e.g. Z:) – for a network share, enter its UNC path ({0})."
+   ],
+   [
+    "^Ez ennek a gépnek a saját megosztása\\. A szolgáltatás a rendszerfiókkal \\(SYSTEM\\) fut, amely a hálózati megosztásokat nem éri el – add hozzá a könyvtárat a helyi mappájával \\(pl\\. F:\\\\filmek\\), ne a megosztáson át\\.$",
+    "This is this machine's own share. The service runs as the system account (SYSTEM), which cannot reach network shares – add the library by its local folder (e.g. F:\\filmek), not through the share."
+   ],
+   [
+    "^A szolgáltatás a rendszerfiókkal \\(SYSTEM\\) fut, amely más gép megosztását munkacsoportban nem éri el\\. Állítsd be, hogy a Kinora szolgáltatás egy olyan felhasználóval fusson, aki megnyithatja a megosztást \\(services\\.msc → Kinora → Bejelentkezés\\), majd indítsd újra\\.$",
+    "The service runs as the system account (SYSTEM), which cannot reach another machine's share in a workgroup. Set the Kinora service to run as a user who can open the share (services.msc → Kinora → Log On), then restart it."
+   ],
+   [
+    "^A megosztás jogait a megosztást adó gépen kell megadni a\\(z\\) (.+) felhasználónak \\(a megosztás és a mappa Biztonság lapján is\\)\\.$",
+    "Grant user {0} access on the machine that provides the share (on both the share and the folder's Security tab)."
    ]
   ],
   "aLangs": "Languages",

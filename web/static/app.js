@@ -1878,7 +1878,13 @@ function permDialog(rep) {
     !rep.ok && rep.problems.length > 0 && h('ul.small', null, rep.problems.map(pr => h('li.mono', null, `${pr.path}: ${pr.need === 'x' ? T.permEnter : T.permRead}`))),
     !rep.ok && rep.commands.length > 0 && [h('p', { class: 'mt3' }, T.permFix), copyBlock(rep.commands)],
     !rep.ok && rep.group_commands && [h('p', { class: 'mt3' }, T.permGroup), copyBlock(rep.group_commands)],
-    rep.hint && h('p.muted.small', { class: 'mt3' }, srv(rep.hint))), close => [h('button.btn.primary', { onclick: close }, T.close)]);
+    rep.hint && h('p.muted.small', { class: 'mt3' }, srv(rep.hint))), close => [
+    !rep.ok && rep.can_fix && h('button.btn.primary', { onclick: async e => {
+      e.currentTarget.disabled = true;
+      try { const fixed = await api('POST', '/api/admin/permfix?path=' + encodeURIComponent(rep.path)); close(); permDialog(fixed); }
+      catch (err) { toast(err.message, true); close(); }
+    } }, T.permAutoFix),
+    h('button.btn' + (!rep.ok && rep.can_fix ? '' : '.primary'), { onclick: close }, T.close)]);
 }
 
 async function folderPicker(start, onPick) {

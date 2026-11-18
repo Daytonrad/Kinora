@@ -46,6 +46,7 @@ type PermReport struct {
 	Message  string        `json:"message"`
 	Problems []PermProblem `json:"problems"`
 	Commands []string      `json:"commands"`
+	CanFix   bool          `json:"can_fix,omitempty"`        // the server can grant the rights itself (POST /api/admin/permfix)
 	Group    []string      `json:"group_commands,omitempty"` // alternative: add the user to the owning group
 	Hint     string        `json:"hint,omitempty"`
 }
@@ -173,6 +174,65 @@ func windowsPermCommands(userName string, probs []PermProblem) []string {
 	return cmds
 }
 
+// hostName is os.Hostname, replaceable in tests.
+var hostName = os.Hostname
+
+// uncHost returns the server of a \\server\share path ("" for a local path).
+func uncHost(p string) string {
+	if !strings.HasPrefix(p, `\\`) {
+		return ""
+	}
+	h, _, _ := strings.Cut(p[2:], `\`)
+	return h
+}
+
+// windowsPermReport: a local folder gets icacls commands. A share (UNC path) cannot be fixed from
+// here: LocalSystem reaches the network as the machine account (HOST$), which a workgroup share
+// does not accept – the machine's own share is better added by its local folder, another machine's
+// share needs the service to run as a user who can open it.
+func windowsPermReport(rep PermReport, userName, sid string, probs []PermProblem) PermReport {
+	// user.Current names LocalSystem and NetworkService alike as the machine account (WORKGROUP\HOST$),
+	// which icacls cannot resolve: the SID (user.Current's Uid on Windows) is exact and not localized.
+	account := userName
+	switch sid {
+	case "S-1-5-18":
+		account = `NT AUTHORITY\SYSTEM`
+	case "S-1-5-19":
+		account = `NT AUTHORITY\LOCAL SERVICE`
+	case "S-1-5-20":
+		account = `NT AUTHORITY\NETWORK SERVICE`
+	}
+	system := sid == "S-1-5-18" || (sid == "" && (strings.HasSuffix(userName, "$") || strings.EqualFold(userName, `NT AUTHORITY\SYSTEM`)))
+	if system {
+		account = `NT AUTHORITY\SYSTEM`
+	}
+	grantee := account
+	if strings.HasPrefix(sid, "S-1-") {
+		grantee = "*" + sid
+	} else if system {
+		grantee = "*S-1-5-18"
+	}
+	rep.User = account
+	rep.Message = fmt.Sprintf("A(z) %s felhasználónak nincs olvasási joga ehhez: %s", account, rep.Path)
+	host := uncHost(rep.Path)
+	if host == "" {
+		rep.Commands = windowsPermCommands(grantee, probs)
+		rep.CanFix = canGrantRead && strings.HasPrefix(sid, "S-1-")
+		rep.Hint = "A parancsokat rendszergazdaként futtatott parancssorban futtasd, utána szkenneld újra a könyvtárat. A szolgáltatás nem látja a hozzárendelt hálózati meghajtókat (pl. Z:) – hálózati megosztásnál az UNC útvonalat add meg (\\\\szerver\\megosztás)."
+		return rep
+	}
+	if me, err := hostName(); err == nil && strings.EqualFold(host, me) {
+		rep.Hint = "Ez ennek a gépnek a saját megosztása. A szolgáltatás a rendszerfiókkal (SYSTEM) fut, amely a hálózati megosztásokat nem éri el – add hozzá a könyvtárat a helyi mappájával (pl. F:\\filmek), ne a megosztáson át."
+		return rep
+	}
+	if system {
+		rep.Hint = "A szolgáltatás a rendszerfiókkal (SYSTEM) fut, amely más gép megosztását munkacsoportban nem éri el. Állítsd be, hogy a Kinora szolgáltatás egy olyan felhasználóval fusson, aki megnyithatja a megosztást (services.msc → Kinora → Bejelentkezés), majd indítsd újra."
+		return rep
+	}
+	rep.Hint = fmt.Sprintf("A megosztás jogait a megosztást adó gépen kell megadni a(z) %s felhasználónak (a megosztás és a mappa Biztonság lapján is).", account)
+	return rep
+}
+
 func shellQuote(p string) string {
 	if strings.ContainsAny(p, " '\"$`\\!&;()|<>*?[]{}#~") {
 		return "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
@@ -188,10 +248,7 @@ func buildPermReport(path, mode, userName, uid string, probs []PermProblem, grou
 		return rep
 	}
 	if mode == "windows" {
-		rep.Message = fmt.Sprintf("A(z) %s felhasználónak nincs olvasási joga ehhez: %s", userName, path)
-		rep.Commands = windowsPermCommands(userName, probs)
-		rep.Hint = "A parancsokat rendszergazdaként futtatott parancssorban futtasd, utána szkenneld újra a könyvtárat. A szolgáltatás nem látja a hozzárendelt hálózati meghajtókat (pl. Z:) – hálózati megosztásnál az UNC útvonalat add meg (\\\\szerver\\megosztás)."
-		return rep
+		return windowsPermReport(rep, userName, uid, probs)
 	}
 	who := userName
 	if mode == "docker" {
@@ -247,6 +304,46 @@ func (s *Server) permReport(path string) (PermReport, error) {
 	}
 	name, uid := serviceUser()
 	return buildPermReport(path, installMode(), name, uid, probs, ownerGroup), nil
+}
+
+// fixPerms grants the service account the missing rights itself (Windows) and checks again.
+func (s *Server) fixPerms(path string) (PermReport, error) {
+	rep, err := s.permReport(path)
+	if err != nil || rep.OK || !rep.CanFix {
+		return rep, err
+	}
+	_, sid := serviceUser()
+	fixErr := grantRead(sid, rep.Problems)
+	after, err := s.permReport(path)
+	if err != nil {
+		return rep, err
+	}
+	if !after.OK && fixErr != nil {
+		after.Message += " (" + fixErr.Error() + ")"
+	}
+	if !after.OK {
+		after.CanFix = false // it did not help: the commands are left
+	}
+	return after, nil
+}
+
+// POST /api/admin/permfix?path=… | ?library=… – "Javítás most": the server grants itself read access.
+func (s *Server) handlePermFix(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	path := r.URL.Query().Get("path")
+	if id := queryInt(r, "library", 0); id > 0 {
+		if lib, err := s.st.Library(int64(id)); err == nil {
+			path = lib.Path
+		}
+	}
+	rep, err := s.fixPerms(path)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if rep.OK {
+		s.log.Info("permissions granted", "path", rep.Path, "user", rep.User)
+	}
+	writeJSON(w, http.StatusOK, rep)
 }
 
 // GET /api/admin/permcheck?path=… – "Jogosultság ellenőrzése".

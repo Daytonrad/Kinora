@@ -372,6 +372,7 @@
   "permCheck": "Jogosultság ellenőrzése",
   "permOk": "Olvasható – rendben.",
   "permFix": "Javítás (futtasd a szerveren):",
+  "permAutoFix": "Javítás most",
   "permGroup": "Vagy csoporton keresztül:",
   "locked": "nincs jog",
   "hostPath": "A hoston: {0}",
