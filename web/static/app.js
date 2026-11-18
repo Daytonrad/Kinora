@@ -150,6 +150,7 @@ const ICONS = {
   eyeOff: 'M3 3l18 18M10.6 6.1A10 10 0 0112 6c6 0 10 6 10 6a17 17 0 01-3 3.5M6.6 7.6C3.8 9.3 2 12 2 12s4 7 10 7a9.5 9.5 0 004.4-1.1', plus: 'M12 5v14M5 12h14', dl: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   lock: 'M7 11V8a5 5 0 0110 0v3M5 11h14v10H5z', people: 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2 20c0-4 3-6 7-6s7 2 7 6M16 4.5a3.5 3.5 0 010 6.5M18 14c2.5.6 4 2.6 4 6', tag: 'M3 12V4h8l10 10-8 8z M7.5 8.5h.01',
   x: 'M6 6l12 12M18 6L6 18', filter: 'M4 5h16l-6 8v6l-4-2v-4z',
+  search: 'M10.5 4a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM20 20l-4.8-4.8', sortAsc: 'M4 7h5M4 12h8M4 17h11M18 19V5M15 8l3-3 3 3', sortDesc: 'M4 7h11M4 12h8M4 17h5M18 5v14M15 16l3 3 3-3',
 };
 function icon(name, fill) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -166,6 +167,21 @@ function icon(name, fill) {
   svg.append(p);
   return svg;
 }
+// The one search field: lens, the input, a "/" hint while empty, and a clear button once there's text.
+function searchField(input, cls) {
+  const clear = h('button.sf-clear', { type: 'button', 'aria-label': T.clearSearch, onclick: () => {
+    input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); input.focus();
+  } }, icon('x'));
+  return h('div.search-field' + (cls ? '.' + cls : ''), null, icon('search'), input, h('kbd', { 'aria-hidden': 'true' }, '/'), clear);
+}
+// "/" jumps to the page's own search (the library filter first, then the header).
+document.addEventListener('keydown', e => {
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const f = document.querySelector('.toolbar .search-field input') || document.querySelector('.search-box input');
+  if (f && f.offsetParent) { e.preventDefault(); f.focus(); }
+});
 function toast(msg, err) {
   const box = document.getElementById('toasts');
   for (const old of [...box.children]) if (old.textContent === msg) old.remove();
@@ -355,7 +371,7 @@ function shell(active, ...content) {
       h('a' + (active === 'collections' ? '.on' : ''), { href: '#/collections' }, T.collections),
       h('a' + (active === 'downloads' ? '.on' : ''), { href: '#/downloads' }, T.downloads),
       me.user.is_admin && h('a' + (active === 'admin' ? '.on' : ''), { href: '#/admin' }, T.admin)),
-    h('div.search-box', null, searchInput),
+    searchField(searchInput, 'search-box'),
     h('div.menu', null, avatarBtn, menuPop));
   const main = h('main', null, content);
   root.append(top, main);
@@ -686,6 +702,7 @@ async function viewLibrary(libId, q) {
   const refresh = () => {
     const p = params(); p.delete('library');
     history.replaceState(null, '', '#/library/' + libId + '?' + p);
+    paintFiltersBtn();
     load(true);
   };
   const chipList = (list, set) => h('div.chips', null, list.slice(0, 60).map(x => {
@@ -710,11 +727,23 @@ async function viewLibrary(libId, q) {
       h('a.btn.ghost', { href: '#/library/' + libId }, T.clear),
       !state.me.profile.is_kids && h('button.btn', { onclick: saveAsSmart }, T.saveSmart)));
   const sortSel = h('select', { 'aria-label': T.sort, onchange: e => { sel.sort = e.target.value; refresh(); } }, f.sorts.map(s => h('option', { value: s.value, selected: s.value === sel.sort }, lbl(T.sortLabels, s.value, s.label))));
-  const orderSel = h('select', { 'aria-label': T.order, onchange: e => { sel.order = e.target.value; refresh(); } }, h('option', { value: 'asc', selected: sel.order === 'asc' }, T.asc), h('option', { value: 'desc', selected: sel.order === 'desc' }, T.desc));
-  const qInput = inp('q', T.filterTitle, 'search'); qInput.classList.add('q');
+  const orderBtn = h('button.btn.icon', { type: 'button', onclick: () => { sel.order = sel.order === 'asc' ? 'desc' : 'asc'; paintOrder(); refresh(); } });
+  const paintOrder = () => {
+    const l = T.order + ': ' + (sel.order === 'asc' ? T.asc : T.desc);
+    orderBtn.setAttribute('aria-label', l); orderBtn.title = l;
+    put(orderBtn, icon(sel.order === 'asc' ? 'sortAsc' : 'sortDesc'));
+  };
+  paintOrder();
+  const qInput = inp('q', T.filterTitle, 'search');
+  const filtersBtn = h('button.btn.filters-toggle', { type: 'button', 'aria-expanded': 'false', onclick: () => filtersBtn.setAttribute('aria-expanded', String(filters.classList.toggle('open'))) });
+  const paintFiltersBtn = () => {
+    const n = sel.genre.size + sel.tag.size + ['year_from', 'year_to', 'min_rating', 'played'].filter(k => sel[k]).length + (sel.favorite ? 1 : 0);
+    put(filtersBtn, icon('filter'), T.filters, n ? h('span.n', null, '· ' + n) : null);
+  };
+  paintFiltersBtn();
   main.append(h('div.page-head', null, h('div', null, h('h1', null, lib ? lib.name : ''), countEl)),
     h('div.browse', null, filters, h('div', null,
-      h('div.toolbar', null, h('button.btn.filters-toggle', { onclick: () => filters.classList.toggle('open') }, icon('filter'), T.filters), qInput, sortSel, orderSel),
+      h('div.toolbar', null, filtersBtn, searchField(qInput), h('div.sort-ctl', null, sortSel, orderBtn)),
       grid, sentinel)));
   const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) load(false); }, { rootMargin: '600px' });
   io.observe(sentinel);

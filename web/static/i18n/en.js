@@ -923,6 +923,7 @@
   "metaNeedsKey": "This needs a TMDB API key: enter it above and save.",
   "setGeneral": "General",
   "setScanning": "Scanning",
-  "setNetwork": "Network and sign-in"
+  "setNetwork": "Network and sign-in",
+  "clearSearch": "Clear search"
  }
 };

@@ -544,6 +544,7 @@
   "metaNeedsKey": "Ehhez TMDB API kulcs kell: add meg fent, és mentsd.",
   "setGeneral": "Általános",
   "setScanning": "Szkennelés",
-  "setNetwork": "Hálózat és belépés"
+  "setNetwork": "Hálózat és belépés",
+  "clearSearch": "Keresés törlése"
  }
 };

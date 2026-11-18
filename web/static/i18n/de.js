@@ -917,6 +917,7 @@
   "metaNeedsKey": "Dafür ist ein TMDB-API-Schlüssel nötig: Trag ihn oben ein und speichere.",
   "setGeneral": "Allgemein",
   "setScanning": "Scannen",
-  "setNetwork": "Netzwerk und Anmeldung"
+  "setNetwork": "Netzwerk und Anmeldung",
+  "clearSearch": "Suche löschen"
  }
 };
