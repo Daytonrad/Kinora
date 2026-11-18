@@ -2,7 +2,7 @@
 
 **Magyar** · [English](README.en.md)
 
-Saját gépen futó médiaszerver filmekhez és sorozatokhoz – a Jellyfin és a Plex alternatívája, magyar felülettel.
+Saját gépen futó médiaszerver filmekhez és sorozatokhoz – a Jellyfin és a Plex alternatívája, magyar, angol és német webes felülettel.
 A neve az 1890-es évek kézi „mozgókép-nézegetőjéből” jön.
 
 Egyetlen Go bináris, beágyazott webes klienssel; SQLite adatbázis; az ffmpeg végzi az átkódolást.
@@ -286,12 +286,12 @@ internal/server/   HTTP API, middleware, webkliens kiszolgálása
 web/static/        vanilla JS SPA (index.html, app.js, style.css, vendor/hls.js, vendor/qrcode-generator)
 ```
 
-A webkliens összes szövege az `app.js` elején, a `T` objektumban van, így az angol fordítás egy helyen elvégezhető.
+A webkliens többnyelvű (magyar, angol, német). A szövegek a `web/static/i18n/<nyelv>.js` fájlokban vannak; a magyar az alap, a hiányzó kulcsok arra esnek vissza. A nyelvet a böngésző beállítása adja, és a profilmenüben, a fiókoldalon vagy a bejelentkezésnél át lehet váltani (a választás a böngészőben marad meg). A szerver magyar üzeneteit (hibák, ajánlássorok, lejátszási indokok, watch party üzenetek) a kliens a nyelvi fájlok `srv`/`srvRe` táblájával fordítja. Új nyelvhez másold az `en.js`-t, fordítsd le, és vedd fel az `index.html`-be és az `app.js` `LANGS` listájába.
 
 ### Tudatosan későbbre hagyva (v2)
 
 Beépített relay/NAT-áttörés, offline letöltés az appokba, watch party az appokból, intro-felismerés audio-ujjlenyomattal,
-trickplay előnézeti képek, zenei könyvtár, élő TV, hiányzó gyűjteményelemek TMDB-ből, Postgres, angol fordítás.
+trickplay előnézeti képek, zenei könyvtár, élő TV, hiányzó gyűjteményelemek TMDB-ből, Postgres, a natív appok fordítása.
 
 ## Dizájn
 

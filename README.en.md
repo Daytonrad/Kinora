@@ -2,7 +2,7 @@
 
 [Magyar](README.md) · **English**
 
-A self-hosted media server for movies and TV shows — an alternative to Jellyfin and Plex, with a Hungarian interface. The name comes from a hand-held “motion-picture viewer” from the 1890s.
+A self-hosted media server for movies and TV shows — an alternative to Jellyfin and Plex, with a web interface in Hungarian, English and German. The name comes from a hand-held “motion-picture viewer” from the 1890s.
 
 Kinora is a single Go binary with an embedded web client, an SQLite database, and FFmpeg for transcoding. Docker is the recommended installation method.
 
@@ -260,11 +260,11 @@ internal/server/   HTTP API, middleware and web client
 web/static/        vanilla JS SPA (index.html, app.js, style.css, vendor/hls.js, vendor/qrcode-generator)
 ```
 
-All web-client strings live in the `T` object at the beginning of `app.js`, so the UI can be translated from one place.
+The web client is multilingual (Hungarian, English, German). Strings live in `web/static/i18n/<lang>.js`; Hungarian is the base, and missing keys fall back to it. The language follows the browser setting and can be switched in the profile menu, on the account page or on the sign-in screen (the choice is kept in the browser). The server’s Hungarian messages (errors, home rows, playback reasons, watch-party messages) are translated in the client through the `srv`/`srvRe` tables of the language files. To add a language, copy `en.js`, translate it, and add it to `index.html` and to the `LANGS` list in `app.js`.
 
 ### Planned for a later version
 
-Built-in relay/NAT traversal, offline downloads in the apps, Watch parties in the apps, audio-fingerprint intro detection, trick-play preview images, music libraries, live TV, importing missing collection items from TMDB, PostgreSQL and a full English app translation.
+Built-in relay/NAT traversal, offline downloads in the apps, Watch parties in the apps, audio-fingerprint intro detection, trick-play preview images, music libraries, live TV, importing missing collection items from TMDB, PostgreSQL and translations of the native apps.
 
 ## Design
 

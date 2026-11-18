@@ -2,104 +2,36 @@
 'use strict';
 
 // ===================================================================== strings
-// Every user-visible text lives here so an English translation can be added later.
-const T = {
-  appName: 'Kinora',
-  home: 'Kezdőlap', collections: 'Gyűjtemények', downloads: 'Letöltések', admin: 'Admin', searchPh: 'Keresés címre, leírásra, címkére',
-  switchProfile: 'Profilváltás', account: 'Fiók', logout: 'Kijelentkezés', joinParty: 'Csatlakozás watch partyhoz',
-  setupTitle: 'Állítsuk be a Kinorát', setupLede: 'Add meg a szerver nevét, és hozd létre az adminisztrátori fiókot.',
-  serverName: 'Szerver neve', username: 'Felhasználónév', password: 'Jelszó', password2: 'Jelszó még egyszer',
-  createAdmin: 'Admin fiók létrehozása', pwMismatch: 'A két jelszó nem egyezik.',
-  loginTitle: 'Bejelentkezés', loginLede: 'Lépj be a fiókodba.', login: 'Belépés',
-  joinTitle: 'Regisztráció meghívóval', joinLede: s => `Meghívást kaptál ide: ${s}. Válassz felhasználónevet és jelszót.`,
-  join: 'Fiók létrehozása', inviteInvalid: 'Ez a meghívó érvénytelen vagy lejárt. Kérj újat attól, aki küldte.',
-  whoWatches: 'Ki néz?', addProfile: 'Profil hozzáadása', editProfiles: 'Profilok szerkesztése', done: 'Kész',
-  kids: 'Gyerek', pinTitle: n => `${n} profilja PIN-nel védett`, pinLabel: 'PIN', enter: 'Belépés',
-  profileName: 'Név', color: 'Szín', pin: 'PIN (4–8 számjegy, üresen hagyva nincs)', pinKeep: 'Hagyd üresen, ha nem változik',
-  removePin: 'PIN eltávolítása', isKids: 'Gyerekprofil (csak korhatár-besorolt, korosztálynak megfelelő tartalom)',
-  maxRating: 'Korhatár-szint', ratingLevels: ['Mindenki (G, KN)', '6+ / PG', '12+ / PG-13', '16+ / R', '18+'], noLimit: 'Nincs korlát',
-  subLangs: 'Feliratnyelvek (prioritás)', audioLangs: 'Hangsávnyelvek (prioritás)', langHint: 'Vesszővel elválasztva, pl. hun,eng',
-  subMode: 'Feliratok', subModes: { auto: 'Automatikus (idegen nyelvű hangnál)', always: 'Mindig', off: 'Kikapcsolva' },
-  autoplayNext: 'Következő rész automatikus indítása', maxBitrate: 'Maximális bitráta', bitrateOpts: [[0, 'Eredeti'], [20000, '20 Mbps'], [8000, '8 Mbps'], [4000, '4 Mbps'], [2000, '2 Mbps'], [1000, '1 Mbps']],
-  save: 'Mentés', cancel: 'Mégse', delete: 'Törlés', close: 'Bezárás', edit: 'Szerkesztés', create: 'Létrehozás', copy: 'Másolás', copied: 'Vágólapra másolva.',
-  saved: 'Mentve.', deleted: 'Törölve.', confirmDelete: n => `Biztosan törlöd: ${n}?`,
-  play: 'Lejátszás', resume: t => `Folytatás (${t})`, playEp: (s, e) => `Lejátszás: ${s}. évad ${e}. rész`, resumeEp: (s, e) => `Folytatás: ${s}. évad ${e}. rész`,
-  markPlayed: 'Megnézettnek jelölés', markUnplayed: 'Megnézetlennek jelölés', favorite: 'Kedvenc', hide: 'Elrejtés', unhide: 'Elrejtés visszavonása',
-  hiddenToast: 'Elrejtve. Ha újra elkezded nézni, visszakerül.', hideSeries: 'Sorozat elrejtése a listákból',
-  addToCollection: 'Hozzáadás gyűjteményhez', newCollection: 'Új gyűjtemény…', inCollections: 'Gyűjteményekben', addedTo: n => `Hozzáadva: ${n}`, removedFrom: n => `Eltávolítva innen: ${n}`,
-  tags: 'Címkék', addTag: 'Új címke…', download: 'Letöltés', downloadQ: 'Minőség', original: 'Eredeti fájl', startParty: 'Watch party indítása',
-  fixMatch: 'Találat javítása', similar: 'Hasonló', seasons: 'Évadok', episodes: 'Epizódok', season: n => n === 0 ? 'Különkiadások' : `${n}. évad`,
-  ep: (s, e) => `S${String(s).padStart(2, '0')}E${String(e).padStart(2, '0')}`, min: m => `${m} perc`, hm: (h, m) => h ? `${h} ó ${m} p` : `${m} perc`,
-  genres: 'Műfajok', file: 'Fájl', video: 'Videó', audio: 'Hang', subtitles: 'Felirat',
-  all: 'Összes', more: 'Összes', moreActions: 'Műveletek', moreBtn: 'Továbbiak', details: 'Részletek', data: 'Adatok',
-  libEmpty: 'Ebben a könyvtárban még nincs semmi. Ha most adtad hozzá, a szkennelés pár perc.', noResults: 'Nincs találat ezekkel a szűrőkkel.',
-  filters: 'Szűrők', sort: 'Rendezés', asc: 'Növekvő', desc: 'Csökkenő', yearFrom: 'Évtől', yearTo: 'Évig', minRating: 'Min. értékelés',
-  watched: 'Megnézve', unwatched: 'Nem nézett', any: 'Mind', onlyFav: 'Csak kedvencek', clear: 'Szűrők törlése', saveSmart: 'Mentés smart gyűjteményként',
-  homeEmptyTitle: 'Még üres a vetítőterem', homeEmptyAdmin: 'Adj hozzá egy könyvtárat az adminfelületen, és a Kinora beolvassa a filmjeidet.', homeEmptyUser: 'Az adminisztrátor még nem adott hozzá könyvtárat.',
-  addLibrary: 'Könyvtár hozzáadása', searchTitle: q => `Találatok: „${q}”`, searchEmpty: 'Nincs találat.',
-  collEmpty: 'Még nincs gyűjteményed. A kézi gyűjteménybe te válogatsz, a smart gyűjtemény szabályok alapján frissül magától.',
-  newManual: 'Új kézi gyűjtemény', newSmart: 'Új smart gyűjtemény', manual: 'Kézi', smart: 'Smart', shared: 'Közös (az egész háztartás látja)',
-  pinned: 'Kitűzés a kezdőlapra', collName: 'Név', rules: 'Szabályok', matchAll: 'Minden szabály teljesüljön', matchAny: 'Bármelyik szabály teljesüljön',
-  addRule: 'Szabály hozzáadása', limit: 'Legfeljebb (üres = nincs korlát)', preview: n => `Előnézet – ${n} találat`, removeFromColl: 'Eltávolítás',
-  ops: { is: 'az', is_not: 'nem az', gte: 'legalább', lte: 'legfeljebb', contains: 'tartalmazza', not_contains: 'nem tartalmazza', starts_with: 'így kezdődik', within_days: 'az utóbbi N napban', older_than_days: 'régebben, mint N nap' },
-  yes: 'Igen', no: 'Nem', moveUp: 'Feljebb', moveDown: 'Lejjebb',
-  dlEmpty: 'Nincs letöltés. A részletes oldalon választhatsz minőséget, az átkódolás a háttérben fut.', dlStatus: { queued: 'Sorban áll', running: 'Készül', done: 'Kész', error: 'Hiba' },
-  dlStarted: 'A letöltés elindult. A Letöltések oldalon követheted.', saveFile: 'Mentés eszközre', dlKept: 'A kész fájlok 7 napig érhetők el.',
-  // player
-  back: 'Vissza', pause: 'Szünet', rewind: '10 mp vissza', forward: '10 mp előre', mute: 'Némítás', fullscreen: 'Teljes képernyő',
-  audioTrack: 'Hangsáv', subtitle: 'Felirat', subOff: 'Kikapcsolva', showAll: 'Összes nyelv mutatása', burnIn: 'beégetve', quality: 'Minőség',
-  qAuto: 'Automatikus / eredeti', why: 'Miért így megy?', whyTitle: { direct: 'Közvetlen lejátszás', remux: 'Remux (csomagolásváltás)', transcode: 'Átkódolás' },
-  encoder: 'Encoder', nextEp: 'Következő rész', nextIn: n => `Indul ${n} mp múlva`, playNow: 'Indítás most', dismiss: 'Mégse',
-  playErr: 'A lejátszás nem sikerült', retry: 'Újra', forceTranscode: 'Próbáld átkódolva', loading: 'Betöltés…', unknownLang: 'ismeretlen',
-  // party
-  party: 'Watch party', partyLeave: 'Kilépés a watch partyból', partyCode: 'Kód', partyLink: 'Meghívó link', partyMembers: 'Nézők', partyEveryone: 'Mindenki irányíthat', partyChatPh: 'Üzenet…',
-  partySend: 'Küldés', partyWaiting: names => `Várakozás: ${names.join(', ')}…`, partyJoinTitle: 'Csatlakozás watch partyhoz', partyCodeLabel: '6 karakteres kód',
-  partyNotFound: 'Nincs ilyen watch party. Ellenőrizd a kódot.', partyLost: 'A kapcsolat megszakadt, újracsatlakozás…', host: 'házigazda', buffering: 'tölt…',
-  // admin
-  aDash: 'Irányítópult', aLibs: 'Könyvtárak', aUsers: 'Felhasználók', aInvites: 'Meghívók', aTranscode: 'Átkódolás', aMeta: 'Metaadat', aConnect: 'Csatlakozás', aSettings: 'Beállítások',
-  version: 'Verzió', uptime: 'Futásidő', titles: 'Cím', files: 'Fájl', size: 'Méret', activeTranscodes: 'Aktív átkódolás', parties: 'Watch party', scans: 'Szkennelés',
-  libName: 'Név', libPath: 'Mappa', libKind: 'Típus', kinds: { movies: 'Filmek', shows: 'Sorozatok', mixed: 'Vegyes' }, choose: 'Tallózás…', scan: 'Szkennelés',
-  lastScan: 'Utolsó szkennelés', never: 'még soha', phase: { walk: 'bejárás', probe: 'elemzés', cleanup: 'rendrakás', done: 'kész' }, scanErr: 'Szkennelési hiba',
-  pickFolder: 'Mappa kiválasztása', useFolder: 'Ezt a mappát választom', up: 'Feljebb', mediaHint: 'Dockerben a médiád a /media alatt van (csak olvasható).',
-  newUser: 'Új felhasználó', isAdmin: 'Adminisztrátor', resetPw: 'Új jelszó', profilesN: n => `${n} profil`, you: '(te)',
-  newInvite: 'Új meghívó', note: 'Megjegyzés', uses: 'Felhasználások', validHours: 'Érvényesség (óra, 0 = korlátlan)', inviteLink: 'Meghívó link', usesLeft: n => `még ${n}×`, expires: 'Lejár',
-  hwTest: 'Encoder-önteszt futtatása', hwTesting: 'Teszt fut…', selectedEnc: 'Használt encoder', encSetting: 'Encoder kiválasztása', encAuto: 'Automatikus (első működő hardveres, különben szoftveres)', tonemap: 'HDR → SDR tónusleképezés',
-  tmdbKey: 'TMDB API kulcs (v3 kulcs vagy v4 token)', metaLang: 'Metaadat nyelve', refreshMeta: 'Metaadat frissítése', retryNoMatch: 'A „nincs találat” elemek újrapróbálása', metaStatus: 'Állapot',
-  metaHint: 'Kulcs nélkül a Kinora csak a fájlnevekből és a helyi NFO-fájlokból dolgozik. Kulcsot ingyen kérhetsz: themoviedb.org → Settings → API.',
-  publicUrl: 'Nyilvános URL', scanInterval: 'Szkennelési intervallum (perc, 0 = ki)', backup: 'Adatbázis-mentés letöltése', backupHint: 'Konzisztens pillanatkép (VACUUM INTO) – futás közben is biztonságos.',
-  envLocked: v => `környezeti változóból beállítva (${v})`,
-  connectLede: 'Ezeken a címeken érhető el a szerver. Telefonról olvasd be a QR-kódot.', noPublic: 'Nincs megadva nyilvános URL (Beállítások).',
-  matchSearch: 'Keresés a TMDB-ben', matchApply: 'Ezt választom', tmdbId: 'vagy TMDB azonosító',
-  netErr: 'Nem érem el a szervert. Ellenőrizd a kapcsolatot.',
-  // devices & quick connect
-  connectDevice: 'Eszköz csatlakoztatása', qcLede: 'Írd be a tévén vagy telefonon látható 6 jegyű kódot.', qcCode: '6 jegyű kód', next: 'Tovább',
-  qcWants: (n, p) => `${n || 'Ismeretlen eszköz'} (${p}) szeretne belépni a fiókodba.`, qcProfile: 'Melyik profillal lépjen be?', qcAnyProfile: 'Profilválasztó az eszközön',
-  qcPinNote: 'A PIN-nel védett profil PIN-jét az új eszközön kell megadni.', qcKidsNote: 'A gyerekprofillal belépett eszköz nem válthat más profilra.',
-  approve: 'Jóváhagyás', deny: 'Elutasítás', qcApproved: 'Kész! Az eszköz pár másodpercen belül belép.', qcDenied: 'Elutasítva.', qcKids: 'Gyerekprofilból nem lehet eszközt csatlakoztatni.',
-  myDevices: 'Bejelentkezett eszközök', thisDevice: 'ez az eszköz', signOutDevice: 'Kiléptetés', signOutOthers: 'Kiléptetés mindenhonnan (ezen kívül)',
-  signedOutN: n => `${n} eszköz kiléptetve.`, lastActive: 'Utoljára aktív', aDevices: 'Eszközök',
-  platforms: { web: 'Böngésző', android: 'Android', androidtv: 'Android TV', ios: 'iOS', tizen: 'Samsung TV', tvos: 'Apple TV', webos: 'LG TV' },
-  // branding
-  aLook: 'Megjelenés', logoDark: 'Logó sötét háttérre', logoLight: 'Logó világos háttérre', uploadLogo: 'Logó feltöltése…', removeLogo: 'Logó törlése',
-  logoHint: 'PNG, JPG, WebP vagy SVG, legfeljebb 2 MB. A faviconét és az app-ikonokat a Kinora készíti el belőle.', accent: 'Akcentszín',
-  setupLogo: 'Logó (nem kötelező)', noLogo: 'Nincs saját logó – a Kinora felirat látszik.',
-  // folders & permissions
-  permCheck: 'Jogosultság ellenőrzése', permOk: 'Olvasható – rendben.', permFix: 'Javítás (futtasd a szerveren):', permGroup: 'Vagy csoporton keresztül:',
-  locked: 'nincs jog', hostPath: p => `A hoston: ${p}`, shortcuts: 'Gyorsugrás',
-  mediaHintNative: 'Bármelyik mappa választható, amit a Kinora szolgáltatás felhasználója olvashat; a lakat jelzi, ahová nincs joga.',
-  mediaHintDocker: 'Dockerben a /media alatt vannak a csatolt mappák; a docker-compose.host.yml-lel a /host alatt a teljes gép is.',
-  // skip intro / credits
-  skipIntro: 'Intró átugrása', skipRecap: 'Előzmények átugrása', skipCredits: 'Stáblista átugrása', skippedIntro: 'Intró átugorva',
-  skipMode: 'Intró és stáblista', skipModes: { manual: 'Átugrás gombbal', auto: 'Automatikus átugrás', off: 'Kikapcsolva' },
-  markIntroStart: 'Intró eleje itt', markIntroEnd: 'Intró vége itt', markCredits: 'Stáblista kezdete itt', clearIntro: 'Kézi intró-jelölés törlése',
-  markStartFirst: 'Előbb jelöld meg az intró elejét.', markSaved: 'Jelölés mentve.',
-  propagateAsk: 'Alkalmazod az évad többi részére is, ahol ugyanez a főcím szól?', propagated: n => `${n} további résznél beállítva.`,
-  aSegments: 'Intró-felismerés', segAnalyze: 'Intró-felismerés futtatása', segQueued: n => `Sorba állítva: ${n} évad.`,
-  segBackend: 'Ujjlenyomat-készítő', segQueue: 'Várakozó évadok', segRunning: 'Most fut', segStats: (e, a, i, c, m) => `${a}/${e} rész elemezve · intró: ${i} · stáblista: ${c} · kézi jelölés: ${m}`,
-  segDetection: 'Intró- és stáblista-felismerés', segWindow: 'Intró keresése az első N percben (2–30)',
-  qcEnabled: 'Belépés kóddal (Quick Connect)', discEnabled: 'Szerverkeresés a helyi hálózaton (UDP 7359)', on: 'Bekapcsolva', off: 'Kikapcsolva',
-  ago: s => { const m = Math.round(s / 60); if (m < 1) return 'most'; if (m < 60) return `${m} perce`; const h = Math.round(m / 60); if (h < 48) return `${h} órája`; return `${Math.round(h / 24)} napja`; },
-};
+// Every user-visible text lives in i18n/<lang>.js. Hungarian is the base: other languages fall back to it key by key.
+const I18N = window.KINORA_I18N || {};
+const LANGS = [['hu', 'Magyar'], ['en', 'English'], ['de', 'Deutsch']];
+const LANG = (() => {
+  const ok = l => LANGS.some(([c]) => c === l) && I18N[l];
+  const saved = localStorage.getItem('kinora-lang');
+  if (ok(saved)) return saved;
+  for (const l of navigator.languages || [navigator.language || '']) { const c = String(l).slice(0, 2).toLowerCase(); if (ok(c)) return c; }
+  return I18N.en ? 'en' : 'hu';
+})();
+const T = Object.assign({}, I18N.hu, I18N[LANG]);
+document.documentElement.lang = LANG;
+function setLang(l) { if (l === LANG) return; localStorage.setItem('kinora-lang', l); location.reload(); }
+function langSwitch() {
+  return h('div.chips.lang-switch', { role: 'group', 'aria-label': T.language },
+    LANGS.map(([c, name]) => h('button.chip' + (c === LANG ? '.on' : ''), { type: 'button', lang: c, 'aria-pressed': String(c === LANG), onclick: e => { e.stopPropagation(); setLang(c); } }, name)));
+}
+// Server texts (errors, home rows, playback reasons) are Hungarian; translate the known ones:
+// exact match, then the language's patterns, then "known prefix: detail".
+function srv(msg) {
+  if (typeof msg !== 'string' || !msg || LANG === 'hu') return msg;
+  const d = T.srv || {};
+  if (d[msg]) return d[msg];
+  for (const [re, f] of T.srvRe || []) { const m = msg.match(re); if (m) return f(...m.slice(1)); }
+  const i = msg.indexOf(': ');
+  if (i > 0 && d[msg.slice(0, i)]) return d[msg.slice(0, i)] + ': ' + srv(msg.slice(i + 2));
+  return msg;
+}
+const lbl = (map, key, fallback) => (map && map[key]) || fallback;
+const num = (v, digits) => Number(v).toLocaleString(T.locale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 // ===================================================================== helpers
 const $ = (s, r = document) => r.querySelector(s);
@@ -171,8 +103,8 @@ const fmtTime = s => {
   const hh = Math.floor(s / 3600), mm = Math.floor(s / 60) % 60, ss = s % 60;
   return (hh ? hh + ':' + String(mm).padStart(2, '0') : mm) + ':' + String(ss).padStart(2, '0');
 };
-const fmtRuntime = sec => { if (sec < 60) return `${Math.round(sec)} mp`; const m = Math.round(sec / 60); return T.hm(Math.floor(m / 60), m % 60); };
-const fmtBytes = b => { if (!b) return '0 B'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; const i = Math.min(4, Math.floor(Math.log(b) / Math.log(1024))); return (b / 1024 ** i).toFixed(i ? 1 : 0).replace('.', ',') + ' ' + u[i]; };
+const fmtRuntime = sec => { if (sec < 60) return T.sec(Math.round(sec)); const m = Math.round(sec / 60); return T.hm(Math.floor(m / 60), m % 60); };
+const fmtBytes = b => { if (!b) return '0 B'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; const i = Math.min(4, Math.floor(Math.log(b) / Math.log(1024))); return num(b / 1024 ** i, i ? 1 : 0) + ' ' + u[i]; };
 const resLabel = (w, hgt) => (hgt >= 1600 || w >= 3200) ? '4K' : (hgt >= 900 || w >= 1800) ? '1080p' : (hgt >= 650 || w >= 1200) ? '720p' : hgt ? 'SD' : '';
 const imgURL = (it, kind) => `/api/images/${it.id}/${kind}?v=${it.updated_at || 0}`;
 const debounce = (f, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => f(...a), ms); }; };
@@ -203,7 +135,7 @@ async function api(method, path, body, opts = {}) {
   const ct = res.headers.get('content-type') || '';
   if (ct.includes('json')) data = await res.json().catch(() => null);
   if (!res.ok) {
-    const msg = (data && data.error) || `HTTP ${res.status}`;
+    const msg = srv(data && data.error) || `HTTP ${res.status}`;
     if (res.status === 401 && !opts.noRedirect) { state.me = null; go('#/login'); }
     else if (res.status === 428 && !opts.noRedirect) { go('#/profiles'); }
     else if (!opts.quiet) toast(msg, true);
@@ -332,6 +264,8 @@ function shell(active, ...content) {
     h('a', { role: 'menuitem', href: '#/account' }, T.account),
     !p.is_kids && !me.profile_locked && h('a', { role: 'menuitem', href: '#/quickconnect' }, T.connectDevice),
     h('hr'),
+    langSwitch(),
+    h('hr'),
     h('button', { role: 'menuitem', onclick: () => POST('/api/logout').then(() => { state.me = null; go('#/login'); }) }, T.logout));
   const avatarBtn = h('button.avatar', { style: { background: p.color }, 'aria-label': p.name, 'aria-haspopup': 'menu', onclick: e => { e.stopPropagation(); menuPop.classList.toggle('hidden'); } }, p.name.slice(0, 1).toUpperCase());
   const closeMenu = () => menuPop.classList.add('hidden');
@@ -339,7 +273,7 @@ function shell(active, ...content) {
   onCleanup(() => document.removeEventListener('click', closeMenu));
   const top = h('header.top' + (active === 'home' ? '' : '.solid'), null,
     brandMark('a'),
-    h('nav.nav', { 'aria-label': 'Fő menü' },
+    h('nav.nav', { 'aria-label': T.mainMenu },
       h('a' + (active === 'home' ? '.on' : ''), { href: '#/home' }, T.home),
       libsNav,
       h('a' + (active === 'collections' ? '.on' : ''), { href: '#/collections' }, T.collections),
@@ -393,7 +327,7 @@ function applyBranding() {
 }
 
 function authPage(title, lede, form) {
-  put(app(), h('div.center', null, h('div.auth', null, brandMark('span'), h('h1', null, title), h('p.lede', null, lede), form)));
+  put(app(), h('div.center', null, h('div.auth', null, brandMark('span'), h('h1', null, title), h('p.lede', null, lede), form, langSwitch())));
   setTimeout(() => form.querySelector('input')?.focus(), 30);
 }
 function field(label, input, hint) { return h('label.field', null, h('span', null, label), input, hint && h('div.hint', { class: 'mt1' }, hint)); }
@@ -477,7 +411,7 @@ async function selectProfile(p) {
 
 function profileEditor(p) {
   const isNew = !p;
-  p = p || { name: '', color: COLORS[Math.floor(Math.random() * COLORS.length)], is_kids: false, max_rating_level: null, sub_langs: 'hun,eng', audio_langs: 'hun,eng', sub_mode: 'auto', autoplay_next: true, max_bitrate: 0 };
+  p = p || { name: '', color: COLORS[Math.floor(Math.random() * COLORS.length)], is_kids: false, max_rating_level: null, sub_langs: T.defaultLangs, audio_langs: T.defaultLangs, sub_mode: 'auto', autoplay_next: true, max_bitrate: 0 };
   let color = p.color;
   const name = h('input', { type: 'text', value: p.name, maxlength: 30 });
   const sw = h('div.swatches', null, COLORS.map(c => h('button' + (c === color ? '.on' : ''), { type: 'button', style: { background: c }, 'aria-label': c, onclick: e => { color = c; sw.querySelectorAll('button').forEach(b => b.classList.remove('on')); e.currentTarget.classList.add('on'); } })));
@@ -513,7 +447,7 @@ function profileEditor(p) {
 // ===================================================================== cards & shelves
 function itemSub(it) {
   if (it.kind === 'episode') return [it.series_title, it.season_num != null && it.episode_num != null ? T.ep(it.season_num, it.episode_num) : ''].filter(Boolean).join('  ');
-  if (it.kind === 'series') return [it.year, it.episode_count ? `${it.episode_count} rész` : ''].filter(Boolean).join('  ');
+  if (it.kind === 'series') return [it.year, it.episode_count ? T.epCount(it.episode_count) : ''].filter(Boolean).join('  ');
   return it.year || '';
 }
 function artImg(it, kind, alt) {
@@ -529,7 +463,7 @@ function card(it, style = 'poster', opts = {}) {
   const ud = it.user_data || {};
   if (style === 'landscape' && ud.position > 0 && it.runtime_sec) art.append(h('div.prog', null, h('i', { style: { width: Math.min(100, ud.position / it.runtime_sec * 100) + '%' } })));
   if (ud.played && it.kind !== 'season') art.append(h('span.tick', { title: T.watched }, icon('check')));
-  else if (it.kind === 'series' && it.unplayed_count) art.append(h('span.count', { title: 'megnézetlen' }, it.unplayed_count));
+  else if (it.kind === 'series' && it.unplayed_count) art.append(h('span.count', { title: T.unwatchedTitle }, it.unplayed_count));
   const href = '#/item/' + it.id;
   const el = h('div.card.' + style, { tabindex: 0, role: 'link', 'aria-label': it.title, onclick: e => { if (!e.target.closest('.more')) location.hash = opts.playOnClick ? '#/play/' + it.id : href; }, onkeydown: e => { if (e.key === 'Enter') location.hash = opts.playOnClick ? '#/play/' + it.id : href; } },
     art, h('div.cap', null, h('b', null, it.title), h('span', null, itemSub(it)), opts.reason && h('span.why', null, opts.reason)));
@@ -553,7 +487,7 @@ function popMenu(anchor, entries) {
   onCleanup(close);
 }
 function shelf(title, items, style, opts = {}) {
-  const track = h('div.shelf-track.' + style, { role: 'list' }, items.map(it => card(it, style, { menu: opts.menu, reason: opts.reasons && opts.reasons[it.id], playOnClick: opts.playOnClick })));
+  const track = h('div.shelf-track.' + style, { role: 'list' }, items.map(it => card(it, style, { menu: opts.menu, reason: opts.reasons && srv(opts.reasons[it.id]), playOnClick: opts.playOnClick })));
   return h('section.shelf', { 'aria-label': title }, h('div.shelf-head', null, h('h2', null, title), opts.more && h('a', { href: opts.more }, T.more)), track);
 }
 
@@ -567,7 +501,7 @@ async function viewHome() {
       await POST(`/api/items/${id}/hide`, { hidden: true }); toast(T.hiddenToast); viewHome();
     }],
     [T.markPlayed, async () => { await POST(`/api/items/${it.id}/played`, { played: true }); viewHome(); }],
-    ['Részletek', () => go('#/item/' + it.id)],
+    [T.details, () => go('#/item/' + it.id)],
   ]);
   if (!data.rows.length) {
     const admin = state.me.user.is_admin;
@@ -579,7 +513,7 @@ async function viewHome() {
   if (data.hero) { hero = heroBlock(data.hero, data.rows); main.append(hero); }
   for (const row of data.rows) {
     const landscape = row.style === 'landscape';
-    main.append(shelf(row.title, row.items, row.style, { more: row.more, reasons: row.reasons, playOnClick: landscape, menu: hideMenu(row.hide_as) }));
+    main.append(shelf(srv(row.title), row.items, row.style, { more: row.more, reasons: row.reasons, playOnClick: landscape, menu: hideMenu(row.hide_as) }));
   }
   // the beam follows focus: a poster case lit by the remote becomes tonight's feature on the facade
   if (hero) {
@@ -595,7 +529,7 @@ async function viewHome() {
 }
 function heroBlock(it, rows) {
   let reason = '';
-  for (const r of rows) if (r.reasons && r.reasons[it.id]) { reason = r.reasons[it.id]; break; }
+  for (const r of rows) if (r.reasons && r.reasons[it.id]) { reason = srv(r.reasons[it.id]); break; }
   const sec = h('section.hero', null, h('div.hero-img'), h('div.hero-body'));
   sec._shown = 0;
   fillHero(sec, it, reason);
@@ -668,7 +602,7 @@ async function viewLibrary(libId, q) {
       const r = await GET('/api/items?' + p);
       if (my !== gen) return;
       total = r.total; offset += r.items.length;
-      countEl.textContent = `${total} cím`;
+      countEl.textContent = T.titlesN(total);
       grid.append(...r.items.map(it => card(it, 'poster')));
       if (!total) grid.append(h('p.empty', null, lib && lib.count === 0 ? T.libEmpty : T.noResults));
     } finally { loading = false; }
@@ -692,16 +626,16 @@ async function viewLibrary(libId, q) {
   const filters = h('aside.filters', { 'aria-label': T.filters },
     f.genres.length > 0 && [h('h2', null, T.genres), chipList(f.genres, sel.genre)],
     f.tags.length > 0 && [h('h2', null, T.tags), chipList(f.tags, sel.tag)],
-    h('h2', null, 'Év'), h('div.grid2', null, inp('year_from', T.yearFrom), inp('year_to', T.yearTo)),
-    h('h2', null, T.minRating), inp('min_rating', 'pl. 7'),
+    h('h2', null, T.year), h('div.grid2', null, inp('year_from', T.yearFrom), inp('year_to', T.yearTo)),
+    h('h2', null, T.minRating), inp('min_rating', T.egRating),
     h('h2', null, T.watched), playedSel,
     h('label.check', { class: 'mt3' }, fav, T.onlyFav),
     h('div', { class: 'stack mt4' },
       h('a.btn.ghost', { href: '#/library/' + libId }, T.clear),
       !state.me.profile.is_kids && h('button.btn', { onclick: saveAsSmart }, T.saveSmart)));
-  const sortSel = h('select', { 'aria-label': T.sort, onchange: e => { sel.sort = e.target.value; refresh(); } }, f.sorts.map(s => h('option', { value: s.value, selected: s.value === sel.sort }, s.label)));
-  const orderSel = h('select', { 'aria-label': 'Irány', onchange: e => { sel.order = e.target.value; refresh(); } }, h('option', { value: 'asc', selected: sel.order === 'asc' }, T.asc), h('option', { value: 'desc', selected: sel.order === 'desc' }, T.desc));
-  const qInput = inp('q', 'Szűrés címre…', 'search'); qInput.classList.add('q');
+  const sortSel = h('select', { 'aria-label': T.sort, onchange: e => { sel.sort = e.target.value; refresh(); } }, f.sorts.map(s => h('option', { value: s.value, selected: s.value === sel.sort }, lbl(T.sortLabels, s.value, s.label))));
+  const orderSel = h('select', { 'aria-label': T.order, onchange: e => { sel.order = e.target.value; refresh(); } }, h('option', { value: 'asc', selected: sel.order === 'asc' }, T.asc), h('option', { value: 'desc', selected: sel.order === 'desc' }, T.desc));
+  const qInput = inp('q', T.filterTitle, 'search'); qInput.classList.add('q');
   main.append(h('div.page-head', null, h('div', null, h('h1', null, lib ? lib.name : ''), countEl)),
     h('div.browse', null, filters, h('div', null,
       h('div.toolbar', null, h('button.btn.filters-toggle', { onclick: () => filters.classList.toggle('open') }, icon('filter'), T.filters), qInput, sortSel, orderSel),
@@ -751,7 +685,7 @@ async function viewItem(id) {
     it.year && h('span.badge', null, it.year), it.content_rating && h('span.badge', null, it.content_rating),
     it.runtime_sec > 0 && it.kind !== 'series' && h('span.badge', null, fmtRuntime(it.runtime_sec)),
     it.height > 0 && h('span.badge', null, resLabel(it.width, it.height)), it.hdr && h('span.badge.hot', null, it.hdr),
-    it.video_codec && h('span.badge', null, it.video_codec.toUpperCase()), it.community_rating && h('span.badge', null, icon('star'), it.community_rating.toFixed(1).replace('.', ',')));
+    it.video_codec && h('span.badge', null, it.video_codec.toUpperCase()), it.community_rating && h('span.badge', null, icon('star'), num(it.community_rating, 1)));
 
   const playedBtn = h('button.btn.icon' + (ud.played ? '.on' : ''), { 'aria-pressed': ud.played ? 'true' : 'false', title: ud.played ? T.markUnplayed : T.markPlayed, 'aria-label': ud.played ? T.markUnplayed : T.markPlayed, onclick: async () => {
     await POST(`/api/items/${it.id}/played`, { played: !ud.played }); viewItem(id);
@@ -760,9 +694,9 @@ async function viewItem(id) {
     ud.favorite = !ud.favorite; await POST(`/api/items/${it.id}/favorite`, { favorite: ud.favorite });
     favBtn.classList.toggle('on', ud.favorite); favBtn.setAttribute('aria-pressed', ud.favorite);
   } }, icon('heart', ud.favorite));
-  const stars = h('div.stars', { role: 'radiogroup', 'aria-label': 'Saját értékelés' });
+  const stars = h('div.stars', { role: 'radiogroup', 'aria-label': T.myRating });
   const paintStars = v => stars.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', v != null && i < v));
-  for (let i = 1; i <= 5; i++) stars.append(h('button', { 'aria-label': `${i} csillag`, onclick: async () => {
+  for (let i = 1; i <= 5; i++) stars.append(h('button', { 'aria-label': T.starsN(i), onclick: async () => {
     const v = ud.stars === i ? null : i; ud.stars = v; await POST(`/api/items/${it.id}/stars`, { stars: v }); paintStars(v);
   } }, icon('star')));
   paintStars(ud.stars);
@@ -781,9 +715,9 @@ async function viewItem(id) {
   const tagBox = !kidsP && tagEditor(it);
   const sideInfo = h('dl.side-info', null,
     it.genres && [h('dt', null, T.genres), h('dd', null, it.genres.join(', '))],
-    video && [h('dt', null, T.video), h('dd', null, `${video.codec.toUpperCase()} ${it.width}×${it.height}${it.hdr ? ' ' + it.hdr : ''}${it.bitrate ? ', ' + (it.bitrate / 1e6).toFixed(1).replace('.', ',') + ' Mbps' : ''}`)],
+    video && [h('dt', null, T.video), h('dd', null, `${video.codec.toUpperCase()} ${it.width}×${it.height}${it.hdr ? ' ' + it.hdr : ''}${it.bitrate ? ', ' + num(it.bitrate / 1e6, 1) + ' Mbps' : ''}`)],
     audios.length > 0 && [h('dt', null, T.audio), h('dd', null, audios.map(a => `${(a.lang || T.unknownLang)} ${a.codec}${a.channels ? ' ' + a.channels + 'ch' : ''}`).join(', '))],
-    subs.length > 0 && [h('dt', null, T.subtitles), h('dd', null, subs.map(s => (s.lang || T.unknownLang) + (s.forced ? ' (kényszerített)' : '') + (s.text_based ? '' : ' [kép]')).join(', '))],
+    subs.length > 0 && [h('dt', null, T.subtitles), h('dd', null, subs.map(s => (s.lang || T.unknownLang) + (s.forced ? ` (${T.forced})` : '') + (s.text_based ? '' : ` [${T.imageSub}]`)).join(', '))],
     it.container && [h('dt', null, T.file), h('dd', null, `${it.container.toUpperCase()}, ${fmtBytes(it.size)}`)],
     d.collections && d.collections.length > 0 && [h('dt', null, T.inCollections), h('dd', null, d.collections.map((c, i) => [i ? ', ' : '', h('a', { href: '#/collections/' + c.id }, c.name)]))]);
 
@@ -866,7 +800,7 @@ function tagEditor(it) {
   const input = h('input', { type: 'text', placeholder: T.addTag, list: listId, 'aria-label': T.addTag, onkeydown: e => {
     if (e.key === 'Enter' && input.value.trim()) { e.preventDefault(); tags.push(input.value.trim()); input.value = ''; save(); }
   } });
-  const render = () => put(box, icon('tag'), ...tags.map(t => h('span.chip', null, t, h('button', { class: 'chip-x', 'aria-label': `${t} törlése`, onclick: () => { tags = tags.filter(x => x !== t); save(); } }, icon('x')))), input, dl);
+  const render = () => put(box, icon('tag'), ...tags.map(t => h('span.chip', null, t, h('button', { class: 'chip-x', 'aria-label': T.removeTag(t), onclick: () => { tags = tags.filter(x => x !== t); save(); } }, icon('x')))), input, dl);
   render();
   return h('div', { class: 'mb3' }, box);
 }
@@ -885,7 +819,7 @@ function downloadWidget(it) {
 async function fixMatchDialog(it) {
   const qi = h('input', { type: 'text', value: it.title });
   const yi = h('input', { type: 'number', value: it.year || '' });
-  const idi = h('input', { type: 'number', placeholder: 'pl. 603' });
+  const idi = h('input', { type: 'number', placeholder: T.egTmdbId });
   const results = h('div', { class: 'stack mt3' });
   const kind = it.kind === 'series' ? 'series' : 'movie';
   let m;
@@ -898,7 +832,7 @@ async function fixMatchDialog(it) {
       h('button.btn', { onclick: () => apply(x.id) }, T.matchApply))));
     if (!r.length) results.append(h('p.muted', null, T.searchEmpty));
   };
-  m = modal(T.fixMatch, h('div', null, h('div.grid2', null, field('Cím', qi), field('Év', yi)), h('button.btn', { onclick: search }, T.matchSearch),
+  m = modal(T.fixMatch, h('div', null, h('div.grid2', null, field(T.title, qi), field(T.year, yi)), h('button.btn', { onclick: search }, T.matchSearch),
     results, h('div', { class: 'mt4' }, field(T.tmdbId, idi))), close => [h('button.btn', { onclick: close }, T.cancel), h('button.btn.primary', { onclick: () => idi.value && apply(idi.value) }, T.matchApply)]);
 }
 
@@ -912,7 +846,7 @@ async function viewCollections() {
   if (!cols.length) { main.append(h('p.empty', null, T.collEmpty)); return; }
   for (const c of cols) {
     const r = await GET(`/api/collections/${c.id}?limit=20`);
-    const head = [c.name, c.kind === 'smart' ? ' · smart' : '', c.shared ? ' · közös' : ''].join('');
+    const head = [c.name, c.kind === 'smart' ? ' · smart' : '', c.shared ? ' · ' + T.sharedShort : ''].join('');
     main.append(shelf(head, r.items, 'poster', { more: '#/collections/' + c.id }));
   }
   function newManual() {
@@ -928,8 +862,8 @@ async function viewCollection(id) {
   const main = shell('collections');
   const r = await GET(`/api/collections/${id}?limit=500`);
   const c = r.collection, kids = state.me.profile.is_kids;
-  const pinBtn = !kids && h('button.btn' + (c.pinned ? '.on' : ''), { onclick: async () => { await api('PATCH', '/api/collections/' + id, { pinned: !c.pinned }); viewCollection(id); } }, c.pinned ? 'Kitűzve a kezdőlapra' : T.pinned);
-  main.append(h('div.page-head', null, h('div', null, h('h1', null, c.name), h('span.muted', null, `${r.total} cím · ${c.kind === 'smart' ? T.smart : T.manual}${c.shared ? ' · közös' : ''}`)),
+  const pinBtn = !kids && h('button.btn' + (c.pinned ? '.on' : ''), { onclick: async () => { await api('PATCH', '/api/collections/' + id, { pinned: !c.pinned }); viewCollection(id); } }, c.pinned ? T.pinnedOn : T.pinned);
+  main.append(h('div.page-head', null, h('div', null, h('h1', null, c.name), h('span.muted', null, `${T.titlesN(r.total)} · ${c.kind === 'smart' ? T.smart : T.manual}${c.shared ? ' · ' + T.sharedShort : ''}`)),
     !kids && h('div.row-gap', null, pinBtn,
       c.kind === 'smart' && h('a.btn', { href: `#/collections/${id}/edit` }, T.edit),
       c.kind === 'manual' && h('button.btn', { onclick: () => renameColl(c) }, T.edit),
@@ -963,7 +897,7 @@ async function viewCollectionEdit(id, q) {
   const shared = h('input', { type: 'checkbox', checked: c.shared });
   const pinned = h('input', { type: 'checkbox', checked: c.pinned });
   const match = h('select', null, h('option', { value: 'all', selected: rs.match !== 'any' }, T.matchAll), h('option', { value: 'any', selected: rs.match === 'any' }, T.matchAny));
-  const sort = h('select', null, f.sorts.map(s => h('option', { value: s.value, selected: s.value === (rs.sort || 'title') }, s.label)));
+  const sort = h('select', null, f.sorts.map(s => h('option', { value: s.value, selected: s.value === (rs.sort || 'title') }, lbl(T.sortLabels, s.value, s.label))));
   const order = h('select', null, h('option', { value: 'asc', selected: rs.order !== 'desc' }, T.asc), h('option', { value: 'desc', selected: rs.order === 'desc' }, T.desc));
   const limit = h('input', { type: 'number', min: 0, value: rs.limit || '' });
   const rows = h('div', { class: 'stack' });
@@ -974,7 +908,7 @@ async function viewCollectionEdit(id, q) {
   const valueInput = (fd, v) => {
     const opt = (val, label) => h('option', { value: val, selected: String(v) === String(val) }, label);
     switch (fd.type) {
-      case 'enum': return h('select', null, fd.enum.map(o => opt(o.value, o.label)));
+      case 'enum': return h('select', null, fd.enum.map(o => opt(o.value, lbl(T.kindOpts, o.value, o.label))));
       case 'library': return h('select', null, libs.map(l => opt(l.id, l.name)));
       case 'genre': return h('select', null, f.genres.map(g => opt(g.value, g.value)));
       case 'tag': return h('select', null, f.tags.map(t => opt(t.value, t.value)));
@@ -985,15 +919,15 @@ async function viewCollectionEdit(id, q) {
     }
   };
   const ruleRow = r => {
-    const fsel = h('select', { 'aria-label': 'Mező' }, f.fields.map(x => h('option', { value: x.field, selected: x.field === r.field }, x.label)));
-    const osel = h('select', { 'aria-label': 'Művelet' });
+    const fsel = h('select', { 'aria-label': T.ruleField }, f.fields.map(x => h('option', { value: x.field, selected: x.field === r.field }, lbl(T.ruleFields, x.field, x.label))));
+    const osel = h('select', { 'aria-label': T.ruleOp });
     let vin;
     const row = h('div.row-gap.rule-row');
     const rebuild = (keepV) => {
       const fd = fieldDesc(fsel.value);
       put(osel, ...fd.ops.map(o => h('option', { value: o, selected: o === r.op }, T.ops[o] || o)));
       const nv = valueInput(fd, keepV ? r.value : undefined);
-      nv.setAttribute('aria-label', 'Érték');
+      nv.setAttribute('aria-label', T.ruleValue);
       if (vin) vin.replaceWith(nv); vin = nv;
       for (const el of [osel, vin]) { el.onchange = preview; el.oninput = preview; }
     };
@@ -1039,11 +973,11 @@ async function viewDownloads() {
   const render = async () => {
     const r = await GET('/api/downloads');
     if (!r.jobs.length) { put(box, h('p.empty', null, T.dlEmpty)); return; }
-    put(box, h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, 'Cím'), h('th', null, T.quality), h('th', null, 'Állapot'), h('th', null, ''))),
+    put(box, h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.title), h('th', null, T.quality), h('th', null, T.status), h('th', null, ''))),
       h('tbody', null, r.jobs.map(j => h('tr', null,
         h('td', null, h('a', { href: '#/item/' + j.item_id }, j.file_name)),
         h('td', null, j.quality),
-        h('td', { class: 'td-progress' }, j.status === 'running' ? h('div', null, h('div.bar', null, h('i', { style: { width: Math.round(j.progress * 100) + '%' } })), h('span.small.muted', null, Math.round(j.progress * 100) + '%')) : h('span' + (j.status === 'error' ? '.bad' : ''), { title: j.error || '' }, T.dlStatus[j.status] + (j.error ? ': ' + j.error : '')), j.size ? h('div.small.muted', null, fmtBytes(j.size)) : null),
+        h('td', { class: 'td-progress' }, j.status === 'running' ? h('div', null, h('div.bar', null, h('i', { style: { width: Math.round(j.progress * 100) + '%' } })), h('span.small.muted', null, Math.round(j.progress * 100) + '%')) : h('span' + (j.status === 'error' ? '.bad' : ''), { title: srv(j.error) || '' }, T.dlStatus[j.status] + (j.error ? ': ' + srv(j.error) : '')), j.size ? h('div.small.muted', null, fmtBytes(j.size)) : null),
         h('td', null, j.status === 'done' && h('a.btn.primary', { href: `/api/downloads/${j.key}/file`, download: j.file_name }, icon('dl'), T.saveFile))))))));
     if (r.jobs.some(j => j.status === 'running' || j.status === 'queued')) timer = setTimeout(render, 2000);
   };
@@ -1057,8 +991,9 @@ async function viewAccount() {
   const cur = h('input', { type: 'password', autocomplete: 'current-password' });
   const nw = h('input', { type: 'password', autocomplete: 'new-password' });
   main.append(h('div.page-head', null, h('h1', null, T.account)),
-    h('div.panel', { class: 'narrow' }, h('h2', null, 'Jelszócsere'), field('Jelenlegi jelszó', cur), field('Új jelszó', nw),
+    h('div.panel', { class: 'narrow' }, h('h2', null, T.changePw), field(T.currentPw, cur), field(T.newPw, nw),
       h('button.btn.primary', { onclick: async () => { await POST('/api/me/password', { current: cur.value, new: nw.value }); cur.value = nw.value = ''; toast(T.saved); } }, T.save)),
+    h('div.panel', { class: 'narrow' }, h('h2', null, T.language), langSwitch()),
     devicesPanel(),
     h('p.muted', null, `${state.me.user.username} · ${state.me.server_name} · ${T.version} ${state.me.version}`));
 }
@@ -1150,22 +1085,22 @@ function detectCaps() {
   caps.hdr = !!(window.matchMedia && matchMedia('(dynamic-range: high)').matches && caps.video.includes('hevc'));
   return caps;
 }
-const langName = l => ({ hun: 'Magyar', eng: 'Angol', ger: 'Német', fre: 'Francia', spa: 'Spanyol', ita: 'Olasz', jpn: 'Japán', rus: 'Orosz', pol: 'Lengyel', cze: 'Cseh', slo: 'Szlovák', rum: 'Román', kor: 'Koreai', chi: 'Kínai' }[l] || (l ? l : T.unknownLang));
+const langName = l => T.langNames[l] || l || T.unknownLang;
 
 async function viewPlayer(id, q) {
   const profile = state.me.profile;
   const root = app();
   put(root);
-  const video = h('video', { playsinline: true, preload: 'auto', 'aria-label': 'Videó' });
+  const video = h('video', { playsinline: true, preload: 'auto', 'aria-label': T.video });
   const spinner = h('div.spin', { role: 'progressbar', 'aria-label': T.loading });
   const mid = h('div.p-mid', null, spinner);
   const titleEl = h('h2'), subEl = h('div.s');
   const timeEl = h('span.p-time', null, '0:00 / 0:00');
   const rail = h('div.rail'), ready = h('div.ready'), done = h('div.done'), knob = h('div.knob'), hoverT = h('div.hover-t.hidden');
-  const timeline = h('div.timeline', { role: 'slider', tabindex: 0, 'aria-label': 'Idővonal', 'aria-valuemin': 0 }, rail, ready, done, knob, hoverT);
+  const timeline = h('div.timeline', { role: 'slider', tabindex: 0, 'aria-label': T.timeline, 'aria-valuemin': 0 }, rail, ready, done, knob, hoverT);
   const playBtn = h('button.p-btn', { 'aria-label': T.play }, icon('play'));
   const volBtn = h('button.p-btn', { 'aria-label': T.mute }, icon('vol'));
-  const vol = h('input.vol', { type: 'range', min: 0, max: 1, step: 0.05, value: localStorage.getItem('kinora-vol') || 1, 'aria-label': 'Hangerő' });
+  const vol = h('input.vol', { type: 'range', min: 0, max: 1, step: 0.05, value: localStorage.getItem('kinora-vol') || 1, 'aria-label': T.volume });
   const nextBtn = h('button.p-btn.hidden', { 'aria-label': T.nextEp, title: T.nextEp + ' (N)' }, icon('next'));
   const ccBtn = h('button.p-btn', { 'aria-label': T.subtitle + ' / ' + T.audioTrack, title: T.subtitle + ' (C)' }, icon('cc'));
   const gearBtn = h('button.p-btn', { 'aria-label': T.quality }, icon('gear'));
@@ -1244,7 +1179,7 @@ async function viewPlayer(id, q) {
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = r.url;
     } else {
-      return showError('A böngésző nem támogatja a HLS-t.');
+      return showError(T.noHls);
     }
     if (autoplay) video.play().catch(() => { playBtn.focus(); });
     applySubtitle();
@@ -1266,7 +1201,7 @@ async function viewPlayer(id, q) {
 
   function showError(msg, reasons) {
     put(mid, h('div.p-error', { role: 'alert' }, h('h2', null, T.playErr), h('p', null, msg),
-      reasons && reasons.length && h('ul.why-list.muted', null, reasons.map(r => h('li', null, r))),
+      reasons && reasons.length && h('ul.why-list.muted', null, reasons.map(r => h('li', null, srv(r)))),
       h('div.row-gap', null, h('button.btn.primary', { onclick: () => start(pos()) }, T.retry),
         force !== 'transcode' && h('button.btn', { onclick: () => { force = 'transcode'; start(pos()); } }, T.forceTranscode),
         h('button.btn', { onclick: () => exit() }, T.back))));
@@ -1284,7 +1219,7 @@ async function viewPlayer(id, q) {
     if (!st || !st.text_based) return;
     try {
       const res = await fetch(`/api/items/${id}/subtitles/${subIdx}`, { credentials: 'same-origin' });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+      if (!res.ok) throw new Error(srv((await res.json().catch(() => ({}))).error) || res.status);
       const cues = parseVTT(await res.text());
       if (my !== subGen) return;
       clearCues();
@@ -1295,7 +1230,7 @@ async function viewPlayer(id, q) {
         try { const cue = new VTTCue(Math.max(0, s), e, c.text); cue.line = -3; subTrack.addCue(cue); } catch { /* ignore */ }
       }
       subTrack.mode = 'showing';
-    } catch (e) { toast('Felirat: ' + e.message, true); }
+    } catch (e) { toast(T.subtitle + ': ' + e.message, true); }
   }
   function parseVTT(text) {
     const out = [];
@@ -1342,7 +1277,7 @@ async function viewPlayer(id, q) {
       h('h3', null, T.subtitle),
       opt(T.subOff, subIdx < 0 && burnIdx == null, () => { subIdx = -1; if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); }),
       ...visS.map(s => s.text_based
-        ? opt(`${langName(s.lang)}${s.forced ? ' (kényszerített)' : ''}${s.external ? ' · külső' : ''}`, s.type_index === subIdx, () => { subIdx = s.type_index; if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); })
+        ? opt(`${langName(s.lang)}${s.forced ? ` (${T.forced})` : ''}${s.external ? ' · ' + T.external : ''}`, s.type_index === subIdx, () => { subIdx = s.type_index; if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); })
         : opt(`${langName(s.lang)} · ${T.burnIn} (${s.codec})`, s.type_index === burnIdx, () => { subIdx = -1; burnIdx = s.type_index; applySubtitle(); start(pos()); })),
       (hiddenCount > 0 || showAllLangs) && h('label.check', { class: 'mt3' }, h('input', { type: 'checkbox', checked: showAllLangs, onchange: e => { showAllLangs = e.target.checked; pop._b = null; openPop(buildTracks); } }), T.showAll),
     ];
@@ -1354,11 +1289,11 @@ async function viewPlayer(id, q) {
   function buildWhy() {
     const src = info.source || {};
     return [h('h3', null, T.whyTitle[mode] || mode),
-      h('ul.why-list', null, (info.reasons || []).map(r => h('li', null, r))),
-      info.encoder && h('p', { class: 'mt3' }, h('span.muted', null, T.encoder + ': '), info.encoder_label || info.encoder),
-      info.bitrate && h('p.muted.small', null, `Cél: ${(info.bitrate / 1e6).toFixed(1).replace('.', ',')} Mbps, ${info.width} px széles`),
-      h('p.muted.small', null, `Forrás: ${(src.container || '').toUpperCase()} · ${src.video_codec || '?'} ${src.width}×${src.height} · ${src.audio_codec || '–'}${src.hdr ? ' · ' + src.hdr : ''}`),
-      h('p.muted.small', null, `Böngésző: ${caps.video.join(', ')} | ${caps.audio.join(', ')}`)];
+      h('ul.why-list', null, (info.reasons || []).map(r => h('li', null, srv(r)))),
+      info.encoder && h('p', { class: 'mt3' }, h('span.muted', null, T.encoder + ': '), srv(info.encoder_label) || info.encoder),
+      info.bitrate && h('p.muted.small', null, T.target(num(info.bitrate / 1e6, 1), info.width)),
+      h('p.muted.small', null, `${T.source}: ${(src.container || '').toUpperCase()} · ${src.video_codec || '?'} ${src.width}×${src.height} · ${src.audio_codec || '–'}${src.hdr ? ' · ' + src.hdr : ''}`),
+      h('p.muted.small', null, `${T.browser}: ${caps.video.join(', ')} | ${caps.audio.join(', ')}`)];
   }
   function buildMore() {
     return [h('h3', null, item ? item.title : ''),
@@ -1579,7 +1514,7 @@ async function viewPlayer(id, q) {
   await start(partyCode ? 0 : resumeAt, { paused: !!partyCode });
   if (info) {
     chooseInitialSubtitle(); applySubtitle(); chapterMarks();
-    if (mode === 'transcode') toast(`${T.whyTitle[mode]}: ${(info.reasons || [])[0] || ''} – részletek: ⓘ`);
+    if (mode === 'transcode') toast(`${T.whyTitle[mode]}: ${srv((info.reasons || [])[0]) || ''} – ${T.whyDetails}`);
   }
 }
 
@@ -1623,7 +1558,7 @@ function partyClient(code, player, stage, p) {
         }
         case 'state': onState(m); break;
         case 'chat': line(h('div', null, h('b', { style: { color: m.color } }, m.name + ': '), m.text)); break;
-        case 'sys': line(h('div.sys', null, m.text)); break;
+        case 'sys': line(h('div.sys', null, srv(m.text))); break;
         case 'react': {
           const f = h('div.float-react', { style: { left: (10 + Math.random() * 70) + '%' } }, m.emoji);
           stage.append(f); setTimeout(() => f.remove(), 2700); break;
@@ -1687,27 +1622,27 @@ async function adminDash(body) {
   let t;
   const render = async () => {
     const d = await GET('/api/admin/dashboard');
-    const up = d.uptime_sec, uptime = up > 86400 ? `${Math.floor(up / 86400)} nap ${Math.floor(up / 3600) % 24} ó` : `${Math.floor(up / 3600)} ó ${Math.floor(up / 60) % 60} p`;
+    const up = d.uptime_sec, uptime = up > 86400 ? T.uptimeDH(Math.floor(up / 86400), Math.floor(up / 3600) % 24) : T.uptimeHM(Math.floor(up / 3600), Math.floor(up / 60) % 60);
     const stat = (v, l) => h('div.stat', null, h('b', null, v), h('span', null, l));
     put(body, 
-      h('div.ledger', null, stat(d.library.movies, 'film'), stat(d.library.series, 'sorozat'), stat(d.library.episodes, 'epizód'), stat(fmtBytes(d.library.bytes), T.size),
+      h('div.ledger', null, stat(d.library.movies, T.statMovies), stat(d.library.series, T.statSeries), stat(d.library.episodes, T.statEpisodes), stat(fmtBytes(d.library.bytes), T.size),
         stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime), stat(d.version, T.version)),
-      d.library.missing > 0 && h('p.muted', null, `${d.library.missing} fájl jelenleg hiányzik (nem törlődött – ha visszakerül, a megnézett állapot megmarad).`),
-      h('div.panel', null, h('h2', null, T.activeTranscodes), d.transcodes.length ? h('table.tbl', null, h('tbody', null, d.transcodes.map(s => h('tr', null, h('td', null, s.title), h('td', null, s.mode), h('td', null, s.encoder), h('td', null, fmtTime(s.seconds)))))) : h('p.muted', null, 'Nincs.')),
+      d.library.missing > 0 && h('p.muted', null, T.missingFiles(d.library.missing)),
+      h('div.panel', null, h('h2', null, T.activeTranscodes), d.transcodes.length ? h('table.tbl', null, h('tbody', null, d.transcodes.map(s => h('tr', null, h('td', null, s.title), h('td', null, s.mode), h('td', null, s.encoder), h('td', null, fmtTime(s.seconds)))))) : h('p.muted', null, T.none)),
       h('div.panel', null, h('h2', null, T.scans), scanTable(d.scans)),
-      h('div.panel', null, h('h2', null, T.selectedEnc), h('p', null, d.encoder_selected.label), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))),
-      h('div.panel', null, h('h2', null, 'Mentés'), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
+      h('div.panel', null, h('h2', null, T.selectedEnc), h('p', null, srv(d.encoder_selected.label)), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))),
+      h('div.panel', null, h('h2', null, T.backupTitle), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
     t = setTimeout(render, 5000);
   };
   onCleanup(() => clearTimeout(t));
   await render();
 }
 function scanTable(scans) {
-  if (!scans || !scans.length) return h('p.muted', null, 'Még nem futott szkennelés.');
+  if (!scans || !scans.length) return h('p.muted', null, T.noScans);
   const libName = id => (state.libs || []).find(l => l.id === id)?.name || '#' + id;
   return h('table.tbl', null, h('tbody', null, scans.map(s => h('tr', null, h('td', null, libName(s.library_id)),
-    h('td', null, s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, h('div.bar', null, h('i', { style: { width: (s.total ? s.done / s.total * 100 : 5) + '%' } }))) : s.error ? h('span.bad', null, T.scanErr + ': ' + s.error) : `${s.changed} változás, ${s.removed} hiányzó, ${s.moved} áthelyezett · ${(s.took_ms / 1000).toFixed(1).replace('.', ',')} mp`),
-    h('td', null, s.errors ? h('span.bad', { title: s.last_error }, `${s.errors} hibás fájl`) : '')))));
+    h('td', null, s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, h('div.bar', null, h('i', { style: { width: (s.total ? s.done / s.total * 100 : 5) + '%' } }))) : s.error ? h('span.bad', null, T.scanErr + ': ' + srv(s.error)) : T.scanSummary(s.changed, s.removed, s.moved, num(s.took_ms / 1000, 1))),
+    h('td', null, s.errors ? h('span.bad', { title: srv(s.last_error) }, T.badFiles(s.errors)) : '')))));
 }
 
 async function adminLibs(body) {
@@ -1721,10 +1656,10 @@ async function adminLibs(body) {
       libs.length ? h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.libName), h('th', null, T.libPath), h('th', null, T.libKind), h('th', null, T.lastScan), h('th', null, ''))),
         h('tbody', null, libs.map(l => {
           const s = scanOf(l.id);
-          return h('tr', null, h('td', null, h('b', null, l.name), h('div.small.muted', null, `${l.count} cím`)), h('td.mono', null, l.path), h('td', null, T.kinds[l.kind]),
+          return h('tr', null, h('td', null, h('b', null, l.name), h('div.small.muted', null, T.titlesN(l.count))), h('td.mono', null, l.path), h('td', null, T.kinds[l.kind]),
             h('td', { class: 'td-progress' }, s && s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, h('div.bar', null, h('i', { style: { width: (s.total ? s.done / s.total * 100 : 5) + '%' } })))
-              : s && s.error ? h('span.bad', null, s.error) : l.last_scan_at ? T.ago(Date.now() / 1000 - l.last_scan_at) : T.never,
-              s && s.errors ? h('div.small.bad', { title: s.last_error }, `${s.errors} hibás fájl: ${s.last_error}`) : null),
+              : s && s.error ? h('span.bad', null, srv(s.error)) : l.last_scan_at ? T.ago(Date.now() / 1000 - l.last_scan_at) : T.never,
+              s && s.errors ? h('div.small.bad', { title: srv(s.last_error) }, `${T.badFiles(s.errors)}: ${srv(s.last_error)}`) : null),
             h('td', null, h('div.row-gap', null, h('button.btn', { onclick: async () => { await POST(`/api/libraries/${l.id}/scan`); render(); } }, T.scan),
               h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?library=' + l.id)) }, T.permCheck),
               h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(l.name))) { await api('DELETE', '/api/libraries/' + l.id); state.libs = null; render(); } } }, T.delete))));
@@ -1752,11 +1687,11 @@ async function adminLibs(body) {
 function permDialog(rep) {
   const copyBlock = lines => h('div', null, h('pre.code', null, lines.join('\n')), h('button.btn', { onclick: () => copyText(lines.join('\n')) }, T.copy));
   modal(T.permCheck, h('div', null,
-    h('p', { class: rep.ok ? 'ok' : 'bad' }, rep.ok ? T.permOk : rep.message),
-    !rep.ok && rep.problems.length > 0 && h('ul.small', null, rep.problems.map(pr => h('li.mono', null, `${pr.path}: ${pr.need === 'x' ? 'belépés (x)' : 'olvasás (rX)'}`))),
+    h('p', { class: rep.ok ? 'ok' : 'bad' }, rep.ok ? T.permOk : srv(rep.message)),
+    !rep.ok && rep.problems.length > 0 && h('ul.small', null, rep.problems.map(pr => h('li.mono', null, `${pr.path}: ${pr.need === 'x' ? T.permEnter : T.permRead}`))),
     !rep.ok && rep.commands.length > 0 && [h('p', { class: 'mt3' }, T.permFix), copyBlock(rep.commands)],
     !rep.ok && rep.group_commands && [h('p', { class: 'mt3' }, T.permGroup), copyBlock(rep.group_commands)],
-    rep.hint && h('p.muted.small', { class: 'mt3' }, rep.hint)), close => [h('button.btn.primary', { onclick: close }, T.close)]);
+    rep.hint && h('p.muted.small', { class: 'mt3' }, srv(rep.hint))), close => [h('button.btn.primary', { onclick: close }, T.close)]);
 }
 
 async function folderPicker(start, onPick) {
@@ -1771,7 +1706,7 @@ async function folderPicker(start, onPick) {
     const locked = new Set(r.locked || []);
     put(list, r.parent && h('button.opt', { onclick: () => load(r.parent) }, '↑ ' + T.up), ...r.dirs.map(d => h('button.opt', { onclick: () => load(r.path.replace(/[\\/]$/, '') + r.sep + d) },
       locked.has(d) && [icon('lock'), ' '], d, locked.has(d) && h('span.muted.small', null, ' · ' + T.locked))));
-    if (!r.dirs.length) list.append(h('p.muted.small', null, 'Nincs almappa.'));
+    if (!r.dirs.length) list.append(h('p.muted.small', null, T.noSubdirs));
   };
   modal(T.pickFolder, h('div', null, shortcuts, cur, list), close => [h('button.btn', { onclick: close }, T.cancel),
     h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?path=' + encodeURIComponent(current))) }, T.permCheck),
@@ -1786,7 +1721,7 @@ async function adminUsers(body) {
       h('td', null, h('b', null, u.username), u.id === state.me.user.id && h('span.muted', null, ' ' + T.you)), h('td', null, T.profilesN(u.profiles)), h('td', null, u.is_admin ? T.isAdmin : ''),
       h('td', null, h('div.row-gap', null,
         h('button.btn', { onclick: () => resetPw(u) }, T.resetPw),
-        u.id !== state.me.user.id && h('button.btn', { onclick: async () => { await api('PATCH', '/api/admin/users/' + u.id, { is_admin: !u.is_admin }); adminUsers(body); } }, u.is_admin ? 'Admin jog elvétele' : 'Admin jog'),
+        u.id !== state.me.user.id && h('button.btn', { onclick: async () => { await api('PATCH', '/api/admin/users/' + u.id, { is_admin: !u.is_admin }); adminUsers(body); } }, u.is_admin ? T.revokeAdmin : T.grantAdmin),
         u.id !== state.me.user.id && h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(u.username))) { await api('DELETE', '/api/admin/users/' + u.id); adminUsers(body); } } }, T.delete))))))))));
   function newUser() {
     const un = h('input', { type: 'text' }), pw = h('input', { type: 'password' }), adm = h('input', { type: 'checkbox' });
@@ -1808,11 +1743,11 @@ async function adminInvites(body) {
     invs.length ? h('div', null, invs.map(i => h('div.entry', { style: { opacity: i.uses_left > 0 ? 1 : 0.55 } },
       qrImg(linkOf(i.code)),
       h('div', null, h('div.code', null, i.code), i.note && h('p', null, i.note),
-        h('p.muted.small', null, T.usesLeft(i.uses_left), i.expires_at ? ` · ${T.expires}: ${new Date(i.expires_at * 1000).toLocaleString('hu-HU')}` : ''),
+        h('p.muted.small', null, T.usesLeft(i.uses_left), i.expires_at ? ` · ${T.expires}: ${new Date(i.expires_at * 1000).toLocaleString(T.locale)}` : ''),
         h('p.mono.small', { class: 'break-all' }, linkOf(i.code)),
-        h('div.row-gap', null, h('button.btn', { onclick: () => copyText(linkOf(i.code)) }, T.copy), h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/admin/invites/' + i.code); adminInvites(body); } }, T.delete)))))) : h('p.muted', null, 'Nincs meghívó.')));
+        h('div.row-gap', null, h('button.btn', { onclick: () => copyText(linkOf(i.code)) }, T.copy), h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/admin/invites/' + i.code); adminInvites(body); } }, T.delete)))))) : h('p.muted', null, T.noInvites)));
   function newInv() {
-    const note = h('input', { type: 'text', placeholder: 'pl. Nagyiéknak' }), uses = h('input', { type: 'number', value: 1, min: 1, max: 100 }), hours = h('input', { type: 'number', value: 72, min: 0 });
+    const note = h('input', { type: 'text', placeholder: T.egNote }), uses = h('input', { type: 'number', value: 1, min: 1, max: 100 }), hours = h('input', { type: 'number', value: 72, min: 0 });
     modal(T.newInvite, h('div', null, field(T.note, note), h('div.grid2', null, field(T.uses, uses), field(T.validHours, hours))), close => [h('button.btn', { onclick: close }, T.cancel),
       h('button.btn.primary', { onclick: async () => { await POST('/api/admin/invites', { note: note.value, uses: +uses.value, hours: +hours.value }); close(); adminInvites(body); } }, T.create)]);
   }
@@ -1838,14 +1773,14 @@ function settingsForm(values, env, keys, onSaved) {
 
 async function adminTranscode(body) {
   const [d, s] = await Promise.all([GET('/api/admin/dashboard'), GET('/api/admin/settings')]);
-  const table = res => h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.encoder), h('th', null, 'Eredmény'), h('th', null, 'Idő'), h('th', null, 'Részletek'))),
-    h('tbody', null, res.map(r => h('tr', null, h('td', null, h('b', null, r.label), h('div.small.muted.mono', null, r.name)), h('td', { class: r.ok ? 'ok' : 'bad' }, r.ok ? 'működik' : 'nem elérhető'), h('td', null, r.ok ? r.ms + ' ms' : ''), h('td.small.muted', null, r.error || ''))))));
+  const table = res => h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.encoder), h('th', null, T.result), h('th', null, T.time), h('th', null, T.details))),
+    h('tbody', null, res.map(r => h('tr', null, h('td', null, h('b', null, srv(r.label)), h('div.small.muted.mono', null, r.name)), h('td', { class: r.ok ? 'ok' : 'bad' }, r.ok ? T.works : T.unavailable), h('td', null, r.ok ? r.ms + ' ms' : ''), h('td.small.muted', null, srv(r.error) || ''))))));
   const tbl = h('div', null, table(d.encoders || []));
   const btn = h('button.btn', { onclick: async () => { btn.disabled = true; btn.textContent = T.hwTesting; try { const r = await POST('/api/admin/hwtest'); put(tbl, table(r.results)); toast(T.selectedEnc + ': ' + r.selected.label); } finally { btn.disabled = false; btn.textContent = T.hwTest; } } }, T.hwTest);
-  const encOpts = [['auto', T.encAuto], ...(d.encoders || []).filter(e => e.ok).map(e => [e.name, e.label])];
+  const encOpts = [['auto', T.encAuto], ...(d.encoders || []).filter(e => e.ok).map(e => [e.name, srv(e.label)])];
   put(body, 
-    h('div.panel', null, h('h2', null, 'Encoder-önteszt'), h('p.muted', null, 'Minden encoder valóban lekódol 1 másodpercnyi tesztvideót – így az derül ki, ami tényleg működik, nem csak az, amit az ffmpeg ismer.'), btn, h('div', { class: 'mt3' }, tbl),
-      h('p', { class: 'mt3' }, h('span.muted', null, T.selectedEnc + ': '), d.encoder_selected.label), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))),
+    h('div.panel', null, h('h2', null, T.encTest), h('p.muted', null, T.encTestHint), btn, h('div', { class: 'mt3' }, tbl),
+      h('p', { class: 'mt3' }, h('span.muted', null, T.selectedEnc + ': '), srv(d.encoder_selected.label)), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))),
     h('div.panel', null, h('h2', null, T.encSetting), settingsForm(s.values, s.env, [['encoder', T.encSetting, 'select', encOpts]], () => adminTranscode(body))),
     await segmentsPanel(s));
 }
@@ -1855,11 +1790,11 @@ async function segmentsPanel(s) {
   const onoff = [['1', T.on], ['0', T.off]];
   return h('div.panel', null, h('h2', null, T.aSegments),
     st && h('dl.side-info', null,
-      h('dt', null, T.segBackend), h('dd', { class: st.available ? 'ok' : 'bad' }, st.backend),
-      st.stats && [h('dt', null, 'Állapot'), h('dd', null, T.segStats(st.stats.episodes, st.stats.analysed, st.stats.with_intro, st.stats.with_credits, st.stats.manual))],
+      h('dt', null, T.segBackend), h('dd', { class: st.available ? 'ok' : 'bad' }, srv(st.backend)),
+      st.stats && [h('dt', null, T.status), h('dd', null, T.segStats(st.stats.episodes, st.stats.analysed, st.stats.with_intro, st.stats.with_credits, st.stats.manual))],
       h('dt', null, T.segQueue), h('dd', null, String(st.queue || 0)),
       st.running && [h('dt', null, T.segRunning), h('dd', null, st.running)],
-      st.last_error && [h('dt', null, 'Utolsó hiba'), h('dd.bad.small', null, st.last_error)]),
+      st.last_error && [h('dt', null, T.lastError), h('dd.bad.small', null, srv(st.last_error))]),
     settingsForm(s.values, s.env, [['intro_detection', T.segDetection, 'select', onoff], ['intro_window_min', T.segWindow, 'number']]));
 }
 
@@ -1870,10 +1805,10 @@ async function adminMeta(body) {
   let t;
   put(body, 
     h('div.panel', null, h('h2', null, 'TMDB'), h('p.muted', null, T.metaHint),
-      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', 'Magyar'], ['en-US', 'Angol'], ['de-DE', 'Német']]]], () => adminMeta(body))),
+      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]]]], () => adminMeta(body))),
     h('div.panel', null, h('h2', null, T.refreshMeta), h('label.check', null, retry, T.retryNoMatch),
       h('button.btn.primary', { disabled: !m.enabled, onclick: async () => { await POST('/api/admin/metadata/refresh', { retry_no_match: retry.checked }); adminMeta(body); } }, T.refreshMeta),
-      h('p.muted', { class: 'mt3' }, T.metaStatus + ': ', st.running ? `fut – ${st.done}/${st.total}` : st.finished_at ? `kész (${st.matched} találat, ${st.no_match} nincs találat)` : '–', st.last_error ? h('div.bad.small', null, st.last_error) : null)));
+      h('p.muted', { class: 'mt3' }, T.metaStatus + ': ', st.running ? T.metaRunning(st.done, st.total) : st.finished_at ? T.metaDone(st.matched, st.no_match) : '–', st.last_error ? h('div.bad.small', null, srv(st.last_error)) : null)));
   if (st.running) { t = setTimeout(() => adminMeta(body), 2000); onCleanup(() => clearTimeout(t)); }
 }
 
@@ -1881,18 +1816,18 @@ async function adminConnect(body) {
   const c = await GET('/api/admin/connect');
   const card = (title, url, sub) => h('div.entry', null, qrImg(url),
     h('div', null, h('b', null, title), h('p.mono', { class: 'break-all' }, url), sub && h('p.muted.small', null, sub), h('button.btn', { onclick: () => copyText(url) }, T.copy)));
-  const kindLabel = { lan: 'Helyi hálózat', tailscale: 'Tailscale', other: 'Egyéb' };
+  const kindLabel = { lan: T.lan, tailscale: 'Tailscale', other: T.otherNet };
   put(body, 
     h('div.panel', null, h('h2', null, T.aConnect), h('p.muted', null, T.connectLede),
-      h('div', null, c.public_url ? card('Nyilvános URL', c.public_url) : h('p.muted', null, T.noPublic),
+      h('div', null, c.public_url ? card(T.publicUrl, c.public_url) : h('p.muted', null, T.noPublic),
         c.addresses.map(a => card(kindLabel[a.kind] + ' (' + a.iface + ')', a.url))),
-      c.in_container && h('p.muted.small', { class: 'mt3' }, 'Dockerben futsz: a fenti címek a konténer belső címei lehetnek. Kívülről a gazdagép IP-címén és a kiajánlott porton (alapból 8096) éred el.')),
-    h('div.panel', null, h('h2', null, 'Tailscale (ajánlott, portnyitás nélkül)'), h('p', null, 'Telepítsd a Tailscale-t a szerverre és a telefonodra ugyanazzal a fiókkal, vagy használd a docker-compose.tailscale.yml sidecart. Ezután a 100.x.y.z címen bárhonnan eléred.'),
+      c.in_container && h('p.muted.small', { class: 'mt3' }, T.inDocker)),
+    h('div.panel', null, h('h2', null, T.tsTitle), h('p', null, T.tsHint),
       h('pre.code', null, 'TS_AUTHKEY=tskey-... docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d')),
-    h('div.panel', null, h('h2', null, 'Cloudflare Tunnel (saját domain, HTTPS)'), h('p', null, 'Hozz létre egy tunnelt a Cloudflare Zero Trust felületén, a public hostname mutasson a http://kinora:8096 címre, majd:'),
-      h('pre.code', null, 'CF_TUNNEL_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d'), h('p.muted.small', null, 'Állítsd be a Nyilvános URL-t a Beállításokban, hogy a meghívó linkek is ezt használják.')),
-    h('div.panel', null, h('h2', null, 'Reverse proxy (Caddy / nginx)'), h('p', null, 'A watch party WebSocketet használ, ezért az Upgrade fejléceket tovább kell adni.'),
-      h('pre.code', null, 'kinora.pelda.hu {\n  reverse_proxy 127.0.0.1:8096\n}'),
+    h('div.panel', null, h('h2', null, T.cfTitle), h('p', null, T.cfHint),
+      h('pre.code', null, 'CF_TUNNEL_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d'), h('p.muted.small', null, T.cfPublic)),
+    h('div.panel', null, h('h2', null, T.proxyTitle), h('p', null, T.proxyHint),
+      h('pre.code', null, T.exampleHost + ' {\n  reverse_proxy 127.0.0.1:8096\n}'),
       h('pre.code', null, 'location / {\n  proxy_pass http://127.0.0.1:8096;\n  proxy_http_version 1.1;\n  proxy_set_header Upgrade $http_upgrade;\n  proxy_set_header Connection "upgrade";\n  proxy_set_header Host $host;\n  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n  proxy_set_header X-Forwarded-Proto $scheme;\n  proxy_buffering off;\n  client_max_body_size 0;\n}')));
 }
 
@@ -1904,7 +1839,7 @@ async function adminDevices(body) {
 async function uploadLogo(variant, file) {
   const res = await fetch('/api/admin/branding/logo?variant=' + variant, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+  if (!res.ok) throw new Error(srv(data.error) || 'HTTP ' + res.status);
   state.branding = data;
   applyBranding();
   return data;
@@ -1927,7 +1862,7 @@ function lookPanel(values, env, rerender) {
     h('div.logo-slots', null, slot('dark', T.logoDark), slot('light', T.logoLight)),
     h('label.field', { class: 'mt3' }, h('span', null, T.accent), h('div.row-gap', null, accent,
       h('button.btn', { disabled: !!env.brand_accent, onclick: async () => { await api('PATCH', '/api/admin/settings', { brand_accent: accent.value }); state.branding = await GET('/api/branding'); applyBranding(); toast(T.saved); } }, T.save),
-      h('button.btn.ghost', { disabled: !!env.brand_accent, onclick: async () => { await api('PATCH', '/api/admin/settings', { brand_accent: '' }); state.branding = await GET('/api/branding'); applyBranding(); rerender(); } }, 'Alapszín')),
+      h('button.btn.ghost', { disabled: !!env.brand_accent, onclick: async () => { await api('PATCH', '/api/admin/settings', { brand_accent: '' }); state.branding = await GET('/api/branding'); applyBranding(); rerender(); } }, T.defaultAccent)),
       env.brand_accent && h('div.env-lock', null, T.envLocked(env.brand_accent))));
 }
 
@@ -1939,5 +1874,5 @@ async function adminSettings(body) {
     h('div.panel', null, h('h2', null, T.aSettings), settingsForm(s.values, s.env, [['server_name', T.serverName], ['public_url', T.publicUrl, 'url'], ['scan_interval_min', T.scanInterval, 'number'],
       ['quickconnect_enabled', T.qcEnabled, 'select', onoff], ['discovery_enabled', T.discEnabled, 'select', onoff]], () => { state.status = null; })),
     lookPanel(s.values, s.env, () => adminSettings(body)),
-    h('div.panel', null, h('h2', null, 'Mentés'), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
+    h('div.panel', null, h('h2', null, T.backupTitle), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
 }

@@ -286,6 +286,13 @@ label.check { display: flex; gap: var(--s3); align-items: center; min-height: va
 .menu-pop button, .menu-pop a { display: flex; align-items: center; width: 100%; text-align: left; min-height: var(--hit); padding: 0 var(--s3); border: 0; background: none; border-radius: var(--r1); color: var(--t0); }
 .menu-pop button:hover, .menu-pop a:hover { background: var(--g3); }
 .menu-pop hr { margin: var(--s1) 0; }
+/* language switcher: a row of chips (menu, sign-in pages, account) */
+.lang-switch { margin-top: var(--s5); }
+.panel .lang-switch { margin-top: 0; }
+.menu-pop .lang-switch { margin: 0; flex-wrap: nowrap; }
+.menu-pop .lang-switch .chip { width: auto; padding: 0 var(--s2); border-radius: 0; border-bottom: var(--frame) solid transparent; color: var(--t1); }
+.menu-pop .lang-switch .chip:hover { background: none; color: var(--t0); }
+.menu-pop .lang-switch .chip.on { color: var(--amber); border-bottom-color: var(--amber); }
 @media (max-width: 760px) {
   .top { flex-wrap: wrap; gap: var(--s2) var(--s3); }
   .nav { order: 3; flex-basis: 100%; gap: var(--s3); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); }
