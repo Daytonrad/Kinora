@@ -158,6 +158,9 @@ final class PlayerModel: NSObject {
         closed = true
         report(ended: ended)
         stopSession()
+        #if os(iOS)
+        HomeScenes.shared.stopped()
+        #endif
         countdown?.cancel()
         subtitleLoad?.cancel()
         player.pause()
@@ -535,7 +538,12 @@ final class PlayerModel: NSObject {
         isPlaying = player.timeControlStatus == .playing
         buffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
         // Rate and elapsed time keep the lock screen's clock right (and an iPhone's, for the Apple TV).
-        if wasPlaying != isPlaying { updateNowPlaying() }
+        if wasPlaying != isPlaying {
+            updateNowPlaying()
+            #if os(iOS)
+            if isPlaying { HomeScenes.shared.playing() } else { HomeScenes.shared.paused() }
+            #endif
+        }
         if isPlaying, Date.now.timeIntervalSince(lastReport) > 10 { report() }
 
         if skipMode == "auto", party == nil, let s = currentSegment, s.type != .credits, !skipped.contains(s.start) {

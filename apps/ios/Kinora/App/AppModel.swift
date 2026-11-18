@@ -310,6 +310,10 @@ final class AppModel {
     func play(_ item: Item, from start: Double? = nil, party: PartySession? = nil) {
         guard let client else { return }
         player?.close()
+        #if os(iOS)
+        // Siri learns what the user watches and offers it on the lock screen and in Spotlight.
+        if party == nil { IntentRouter.donate(item) }
+        #endif
         let resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
         // A downloaded copy plays from the device: no server load, works without a connection.
         #if os(iOS)

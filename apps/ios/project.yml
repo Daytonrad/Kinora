@@ -45,6 +45,8 @@ targets:
       path: Kinora/Kinora.entitlements
       properties:
         com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
+        # Home app scenes on playback start, pause and stop (Settings → Otthon).
+        com.apple.developer.homekit: true
     info:
       path: Kinora/Info.plist
       properties:
@@ -65,6 +67,7 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UIBackgroundModes: [audio]
         # Joining a watch party by its QR code.
+        NSHomeKitUsageDescription: A Kinora a lejátszás indulásakor, szünetekor és végén lefuttatja az általad választott Otthon-jelenetet, például lekapcsolja a lámpákat.
         NSCameraUsageDescription: A kamerával a watch party QR-kódját olvashatod be, hogy csatlakozz.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

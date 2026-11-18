@@ -12,7 +12,13 @@ struct KinoraApp: App {
                 .environment(model)
                 .preferredColorScheme(.dark)
                 .tint(Theme.amber)
-                .task { _ = NetworkStatus.shared; await model.start() }
+                .task {
+                    _ = NetworkStatus.shared
+                    IntentRouter.model = model
+                    HomeScenes.shared.warmUp()
+                    await model.start()
+                    KinoraShortcuts.updateAppShortcutParameters()
+                }
                 .onOpenURL { model.open($0) }
                 .onReceive(NotificationCenter.default.publisher(for: NetworkStatus.cameOnline)) { _ in model.syncOffline() }
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in

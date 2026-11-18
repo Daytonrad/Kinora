@@ -6,6 +6,7 @@ struct KinoraWidgets: WidgetBundle {
     var body: some Widget {
         ContinueWidget()
         RecentWidget()
+        SeriesWidget()
     }
 }
 
@@ -74,7 +75,10 @@ struct ContinueView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Header(title: "Folytatás", stale: entry.stale)
                 ForEach(cards.prefix(4)) { c in
-                    Link(destination: c.link) { ContinueRow(card: c) }
+                    HStack(spacing: 10) {
+                        Link(destination: c.link) { ContinueRow(card: c) }
+                        WatchedButton(id: c.id)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -161,11 +165,11 @@ private struct ContinueRow: View {
 
 struct RecentWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "recent", provider: FeedProvider(kind: .recentlyAdded)) { entry in
+        AppIntentConfiguration(kind: "recent", intent: RecentConfig.self, provider: RecentProvider()) { entry in
             RecentView(entry: entry)
         }
         .configurationDisplayName("Új a könyvtárban")
-        .description("A legutóbb hozzáadott filmek és sorozatok.")
+        .description("A legutóbb hozzáadott filmek és sorozatok, egy vagy minden könyvtárból.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -234,7 +238,7 @@ private struct Header: View {
     }
 }
 
-private struct Bar: View {
+struct Bar: View {
     var value: Double
 
     var body: some View {
@@ -249,7 +253,7 @@ private struct Bar: View {
 }
 
 /// The image, or a quiet gradient with the title when there is none.
-private struct Artwork: View {
+struct Artwork: View {
     var data: Data?
     var seed: Int
     var title: String?
@@ -274,7 +278,7 @@ private struct Artwork: View {
     }
 }
 
-private struct EmptyState: View {
+struct EmptyState: View {
     var state: FeedEntry.State
     var empty: String
 

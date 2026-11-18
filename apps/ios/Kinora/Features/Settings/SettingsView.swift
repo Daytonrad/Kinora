@@ -42,6 +42,16 @@ struct SettingsView: View {
                 app
                 subtitleSection
                 downloadsSection
+                Section {
+                    NavigationLink {
+                        HomeScenesView()
+                    } label: {
+                        Label("Otthon-jelenetek", systemImage: "lightbulb.max")
+                    }
+                } footer: {
+                    Text("Például lekapcsolja a lámpákat, amikor elindul egy film.")
+                }
+                .listRowBackground(Theme.panel)
                 devicesSection
                 serverSection
                 Section {

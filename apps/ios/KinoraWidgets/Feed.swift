@@ -45,29 +45,62 @@ enum FeedKind: String {
 /// Fetches /api/home with the app's login, and keeps the last good result in the
 /// App Group container for when the server is out of reach (away from home).
 enum Feed {
-    static func load(_ kind: FeedKind) async -> FeedEntry {
+    /// Continue watching, or the newest titles (of one library, when the widget is set to one).
+    static func load(_ kind: FeedKind, library: Int? = nil) async -> FeedEntry {
+        await load(key: kind.rawValue + (library.map { "-\($0)" } ?? "")) { client in
+            let items: [Item]
+            switch kind {
+            case .continueWatching:
+                items = WidgetFeed.continueWatching(try await client.home())
+            case .recentlyAdded:
+                if let library {
+                    items = try await client.items(library: library, sort: .added, limit: kind.limit).items
+                } else {
+                    items = WidgetFeed.recentlyAdded(try await client.home())
+                }
+            }
+            var cards: [Card] = []
+            for item in items.prefix(kind.limit) {
+                cards.append(await card(item, kind: kind, client: client))
+            }
+            return cards
+        }
+    }
+
+    /// The next episode to watch of one series; empty when every episode is watched.
+    static func nextEpisode(of series: Int) async -> FeedEntry {
+        await load(key: "series-\(series)") { client in
+            guard let next = try await client.item(series).playNext else { return [] }
+            return [await card(next, kind: .continueWatching, client: client)]
+        }
+    }
+
+    /// Runs one fetch with the app's login; falls back to the last good result.
+    private static func load(key: String, _ fetch: (KinoraClient) async throws -> [Card]) async -> FeedEntry {
         let store = ServerStore.shared()
         guard let server = store.current, let token = store.token(for: server.id) else {
             return FeedEntry(date: .now, state: .signedOut)
         }
         let client = KinoraClient(server: server, token: token)
         do {
-            let home = try await client.home()
-            let items = kind == .continueWatching ? WidgetFeed.continueWatching(home) : WidgetFeed.recentlyAdded(home)
-            var cards: [Card] = []
-            for item in items.prefix(kind.limit) {
-                cards.append(await card(item, kind: kind, client: client))
-            }
-            save(cards, kind: kind)
+            let cards = try await fetch(client)
+            save(cards, key: key)
             return FeedEntry(date: .now, state: cards.isEmpty ? .empty : .cards(cards))
         } catch KinoraError.unauthorized {
             return FeedEntry(date: .now, state: .signedOut)
         } catch {
-            if let cached = cached(kind), !cached.isEmpty {
+            if let cached = cached(key), !cached.isEmpty {
                 return FeedEntry(date: .now, state: .cards(cached), stale: true)
             }
             return FeedEntry(date: .now, state: .offline)
         }
+    }
+
+    /// The app's login, for the widget intents (marking a title watched).
+    static func client() -> KinoraClient? {
+        let store = ServerStore.shared()
+        guard let server = store.current, let token = store.token(for: server.id) else { return nil }
+        return KinoraClient(server: server, token: token)
     }
 
     private static func card(_ item: Item, kind: FeedKind, client: KinoraClient) async -> Card {
@@ -104,18 +137,18 @@ enum Feed {
 
     // MARK: - last good result
 
-    private static func file(_ kind: FeedKind) -> URL? {
-        AppGroup.container?.appending(path: "Library/Caches/widget-\(kind.rawValue).json")
+    private static func file(_ key: String) -> URL? {
+        AppGroup.container?.appending(path: "Library/Caches/widget-\(key).json")
     }
 
-    private static func save(_ cards: [Card], kind: FeedKind) {
-        guard let url = file(kind) else { return }
+    private static func save(_ cards: [Card], key: String) {
+        guard let url = file(key) else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? JSONEncoder().encode(cards).write(to: url, options: .atomic)
     }
 
-    private static func cached(_ kind: FeedKind) -> [Card]? {
-        guard let url = file(kind), let data = try? Data(contentsOf: url) else { return nil }
+    private static func cached(_ key: String) -> [Card]? {
+        guard let url = file(key), let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode([Card].self, from: data)
     }
 }
