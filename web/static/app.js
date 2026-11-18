@@ -1923,11 +1923,11 @@ async function adminMeta(body) {
   let t;
   put(body, 
     h('div.panel', null, h('h2', null, 'TMDB'), h('p.muted', null, T.metaHint),
-      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]]]], () => adminMeta(body))),
+      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]]]], () => setTimeout(() => adminMeta(body), 400)), h('p.muted.small', null, T.metaLangHint)),
     h('div.panel', null, h('h2', null, T.refreshMeta), h('label.check', null, retry, T.retryNoMatch),
       h('button.btn.primary', { disabled: !m.enabled, onclick: async () => { await POST('/api/admin/metadata/refresh', { retry_no_match: retry.checked }); adminMeta(body); } }, T.refreshMeta),
       !m.enabled && h('p.note-off', null, T.metaNeedsKey),
-      h('div.muted', { class: 'mt3' }, T.metaStatus + ': ', st.running ? [T.metaRunning(st.done, st.total), h('div.bar', { style: { maxWidth: '30rem' } }, h('i', { style: { width: (st.total ? st.done / st.total * 100 : 5) + '%' } }))] : st.finished_at ? T.metaDone(st.matched, st.no_match) : '–', st.last_error ? h('div.bad.small', null, srv(st.last_error)) : null)));
+      h('div.muted', { class: 'mt3' }, T.metaStatus + ': ', st.running ? [T.metaRunning(st.done, st.total), st.relang ? ' · ' + T.metaRelang(st.relang) : '', h('div.bar', { style: { maxWidth: '30rem' } }, h('i', { style: { width: (st.total ? st.done / st.total * 100 : 5) + '%' } }))] : st.finished_at ? T.metaDone(st.matched, st.no_match) : '–', st.last_error ? h('div.bad.small', null, srv(st.last_error)) : null)));
   if (st.running) { t = setTimeout(() => adminMeta(body), 2000); onCleanup(() => clearTimeout(t)); }
 }
 

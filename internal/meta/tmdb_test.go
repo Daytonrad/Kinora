@@ -35,7 +35,12 @@ func TestRefreshMovieAndSeries(t *testing.T) {
 			j(w, map[string]any{"results": []any{}})
 		}
 	})
+	en := func(r *http.Request) bool { return r.URL.Query().Get("language") == "en-US" }
 	mux.HandleFunc("/3/movie/329865", func(w http.ResponseWriter, r *http.Request) {
+		if en(r) {
+			j(w, map[string]any{"id": 329865, "title": "Arrival", "release_date": "2016-11-10", "overview": "A linguist."})
+			return
+		}
 		j(w, map[string]any{"id": 329865, "title": "Érkezés", "release_date": "2016-11-10", "overview": "Nyelvész.", "vote_average": 7.6,
 			"genres": []map[string]any{{"name": "Sci-Fi"}, {"name": "Dráma"}}, "belongs_to_collection": map[string]any{"name": "Villeneuve gyűjtemény"},
 			"release_dates": map[string]any{"results": []map[string]any{
@@ -46,11 +51,20 @@ func TestRefreshMovieAndSeries(t *testing.T) {
 		j(w, map[string]any{"results": []map[string]any{{"id": 77, "name": "Teszt Sorozat", "first_air_date": "2020-01-01"}}})
 	})
 	mux.HandleFunc("/3/tv/77", func(w http.ResponseWriter, r *http.Request) {
+		if en(r) {
+			j(w, map[string]any{"id": 77, "name": "Test Show", "first_air_date": "2020-01-01", "overview": "Description",
+				"seasons": []map[string]any{{"season_number": 1}}})
+			return
+		}
 		j(w, map[string]any{"id": 77, "name": "Teszt Sorozat", "first_air_date": "2020-01-01", "overview": "Leírás", "vote_average": 8.2,
 			"genres": []map[string]any{{"name": "Sci-Fi & Fantasy"}},
 			"content_ratings": map[string]any{"results": []map[string]any{{"iso_3166_1": "US", "rating": "TV-MA"}}}})
 	})
 	mux.HandleFunc("/3/tv/77/season/1", func(w http.ResponseWriter, r *http.Request) {
+		if en(r) {
+			j(w, map[string]any{"episodes": []map[string]any{{"episode_number": 1, "name": "The beginning"}}})
+			return
+		}
 		j(w, map[string]any{"episodes": []map[string]any{{"episode_number": 1, "name": "A kezdet", "overview": "Első rész."}}})
 	})
 	ts := httptest.NewServer(mux)
@@ -117,5 +131,22 @@ func TestRefreshMovieAndSeries(t *testing.T) {
 	}
 	if u, _ := st.Item(unknown, nil); u.Title != "Érkezés" {
 		t.Fatal("manual match")
+	}
+
+	// switching the metadata language re-fetches matched items, but never NFO / manual ones
+	st.SetSetting("metadata_lang", "en-US")
+	if err := f.Refresh(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[int64]string{movie: "Arrival", unknown: "Arrival", series: "Test Show", ep: "The beginning", nfo: "Local NFO"} {
+		if it, _ := st.Item(id, nil); it.Title != want {
+			t.Fatalf("after language switch item %d: %q, want %q", id, it.Title, want)
+		}
+	}
+	if st.Setting("metadata_lang_applied") != "en-US" {
+		t.Fatal("applied language not stored")
+	}
+	if err := f.Refresh(context.Background(), false); err != nil || f.Status().Total != 0 {
+		t.Fatalf("second refresh must not re-fetch again: %+v %v", f.Status(), err)
 	}
 }

@@ -500,6 +500,8 @@
   "lastError": "Letzter Fehler",
   "metaRunning": "läuft – {0}/{1}",
   "metaDone": "fertig ({0} Treffer, {1} ohne Treffer)",
+  "metaRelang": "vorhandene Titel werden neu geladen: {0}",
+  "metaLangHint": "Wenn du die Sprache änderst, lädt Kinora bereits zugeordnete Filme und Serien in der neuen Sprache neu. Manuell bearbeitete und NFO-Einträge bleiben unverändert.",
   "lan": "Lokales Netzwerk",
   "otherNet": "Sonstige",
   "defaultAccent": "Standardfarbe",

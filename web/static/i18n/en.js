@@ -506,6 +506,8 @@
   "lastError": "Last error",
   "metaRunning": "running – {0}/{1}",
   "metaDone": "done ({0} matched, {1} no match)",
+  "metaRelang": "re-fetching existing titles in {0}",
+  "metaLangHint": "When you change the language, Kinora re-fetches already matched movies and shows in the new language. Manually edited and NFO items are left alone.",
   "lan": "Local network",
   "otherNet": "Other",
   "defaultAccent": "Default colour",

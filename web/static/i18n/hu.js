@@ -476,6 +476,8 @@
   "lastError": "Utolsó hiba",
   "metaRunning": "fut – {0}/{1}",
   "metaDone": "kész ({0} találat, {1} nincs találat)",
+  "metaRelang": "a meglévő címek újratöltése ezen a nyelven: {0}",
+  "metaLangHint": "Ha átállítod a nyelvet, a Kinora a már párosított filmeket és sorozatokat is újratölti az új nyelven. A kézzel szerkesztett és NFO-ból jövő elemekhez nem nyúl.",
   "lan": "Helyi hálózat",
   "otherNet": "Egyéb",
   "defaultAccent": "Alapszín",

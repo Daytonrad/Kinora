@@ -46,6 +46,8 @@ type Status struct {
 	Total     int    `json:"total"`
 	Done      int    `json:"done"`
 	Matched   int    `json:"matched"`
+	// Relang is the metadata language matched items are being re-fetched in, set while that runs.
+	Relang    string `json:"relang,omitempty"`
 	NoMatch   int    `json:"no_match"`
 	LastError string `json:"last_error,omitempty"`
 	FinishedAt int64 `json:"finished_at,omitempty"`
@@ -263,13 +265,31 @@ func pickCert(byCountry map[string]string) string {
 
 type target struct {
 	id, libID int64
+	tmdbID    int64 // known match, re-applied without a search
 	kind      string
 	title     string
 	year      int
 }
 
+// appliedLangKey stores the metadata language every matched item was last fetched in.
+const appliedLangKey = "metadata_lang_applied"
+
+// relangNeeded returns the configured metadata language when matched items still carry another one.
+// Databases from before this key existed were filled with the default (Hungarian) language.
+func (f *Fetcher) relangNeeded() string {
+	lang, applied := f.st.Setting("metadata_lang"), f.st.Setting(appliedLangKey)
+	if applied == "" {
+		applied = store.SettingDefaults["metadata_lang"]
+	}
+	if lang == applied {
+		return ""
+	}
+	return lang
+}
+
 // Refresh fetches metadata for every movie/series without it. retryNoMatch also
-// retries items previously marked as "no match".
+// retries items previously marked as "no match". When the metadata language changed
+// since the last full pass, already matched items are re-fetched in the new language too.
 func (f *Fetcher) Refresh(ctx context.Context, retryNoMatch bool) error {
 	if !f.Enabled() {
 		return ErrNoKey
@@ -287,31 +307,53 @@ func (f *Fetcher) Refresh(ctx context.Context, retryNoMatch bool) error {
 		f.status.FinishedAt = time.Now().Unix()
 		f.mu.Unlock()
 	}()
+	if err := f.refresh(ctx, retryNoMatch); err != nil {
+		return err
+	}
+	// the language may have been changed again while this pass ran
+	for i := 0; i < 3 && f.relangNeeded() != ""; i++ {
+		if err := f.refresh(ctx, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func (f *Fetcher) refresh(ctx context.Context, retryNoMatch bool) error {
+	relang := f.relangNeeded()
 	cond := "tmdb_id IS NULL"
 	if retryNoMatch {
 		cond = "(tmdb_id IS NULL OR tmdb_id=0)"
 	}
-	rows, err := f.st.DB.Query(`SELECT id,library_id,kind,title,COALESCE(year,0) FROM items WHERE kind IN ('movie','series') AND missing=0 AND ` + cond)
+	if relang != "" {
+		cond = "(" + cond + " OR tmdb_id>0)" // manual / NFO items (-1) are never touched
+	}
+	rows, err := f.st.DB.Query(`SELECT id,library_id,kind,title,COALESCE(year,0),COALESCE(tmdb_id,0) FROM items WHERE kind IN ('movie','series') AND missing=0 AND ` + cond)
 	if err != nil {
 		return err
 	}
 	var ts []target
 	for rows.Next() {
 		var t target
-		rows.Scan(&t.id, &t.libID, &t.kind, &t.title, &t.year)
+		rows.Scan(&t.id, &t.libID, &t.kind, &t.title, &t.year, &t.tmdbID)
+		if t.tmdbID < 0 {
+			t.tmdbID = 0
+		}
 		ts = append(ts, t)
 	}
 	rows.Close()
 	f.mu.Lock()
-	f.status.Total = len(ts)
+	f.status = Status{Running: true, Total: len(ts), Relang: relang}
 	f.mu.Unlock()
+	if relang != "" {
+		f.log.Info("tmdb: re-fetching metadata in the new language", "lang", relang, "items", len(ts))
+	}
 	libs := map[int64]bool{}
 	for _, t := range ts {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		matched, err := f.fetchOne(ctx, t, 0)
+		matched, err := f.fetchOne(ctx, t, t.tmdbID)
 		f.mu.Lock()
 		f.status.Done++
 		if err != nil {
@@ -333,6 +375,11 @@ func (f *Fetcher) Refresh(ctx context.Context, retryNoMatch bool) error {
 	}
 	for id := range libs {
 		f.st.FinishScan(id) // propagate series ratings to episodes
+	}
+	if relang != "" {
+		if err := f.st.SetSetting(appliedLangKey, relang); err != nil {
+			return err
+		}
 	}
 	f.log.Info("tmdb refresh finished", "items", len(ts))
 	return nil

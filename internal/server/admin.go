@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ScotyLucas/kinora/internal/meta"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -201,6 +202,7 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 		return
 	}
 	var changed []string
+	oldLang := s.st.Setting("metadata_lang")
 	for _, k := range settingKeys {
 		v, present := in[k]
 		if !present {
@@ -257,6 +259,14 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 	}
 	if len(changed) > 0 {
 		s.log.Info("settings changed", "keys", strings.Join(changed, ","))
+	}
+	if s.st.Setting("metadata_lang") != oldLang && s.Meta.Enabled() {
+		// re-fetch matched titles in the new language; a refresh already running picks it up when it ends
+		go func() {
+			if err := s.Meta.Refresh(s.bgCtx, false); err != nil && !errors.Is(err, meta.ErrRunning) {
+				s.log.Warn("metadata refresh", "err", err)
+			}
+		}()
 	}
 	s.handleSettings(w, r, c)
 }
