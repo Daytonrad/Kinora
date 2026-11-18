@@ -32,7 +32,7 @@ import Testing
          "seasons":[{"id":2,"kind":"season","title":"1. évad","season_num":1}],"similar":[]}
         """, as: ItemDetail.self)
         #expect(d.item.kind == .series)
-        #expect(d.playNext?.episodeLabel == "S1 · E3")
+        #expect(d.playNext?.episodeLabel == "1. évad 3. rész")
         #expect(d.seasons?.first?.seasonNum == 1)
     }
 

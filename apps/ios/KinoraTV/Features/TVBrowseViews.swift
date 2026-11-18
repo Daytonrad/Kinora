@@ -212,7 +212,7 @@ private struct TVHero: View {
                 if let o = item.overview, !o.isEmpty {
                     Text(o).font(.callout).foregroundStyle(Theme.plaster).lineLimit(3).frame(maxWidth: 900, alignment: .leading)
                 }
-                HStack(spacing: 24) {
+                TVButtonRow {
                     if item.kind == .movie || item.kind == .episode {
                         Button { model.play(item) } label: {
                             Label(item.progress != nil ? L("Folytatás") : L("Lejátszás"), systemImage: "play.fill")
@@ -301,7 +301,7 @@ struct TVDetailView: View {
                     }
                 }
             }
-            HStack(spacing: 24) {
+            TVButtonRow {
                 Button { if let t = playTarget { model.play(t) } } label: {
                     Label(playLabel, systemImage: "play.fill")
                 }
@@ -336,7 +336,10 @@ struct TVDetailView: View {
     private var playLabel: String {
         guard let t = playTarget else { return L("Lejátszás") }
         if t.progress != nil { return L("Folytatás") }
-        if t.kind == .episode, current.kind != .episode, let l = t.episodeLabel { return L("{0} lejátszása", l) }
+        if t.kind == .episode, current.kind != .episode, let e = t.episodeNum {
+            if let s = t.seasonNum { return L("Lejátszás: {0}. évad {1}. rész", s, e) }
+            return L("Lejátszás: {0}. rész", e)
+        }
         return L("Lejátszás")
     }
 
@@ -498,7 +501,7 @@ struct TVLibraryGrid: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 HStack(spacing: 20) {
-                    Text(library.name).font(Theme.display(64))
+                    Text(library.name).font(Theme.display(64)).lineLimit(1)
                     Spacer()
                     ForEach(ItemSort.allCases) { s in
                         Button(s.label) { sort = s }
@@ -620,10 +623,13 @@ struct TVSettingsTab: View {
                 VStack(alignment: .leading, spacing: 22) {
                     if let p = model.me?.profile {
                         HStack(spacing: 30) {
-                            TVProfileFace(profile: p, size: 120)
+                            TVProfileFace(profile: p, size: 120, showsName: false)
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(model.me?.user.username ?? "").font(.title3)
-                                if let s = model.server { Text(s.name).foregroundStyle(Theme.muted) }
+                                Text(p.name).font(.title3)
+                                let user = model.me?.user.username
+                                let sub = [user == p.name ? nil : user, model.server?.name, p.isKids ? L("Gyerek") : nil]
+                                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                                if !sub.isEmpty { Text(sub).foregroundStyle(Theme.muted) }
                             }
                         }
                         .padding(.bottom, 20)
@@ -643,7 +649,7 @@ struct TVSettingsTab: View {
                         .buttonStyle(TVRowStyle())
 
                     TVHeading(text: L("Felirat mérete")).padding(.top, 30)
-                    HStack(spacing: 20) {
+                    TVButtonRow(spacing: 20) {
                         ForEach(SubtitleStyle.Size.allCases, id: \.self) { s in
                             Button(sizeLabel(s)) {
                                 subtitleSize = s

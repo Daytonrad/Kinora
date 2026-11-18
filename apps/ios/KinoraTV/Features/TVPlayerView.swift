@@ -474,14 +474,11 @@ private struct TVPlayerSurface: UIViewRepresentable {
     }
 }
 
-/// Watch party on the TV: the room code and members at the top while the controls show,
+/// Watch party on the TV: the invite QR, room code and members at the top while the controls show,
 /// chat and room events for a few seconds at the top left, reactions floating up.
 private struct TVPartyOverlay: View {
     var party: PartySession
     var chrome: Bool
-
-    /// Nobody else is here yet: the invite stays up so friends can join.
-    private var alone: Bool { party.members.count <= 1 }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -513,9 +510,9 @@ private struct TVPartyOverlay: View {
                     .animation(.easeOut(duration: 0.3), value: recent.map(\.id))
                 }
                 Spacer()
-                if chrome || party.status != nil || alone {
+                if chrome || party.status != nil {
                     VStack(alignment: .trailing, spacing: 10) {
-                        if chrome || alone {
+                        if chrome {
                             // Friends join from their phones: the camera opens the app on this room.
                             HStack(alignment: .center, spacing: 18) {
                                 Text(L("Csatlakozz telefonról:\nolvasd be a kódot"))
@@ -547,6 +544,5 @@ private struct TVPartyOverlay: View {
         }
         .allowsHitTesting(false)
         .animation(.easeOut(duration: 0.25), value: chrome)
-        .animation(.easeOut(duration: 0.25), value: alone)
     }
 }

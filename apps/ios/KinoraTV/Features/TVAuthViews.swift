@@ -87,7 +87,7 @@ struct TVServersView: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .onSubmit { connect(address) }
-                    HStack(spacing: 24) {
+                    TVButtonRow {
                         Button { connect(address) } label: { Label(L("Csatlakozás"), systemImage: "arrow.right") }
                             .buttonStyle(TVPillStyle(prominent: true))
                             .disabled(address.trimmingCharacters(in: .whitespaces).isEmpty || busy)
@@ -182,7 +182,7 @@ struct TVLoginView: View {
             SecureField(L("Jelszó"), text: $password)
                 .textContentType(.password)
                 .onSubmit(login)
-            HStack(spacing: 24) {
+            TVButtonRow {
                 Button(action: login) { Label(L("Belépés"), systemImage: "person.fill.checkmark") }
                     .buttonStyle(TVPillStyle())
                     .disabled(username.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty || busy)
@@ -250,7 +250,7 @@ struct TVQuickConnectView: View {
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(60)
             }
-            HStack(spacing: 24) {
+            TVButtonRow {
                 if failed {
                     Button { attempt += 1 } label: { Label(L("Új kód"), systemImage: "arrow.clockwise") }
                         .buttonStyle(TVPillStyle(prominent: true))
@@ -356,6 +356,8 @@ struct TVProfileFace: View {
     @Environment(\.tvCardFocused) private var focused
     var profile: Profile
     var size: CGFloat = 220
+    /// Off where the name is already written next to the face (Settings).
+    var showsName = true
 
     var body: some View {
         VStack(spacing: 22) {
@@ -376,9 +378,11 @@ struct TVProfileFace: View {
                         .padding(12)
                 }
             }
-            Text(profile.name).font(.title3.weight(.semibold))
-                .foregroundStyle(focused ? Theme.plasterBright : Theme.plaster)
-            if profile.isKids {
+            if showsName {
+                Text(profile.name).font(.title3.weight(.semibold))
+                    .foregroundStyle(focused ? Theme.plasterBright : Theme.plaster)
+            }
+            if showsName, profile.isKids {
                 Text(L("Gyerek")).font(.callout).foregroundStyle(Theme.muted)
             }
         }
@@ -402,7 +406,7 @@ private struct TVPinSheet: View {
                 .frame(width: 500)
                 .onSubmit(submit)
             TVErrorText(message: error)
-            HStack(spacing: 24) {
+            TVButtonRow {
                 Button(L("Belépés"), action: submit)
                     .buttonStyle(TVPillStyle(prominent: true))
                     .disabled(pin.isEmpty || busy)
