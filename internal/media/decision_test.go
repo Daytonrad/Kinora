@@ -116,3 +116,35 @@ func TestTargetWidth(t *testing.T) {
 		}
 	}
 }
+
+var apple = Caps{Video: []string{"h264", "hevc"}, Audio: []string{"aac", "ac3", "eac3"}, Containers: []string{"mp4", "mov"}}
+
+func TestDecideHEVCRemux(t *testing.T) {
+	d := Decide(item("mkv", "hevc", "eac3", 12_000_000), PlaybackRequest{Caps: apple}, nil, 0, true)
+	if d.Mode != "remux" || !d.VideoCopy || !d.FMP4 || d.AudioCopy {
+		t.Fatalf("mkv hevc on an hevc client → fMP4 remux, got %+v", d)
+	}
+	args := strings.Join(BuildHLSArgs(HLSSpec{Item: &store.Item{Path: "/x.mkv"}, Decision: d}, "/tmp/s"), " ")
+	for _, want := range []string{"-c:v copy", "-tag:v hvc1", "-hls_segment_type fmp4", "seg%05d.m4s"} {
+		if !strings.Contains(args, want) {
+			t.Fatalf("missing %q in %s", want, args)
+		}
+	}
+	// h264 remux stays on MPEG-TS
+	d = Decide(item("mkv", "h264", "aac", 4_000_000), PlaybackRequest{Caps: apple}, nil, 0, true)
+	if d.Mode != "remux" || d.FMP4 {
+		t.Fatalf("h264 remux must not use fMP4: %+v", d)
+	}
+	if a := strings.Join(BuildHLSArgs(HLSSpec{Item: &store.Item{Path: "/x.mkv"}, Decision: d}, "/tmp/s"), " "); !strings.Contains(a, "seg%05d.ts") || strings.Contains(a, "fmp4") {
+		t.Fatalf("ts args: %s", a)
+	}
+	// HDR HEVC without HDR support, or a client without HEVC, still transcodes
+	hdr := item("mkv", "hevc", "aac", 12_000_000)
+	hdr.HDR = "HDR10"
+	if d := Decide(hdr, PlaybackRequest{Caps: apple}, nil, 0, true); d.Mode != "transcode" {
+		t.Fatalf("hdr hevc → transcode, got %+v", d)
+	}
+	if d := Decide(item("mkv", "hevc", "aac", 12_000_000), PlaybackRequest{Caps: chrome}, nil, 0, true); d.Mode != "transcode" {
+		t.Fatalf("no hevc caps → transcode, got %+v", d)
+	}
+}

@@ -188,7 +188,7 @@ func downloadName(it *store.Item, quality string) string {
 	}, name)
 }
 
-var reHLSFile = regexp.MustCompile(`^(index\.m3u8|seg\d{5,}\.ts)$`)
+var reHLSFile = regexp.MustCompile(`^(index\.m3u8|init\.mp4|seg\d{5,}\.(ts|m4s))$`)
 
 func (s *Server) handleHLS(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	file := r.PathValue("file")
@@ -220,7 +220,11 @@ func (s *Server) handleHLS(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 		writeErr(w, http.StatusNotFound, "a szegmens még nem készült el")
 		return
 	}
-	w.Header().Set("Content-Type", "video/mp2t")
+	if strings.HasSuffix(file, ".ts") {
+		w.Header().Set("Content-Type", "video/mp2t")
+	} else {
+		w.Header().Set("Content-Type", "video/mp4")
+	}
 	http.ServeFile(w, r, p)
 }
 

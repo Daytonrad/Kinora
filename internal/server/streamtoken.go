@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -152,12 +153,17 @@ func withStreamToken(u, tok string) string {
 }
 
 // rewritePlaylist appends the stream token to every segment URI of an HLS playlist.
+var reMapURI = regexp.MustCompile(`^#EXT-X-MAP:.*URI="([^"]+)"`)
+
 func rewritePlaylist(b []byte, tok string) []byte {
 	lines := strings.Split(string(b), "\n")
 	for i, l := range lines {
 		t := strings.TrimSpace(l)
 		if t != "" && !strings.HasPrefix(t, "#") {
 			lines[i] = withStreamToken(t, tok)
+		} else if m := reMapURI.FindStringSubmatch(t); m != nil {
+			// fMP4 init segment: #EXT-X-MAP:URI="init.mp4" needs the token too
+			lines[i] = strings.Replace(t, `URI="`+m[1]+`"`, `URI="`+withStreamToken(m[1], tok)+`"`, 1)
 		}
 	}
 	return []byte(strings.Join(lines, "\n"))

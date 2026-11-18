@@ -46,6 +46,7 @@ type Decision struct {
 	Width      int      `json:"width"`
 	ToneMap    bool     `json:"tonemap"`
 	BurnSubIdx *int     `json:"burn_sub_idx,omitempty"`
+	FMP4       bool     `json:"-"` // fMP4 HLS segments: copied HEVC cannot go in MPEG-TS for Apple players / hls.js
 }
 
 // codecName maps ffprobe codec names to the names clients report.
@@ -175,11 +176,13 @@ func Decide(it *store.Item, req PlaybackRequest, audioLangs []string, maxKbps in
 		return d
 	}
 
-	remux := vc == "h264" && videoOK && !overBitrate && req.BurnSubIdx == nil && !hdrBlocked && req.Force != "transcode"
+	// H.264 and HEVC can be copied into HLS when the client plays them (HEVC goes in fMP4 segments).
+	remux := (vc == "h264" || vc == "hevc") && videoOK && !overBitrate && req.BurnSubIdx == nil && !hdrBlocked && req.Force != "transcode"
 	d.AudioCopy = audioCodec == "aac" && has(req.Caps.Audio, "aac")
 	if remux {
 		d.Mode = "remux"
 		d.VideoCopy = true
+		d.FMP4 = vc == "hevc"
 		if !d.AudioCopy && audioCodec != "" {
 			why = append(why, fmt.Sprintf("hang átkódolása: %s → AAC", audioCodec))
 		}

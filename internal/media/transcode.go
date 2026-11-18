@@ -117,6 +117,9 @@ func BuildHLSArgs(sp HLSSpec, dir string) []string {
 	opts := EncodeOpts{Bitrate: d.Bitrate, Width: d.Width, ToneMap: d.ToneMap, GOP: true}
 	if d.VideoCopy {
 		args = append(args, "-map", "0:v:0", "-c:v", "copy")
+		if d.FMP4 {
+			args = append(args, "-tag:v", "hvc1") // Apple players only accept the hvc1 sample entry
+		}
 	} else if d.BurnSubIdx != nil {
 		fc := fmt.Sprintf("[0:v:0][0:s:%d]overlay=eof_action=pass,%s[v]", *d.BurnSubIdx, sp.Encoder.Filter(opts))
 		args = append(args, "-filter_complex", fc, "-map", "[v]")
@@ -135,9 +138,14 @@ func BuildHLSArgs(sp HLSSpec, dir string) []string {
 	}
 	args = append(args, "-sn", "-dn", "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "2048",
 		"-f", "hls", "-hls_time", "4", "-hls_list_size", "0", "-hls_playlist_type", "event",
-		"-hls_flags", "independent_segments+temp_file",
-		"-hls_segment_filename", filepath.Join(dir, "seg%05d.ts"),
-		filepath.Join(dir, "index.m3u8"))
+		"-hls_flags", "independent_segments+temp_file")
+	if d.FMP4 {
+		args = append(args, "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4",
+			"-hls_segment_filename", filepath.Join(dir, "seg%05d.m4s"))
+	} else {
+		args = append(args, "-hls_segment_filename", filepath.Join(dir, "seg%05d.ts"))
+	}
+	args = append(args, filepath.Join(dir, "index.m3u8"))
 	return args
 }
 
@@ -205,7 +213,7 @@ func (m *Manager) Start(ctx context.Context, sp HLSSpec) (*Session, error) {
 
 func hasSegment(playlist string) bool {
 	b, err := os.ReadFile(playlist)
-	return err == nil && bytes.Contains(b, []byte(".ts"))
+	return err == nil && (bytes.Contains(b, []byte(".ts")) || bytes.Contains(b, []byte(".m4s")))
 }
 
 // Get returns a session owned by userID.
