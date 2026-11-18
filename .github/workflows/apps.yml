@@ -82,7 +82,9 @@ jobs:
 
   # iOS: native SwiftUI app. KinoraKit unit tests + an unsigned simulator build.
   # Signing for a real device needs a DEVELOPMENT_TEAM in Config/Local.xcconfig – see apps/ios/README.md.
+  # Only on a manual run (Actions → apps → Run workflow), not on pushes, tags or pull requests.
   ios:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     defaults:
       run:
