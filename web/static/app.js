@@ -81,12 +81,8 @@ const T = compileStrings(langChain(LANG));
 document.documentElement.lang = LANG;
 function setLang(l) { if (l === LANG) return; localStorage.setItem('kinora-lang', l); location.reload(); }
 function langSwitch() {
-  if (LANGS.length > 4) {
-    return h('label.lang-switch.lang-select', { onclick: e => e.stopPropagation() }, h('span.small.muted', null, T.language),
-      h('select', { 'aria-label': T.language, onchange: e => setLang(e.target.value) }, LANGS.map(([c, name]) => h('option', { value: c, lang: c, selected: c === LANG }, name))));
-  }
-  return h('div.chips.lang-switch', { role: 'group', 'aria-label': T.language },
-    LANGS.map(([c, name]) => h('button.chip' + (c === LANG ? '.on' : ''), { type: 'button', lang: c, 'aria-pressed': String(c === LANG), onclick: e => { e.stopPropagation(); setLang(c); } }, name)));
+  return h('label.lang-switch.lang-select', { onclick: e => e.stopPropagation() }, h('span.small.muted', null, T.language),
+    h('select', { 'aria-label': T.language, onchange: e => setLang(e.target.value) }, LANGS.map(([c, name]) => h('option', { value: c, lang: c, selected: c === LANG }, name))));
 }
 // Server texts (errors, home rows, playback reasons) are Hungarian; translate the known ones:
 // exact match, then the language's patterns, then "known prefix: detail".
@@ -277,7 +273,7 @@ async function route() {
   if (!state.me) await loadMe();
   if (!state.me) {
     if (p0 !== 'login') { if (p0 === 'quickconnect') rememberAfter(location.hash); return go('#/login'); }
-    return viewLogin();
+    return p1 === 'code' && state.status.quickconnect_enabled ? viewLoginCode() : viewLogin();
   }
   if (p0 === 'login') return go('#/profiles');
   if (p0 === 'quickconnect' && state.me.profile) return viewQuickConnect(q.get('code') || '');
@@ -450,8 +446,58 @@ function viewLogin() {
     e.preventDefault();
     await POST('/api/login', { username: user.value, password: pw.value }, { noRedirect: true });
     await loadMe(); go('#/profiles');
-  } }, field(T.username, user), field(T.password, pw), h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.login));
+  } }, field(T.username, user), field(T.password, pw), h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.login),
+  state.status.quickconnect_enabled && h('div.auth-or', null, h('span', null, T.or)),
+  state.status.quickconnect_enabled && h('a.btn.big.wide', { href: '#/login/code' }, T.qcLoginBtn));
   authPage(T.loginTitle, (state.status.server_name || T.appName) + ' – ' + T.loginLede, form);
+}
+
+// Sign in with a code: this browser shows a 6-digit code, a signed-in device approves it
+// (profile menu → Connect a device); the approved poll sets the session cookie.
+function viewLoginCode() {
+  let alive = true, timer = 0, tick = 0;
+  const stop = () => { clearTimeout(timer); clearInterval(tick); };
+  onCleanup(() => { alive = false; stop(); });
+  const code = h('div.qc-code', { 'aria-live': 'polite' });
+  const left = h('p.qc-left');
+  const msg = h('p.qc-msg', { role: 'status' });
+  const again = h('button.btn.primary.big.wide', { type: 'button', hidden: true, onclick: () => start() }, T.qcNewCode);
+  const end = (text, bad) => {
+    stop(); code.classList.add('off'); put(left); put(msg, text); msg.classList.toggle('bad', !!bad);
+    again.hidden = false; again.focus();
+  };
+  async function start() {
+    stop(); again.hidden = true; code.classList.remove('off'); code.textContent = '––– –––'; put(msg); put(left);
+    let ini;
+    try { ini = await POST('/api/quickconnect/initiate', { platform: 'web' }, { noRedirect: true, quiet: true }); }
+    catch (e) { if (alive) end(e.message || T.netErr, true); return; }
+    if (!alive) return;
+    code.textContent = ini.code.slice(0, 3) + ' ' + ini.code.slice(3);
+    code.setAttribute('aria-label', ini.code.split('').join(' '));
+    const until = Date.now() + ini.expires_in * 1000;
+    const count = () => {
+      const s = Math.max(0, Math.round((until - Date.now()) / 1000));
+      if (!s) return end(T.qcExpired);
+      put(left, T.qcExpiresIn(Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')));
+    };
+    count(); tick = setInterval(count, 1000);
+    const every = (ini.poll_interval || 2) * 1000;
+    const poll = async () => {
+      let r = null;
+      try { r = await GET('/api/quickconnect/status?secret=' + encodeURIComponent(ini.secret), { noRedirect: true, quiet: true }); }
+      catch (e) { if (e.status === 410) { if (alive) end(T.qcExpired); return; } } // a network hiccup: poll again
+      if (!alive) return;
+      if (r && r.status === 'approved') { stop(); put(msg, T.qcSignedIn); await loadMe(); return go(takeAfter() || '#/home'); }
+      if (r && r.status === 'denied') return end(T.qcLoginDenied, true);
+      timer = setTimeout(poll, every);
+    };
+    timer = setTimeout(poll, every);
+  }
+  const box = h('div.qc-box', null, code, left, msg, again,
+    h('ol.qc-steps', null, h('li', null, T.qcStep1), h('li', null, T.qcStep2(T.connectDevice)), h('li', null, T.qcStep3)),
+    h('a.btn.ghost.wide', { href: '#/login' }, T.qcUsePassword));
+  authPage(T.qcLoginTitle, T.qcLoginLede, box);
+  start();
 }
 
 async function viewJoin(code) {

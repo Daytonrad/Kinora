@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"strings"
 	"testing"
 	"time"
@@ -394,6 +395,53 @@ func TestQuickConnectFlow(t *testing.T) {
 	// the code itself is spent
 	if code := c.do("POST", "/api/quickconnect/lookup", map[string]string{"code": ini.Code}, nil); code != 404 {
 		t.Fatalf("spent code lookup %d", code)
+	}
+}
+
+// The web login page signs in with a code: the approved poll sets the session cookie
+// for a browser (no foreign origin), but not for a native app.
+func TestQuickConnectWebLogin(t *testing.T) {
+	c, _ := newTestServer(t)
+	jar, _ := cookiejar.New(nil)
+	web := &client{t: t, base: c.base, hc: &http.Client{Jar: jar}, hdr: map[string]string{"User-Agent": "Mozilla/5.0 (Macintosh) Chrome/130.0 Safari/537.36"}}
+	var ini qcInit
+	if code := web.do("POST", "/api/quickconnect/initiate", map[string]string{"platform": "web"}, &ini); code != 200 {
+		t.Fatalf("initiate %d", code)
+	}
+	var look struct {
+		DeviceName string `json:"device_name"`
+	}
+	if code := c.do("POST", "/api/quickconnect/lookup", map[string]string{"code": ini.Code}, &look); code != 200 || look.DeviceName == "" {
+		t.Fatalf("lookup %d %+v (a browser must get a name)", code, look)
+	}
+	if code := web.do("GET", "/api/me", nil, nil); code != 401 {
+		t.Fatalf("me before approval %d", code)
+	}
+	p := selectFirstProfile(t, c)
+	if code := c.do("POST", "/api/quickconnect/approve", map[string]any{"code": ini.Code, "profile_id": p.ID}, nil); code != 200 {
+		t.Fatalf("approve %d", code)
+	}
+	var s qcStatus
+	if web.do("GET", "/api/quickconnect/status?secret="+ini.Secret, nil, &s); s.Status != "approved" {
+		t.Fatalf("approved: %+v", s)
+	}
+	var me struct {
+		Profile *store.Profile `json:"profile"`
+	}
+	if code := web.do("GET", "/api/me", nil, &me); code != 200 || me.Profile == nil || me.Profile.ID != p.ID {
+		t.Fatalf("me with the qc cookie: %d %+v", code, me)
+	}
+	// a native app (own origin) gets no cookie
+	appJar, _ := cookiejar.New(nil)
+	tv := &client{t: t, base: c.base, hc: &http.Client{Jar: appJar}, hdr: map[string]string{"Origin": "null"}}
+	tv.do("POST", "/api/quickconnect/initiate", map[string]string{"device_name": "TV", "platform": "tizen"}, &ini)
+	c.do("POST", "/api/quickconnect/approve", map[string]any{"code": ini.Code, "profile_id": p.ID}, nil)
+	if tv.do("GET", "/api/quickconnect/status?secret="+ini.Secret, nil, &s); s.Status != "approved" || s.Token == "" {
+		t.Fatalf("app approved: %+v", s)
+	}
+	tv.hdr = nil
+	if code := tv.do("GET", "/api/me", nil, nil); code != 401 {
+		t.Fatalf("an app must not get a session cookie: %d", code)
 	}
 }
 

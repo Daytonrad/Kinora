@@ -93,10 +93,16 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u *store.U
 		s.internalErr(w, r, err)
 		return
 	}
-	if o := r.Header.Get("Origin"); o == "" || sameOrigin(r, o) || !s.isAppOrigin(o) {
-		s.setSessionCookie(w, r, tok) // the web client; native apps keep the token instead
-	}
+	s.webSessionCookie(w, r, tok)
 	writeJSON(w, http.StatusOK, map[string]any{"token": tok, "device_id": dev, "user": u})
+}
+
+// webSessionCookie sets the session cookie for the web client; native apps
+// (their own origin) keep the token from the response instead.
+func (s *Server) webSessionCookie(w http.ResponseWriter, r *http.Request, tok string) {
+	if o := r.Header.Get("Origin"); o == "" || sameOrigin(r, o) || !s.isAppOrigin(o) {
+		s.setSessionCookie(w, r, tok)
+	}
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request, c *reqCtx) {

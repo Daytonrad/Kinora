@@ -195,8 +195,7 @@ func (s *Server) handleQCInitiate(w http.ResponseWriter, r *http.Request, c *req
 		writeErr(w, http.StatusTooManyRequests, "túl sok kódkérés, próbáld újra pár perc múlva")
 		return
 	}
-	d.IP = clientIP(r)
-	e, secret, err := s.qc.initiate(d.Clean())
+	e, secret, err := s.qc.initiate(deviceFromRequest(r, d)) // a browser gets a name from its user agent
 	if err != nil {
 		writeErr(w, http.StatusServiceUnavailable, err.Error())
 		return
@@ -223,6 +222,9 @@ func (s *Server) handleQCStatus(w http.ResponseWriter, r *http.Request, c *reqCt
 	}
 	switch e.Status {
 	case "issued":
+		if tok, _ := e.issued["token"].(string); tok != "" {
+			s.webSessionCookie(w, r, tok) // the web login page signs in with the cookie
+		}
 		writeJSON(w, http.StatusOK, e.issued)
 	case "pending":
 		writeJSON(w, http.StatusOK, map[string]any{"status": "pending", "expires_in": int(time.Until(e.Expires).Seconds())})
@@ -256,6 +258,7 @@ func (s *Server) handleQCStatus(w http.ResponseWriter, r *http.Request, c *reqCt
 			"profile_id": e.ProfileID, "needs_pin": e.NeedsPIN, "profile_locked": e.Lock,
 		}
 		s.qc.issue(secret, resp)
+		s.webSessionCookie(w, r, tok)
 		writeJSON(w, http.StatusOK, resp)
 	}
 }
