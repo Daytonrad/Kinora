@@ -152,8 +152,9 @@ final class PartySession {
     }
 
     private func send(_ c: PartyCommand) {
-        guard let socket, socket.state == .running else { return }
-        socket.send(.data(c.json)) { _ in }
+        let data = c.json
+        guard let socket, socket.state == .running, !data.isEmpty else { return }
+        socket.send(.data(data)) { _ in }
     }
 
     private func handle(_ data: Data) {

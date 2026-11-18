@@ -11,6 +11,11 @@ import Testing
         #expect(WebVTT.text(at: 3, in: cues) == nil)
     }
 
+    @Test func vttReferencesDecodeOnce() {
+        let cues = WebVTT.parse("WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n&amp;lt;b&amp;gt; &lt;3 &#39;x&#x27; &#x1F600; &bogus; & a\n")
+        #expect(cues.first?.text == "&lt;b&gt; <3 'x' \u{1F600} &bogus; & a")
+    }
+
     @Test func picksDefaultSubtitle() {
         func t(_ i: Int, _ l: String, forced: Bool = false) -> SubtitleTrack {
             SubtitleTrack(idx: i, lang: l, title: nil, forced: forced, textBased: true, url: "/s/\(i)")

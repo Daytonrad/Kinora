@@ -43,4 +43,10 @@ import Testing
         let u = try decode("{}", as: UserData.self)
         #expect(u.played == false && u.position == 0)
     }
+
+    @Test func queryValuesEscapeGoSeparators() {
+        // Go's url.ParseQuery drops a pair with ";" in it, and reads "+" as a space.
+        #expect("Star Wars; Ep. 1+2 & más=?".addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed)
+            == "Star%20Wars%3B%20Ep.%201%2B2%20%26%20m%C3%A1s%3D%3F")
+    }
 }

@@ -134,14 +134,47 @@ public enum WebVTT {
                   let s = time(sides[0]),
                   let e = time(sides[1].trimmingCharacters(in: .whitespaces).split(separator: " ").first.map(String.init) ?? "")
             else { continue }
-            let text = lines[(ti + 1)...].joined(separator: "\n")
-                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-                .replacingOccurrences(of: "&amp;", with: "&").replacingOccurrences(of: "&lt;", with: "<")
-                .replacingOccurrences(of: "&gt;", with: ">").replacingOccurrences(of: "&nbsp;", with: " ")
+            let text = unescape(lines[(ti + 1)...].joined(separator: "\n")
+                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty { cues.append(Cue(start: s, end: e, text: text)) }
         }
         return cues.sorted { $0.start < $1.start }
+    }
+
+    static let entities: [String: String] = [
+        "amp": "&", "lt": "<", "gt": ">", "nbsp": " ", "quot": "\"", "apos": "'",
+        "lrm": "\u{200E}", "rlm": "\u{200F}",
+    ]
+
+    /// Character references in one pass, so "&amp;lt;" stays "&lt;" (one decode, not two).
+    static func unescape(_ s: String) -> String {
+        guard s.contains("&") else { return s }
+        var out = ""
+        var rest = s[...]
+        while let amp = rest.firstIndex(of: "&") {
+            out += rest[..<amp]
+            let after = rest[rest.index(after: amp)...]
+            if let semi = after.prefix(12).firstIndex(of: ";") {
+                let name = after[..<semi]
+                var value: String?
+                if name.hasPrefix("#x") || name.hasPrefix("#X") {
+                    value = UInt32(name.dropFirst(2), radix: 16).flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+                } else if name.hasPrefix("#") {
+                    value = UInt32(name.dropFirst()).flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+                } else {
+                    value = entities[String(name)]
+                }
+                if let value {
+                    out += value
+                    rest = after[after.index(after: semi)...]
+                    continue
+                }
+            }
+            out += "&"
+            rest = after
+        }
+        return out + rest
     }
 
     /// "01:02:03.456" or "02:03.456".

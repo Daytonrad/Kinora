@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"io"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -64,11 +65,11 @@ func ReadNFO(path string) *store.LocalMeta {
 			}
 		}
 	}
-	if r, err := strconv.ParseFloat(strings.TrimSpace(strings.ReplaceAll(d.Rating, ",", ".")), 64); err == nil && r > 0 {
+	if r, ok := parseRating(d.Rating); ok {
 		m.Rating = &r
 	} else {
 		for _, rt := range d.Ratings {
-			if v, err := strconv.ParseFloat(strings.TrimSpace(rt.Value), 64); err == nil && v > 0 {
+			if v, ok := parseRating(rt.Value); ok {
 				m.Rating = &v
 				if rt.Default == "true" {
 					break
@@ -131,4 +132,14 @@ func firstNonEmpty(a ...string) string {
 		}
 	}
 	return ""
+}
+
+// parseRating reads "7.5" or "7,5". ParseFloat also accepts "Inf" and "NaN", which JSON
+// cannot encode: one such NFO would break every API answer listing the item.
+func parseRating(s string) (float64, bool) {
+	v, err := strconv.ParseFloat(strings.TrimSpace(strings.ReplaceAll(s, ",", ".")), 64)
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v <= 0 {
+		return 0, false
+	}
+	return v, true
 }

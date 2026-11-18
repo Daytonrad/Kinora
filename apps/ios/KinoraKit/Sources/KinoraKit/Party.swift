@@ -141,6 +141,9 @@ public enum PartyCommand: Sendable, Equatable {
         case .chat(let text): m = ["t": "chat", "text": text]
         case .react(let e): m = ["t": "react", "emoji": e]
         }
+        // NaN/Infinity (a player time before the item is ready) makes JSONSerialization raise an
+        // Objective-C exception that `try?` cannot catch: check first.
+        guard JSONSerialization.isValidJSONObject(m) else { return Data() }
         return (try? JSONSerialization.data(withJSONObject: m, options: [.sortedKeys])) ?? Data()
     }
 }

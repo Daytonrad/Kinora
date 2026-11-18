@@ -61,6 +61,10 @@ test('WebVTT parsing: timing, tags, multi-line, comma decimals', () => {
   assert.equal(activeCues(cues, 10).length, 0);
   assert.equal(activeCues(cues, 63).length, 1);
 });
+test('VTT character references decode once', () => {
+  const cues = parseVTT('WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\n&amp;lt;b&amp;gt; &lt;3 &#39;x&#x27; &#x1F600; &bogus; & a\r\n');
+  assert.equal(cues[0].text, "&lt;b&gt; <3 'x' \u{1F600} &bogus; & a");
+});
 
 test('platform table: TVs direct-play MKV/HEVC/AC-3, phones rely on probing', () => {
   for (const tv of ['tizen', 'webos']) {

@@ -82,4 +82,10 @@ struct PartyTests {
         #expect(KinoraLink(url: URL(string: "kinora://play/12")!) == .play(12))
         #expect(KinoraLink(url: URL(string: "kinora://play/x")!) == nil)
     }
+
+    @Test func nonFiniteCommandIsDroppedNotACrash() {
+        #expect(PartyCommand.pause(at: .nan).json.isEmpty)
+        #expect(PartyCommand.seek(to: .infinity).json.isEmpty)
+        #expect(!PartyCommand.pause(at: 12.5).json.isEmpty)
+    }
 }

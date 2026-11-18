@@ -154,7 +154,8 @@ struct PinBody: Encodable, Sendable { var pin: String? }
 extension CharacterSet {
     static let urlQueryValueAllowed: CharacterSet = {
         var s = CharacterSet.urlQueryAllowed
-        s.remove(charactersIn: "&+=?")
+        // ";" too: Go's url.ParseQuery drops a whole "key=value" pair that contains one.
+        s.remove(charactersIn: "&+=?;")
         return s
     }()
 }

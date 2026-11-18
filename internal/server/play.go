@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -136,7 +135,25 @@ func contentDisposition(kind, name string) string {
 		}
 		return r
 	}, name)
-	return fmt.Sprintf(`%s; filename="%s"; filename*=UTF-8''%s`, kind, ascii, strings.ReplaceAll(url.PathEscape(name), "'", "%27"))
+	return fmt.Sprintf(`%s; filename="%s"; filename*=UTF-8''%s`, kind, ascii, rfc5987(name))
+}
+
+// rfc5987 percent-encodes every byte outside RFC 5987's attr-char. url.PathEscape is not
+// enough: it leaves ; , ( ) = : @ * ' in place, and a ";" ends the header parameter early.
+func rfc5987(s string) string {
+	const hex = "0123456789ABCDEF"
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || strings.IndexByte("!#$&+-.^_`|~", c) >= 0 {
+			b.WriteByte(c)
+		} else {
+			b.WriteByte('%')
+			b.WriteByte(hex[c>>4])
+			b.WriteByte(hex[c&15])
+		}
+	}
+	return b.String()
 }
 
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request, c *reqCtx) {
