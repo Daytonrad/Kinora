@@ -28,7 +28,9 @@ param(
   # a napi frissítés időpontja (helyi idő)
   [string]$UpdateTime = "04:00",
   [switch]$NoAutoUpdate,
-  [string]$Repo = "ScotyLucas/kinora"
+  [string]$Repo = "ScotyLucas/kinora",
+  # a fájlok már az InstallDir-ben vannak (a kinora-setup.exe hívja így): csak szolgáltatás, tűzfal, ütemezett feladat
+  [switch]$Configure
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,6 +46,11 @@ $work = Join-Path $env:TEMP ("kinora-install-" + [guid]::NewGuid().ToString("N")
 New-Item -ItemType Directory -Path $work | Out-Null
 
 try {
+  $exe = Join-Path $InstallDir "kinora.exe"
+  if ($Configure) {
+    if (-not (Test-Path $exe)) { throw "Nincs kinora.exe itt: $InstallDir" }
+    New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+  } else {
   # 1. a csomag beszerzése
   if ($ZipPath) {
     $zip = (Resolve-Path $ZipPath).Path
@@ -81,7 +88,7 @@ try {
   }
   New-Item -ItemType Directory -Force -Path $InstallDir, $DataDir | Out-Null
   Copy-Item -Path (Join-Path $stage "*") -Destination $InstallDir -Recurse -Force
-  $exe = Join-Path $InstallDir "kinora.exe"
+  }
   Write-Host ("Telepítve: " + (& $exe version) + " → $InstallDir")
 
   # 3. szolgáltatás (az install újratelepít, ha már létezik, és el is indítja)

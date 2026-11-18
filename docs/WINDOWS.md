@@ -5,7 +5,15 @@ A videókártyát közvetlenül éri el: NVIDIA (NVENC), Intel (QSV) és AMD (AM
 
 ## Telepítés
 
-Rendszergazdai PowerShellben:
+**Egyszerűen:** töltsd le a `kinora-setup.exe`-t a legújabb kiadásból
+(https://github.com/ScotyLucas/kinora/releases/latest), és futtasd. A telepítő rendszergazdai jogot kér,
+megkérdezi a portot és a médiamappákat (pl. `Filmek=D:\Filmek;Sorozatok=D:\Sorozatok`), és hogy legyen-e
+automatikus frissítés. Eltávolítani a Vezérlőpult / Alkalmazások listájából lehet.
+
+> A telepítő nincs digitálisan aláírva, ezért a SmartScreen első indításkor figyelmeztet:
+> **További információ → Futtatás mindenképp**.
+
+**Parancssorból** (pl. távoli szerveren), rendszergazdai PowerShellben:
 
 ```powershell
 $u = "https://github.com/ScotyLucas/kinora/releases/latest/download/kinora-windows-amd64.zip"
@@ -18,7 +26,7 @@ powershell -ExecutionPolicy Bypass -File .\kinora-setup\install.ps1 -ZipPath kin
 
 Ezután a szerver itt érhető el: `http://<szerver-ip>:8096`.
 
-Az `install.ps1` a következőket végzi el:
+A telepítő (és az `install.ps1`) a következőket végzi el:
 - ellenőrzi a csomag SHA-256 összegét (`-ZipPath` nélkül maga tölti le a legújabb kiadást);
 - a programot a `C:\Program Files\Kinora`, az adatokat a `C:\ProgramData\Kinora` mappába teszi;
 - telepíti és elindítja a **Kinora** szolgáltatást (automatikus, késleltetett indítás, összeomlás után újraindul);
@@ -59,6 +67,8 @@ Az adatmappát (`-DataDir`) mindig helyi lemezre tedd, mert az SQLite adatbázis
 
 ## Eltávolítás
 
+Ha a `kinora-setup.exe`-vel telepítetted: Vezérlőpult → Programok → Kinora → Eltávolítás. Kézzel:
+
 ```powershell
 & "C:\Program Files\Kinora\kinora.exe" service uninstall
 Unregister-ScheduledTask -TaskName "Kinora frissítés" -Confirm:$false
@@ -72,3 +82,4 @@ Remove-Item -Recurse "C:\Program Files\Kinora"
 A `kinora-windows-amd64.zip` minden `v*.*.*` tagnél automatikusan elkészül, és felkerül a GitHub Release-be
 (`.github/workflows/ci.yml`, `windows` job). Tartalma: `kinora.exe` (benne a webes felület), `ffmpeg\ffmpeg.exe` és
 `ffprobe.exe` (BtbN 8.1-es GPL build), valamint az `install.ps1` és az `update.ps1`.
+Mellette a `kinora-setup.exe` ugyanezt tartalmazza grafikus telepítőként (`scripts/windows/kinora.iss`, Inno Setup).

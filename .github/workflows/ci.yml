@@ -151,7 +151,7 @@ jobs:
       run:
         shell: bash
     env:
-      # BtbN's GPL build of the ffmpeg 7.1 branch: NVENC, QSV, AMF and libx264 included
+      # BtbN's GPL build of the ffmpeg 8.1 branch: NVENC, QSV, AMF and libx264 included
       FFMPEG_ZIP: https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-gpl-8.1.zip
     steps:
       - uses: actions/checkout@v4
@@ -190,8 +190,20 @@ jobs:
           $zip = "kinora-windows-amd64.zip"
           Compress-Archive -Path dist/kinora/* -DestinationPath $zip
           (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() + "  $zip" | Out-File -Encoding ascii "$zip.sha256"
+      - name: setup.exe (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; if ($LASTEXITCODE) { exit 1 } }
+          $ver = $env:GITHUB_REF_NAME -replace '^v', ''
+          & $iscc /Qp "/DAppVersion=$ver" "/DSourceDir=$PWD\dist\kinora" "/O$PWD" scripts\windows\kinora.iss
+          if ($LASTEXITCODE) { exit 1 }
+          $exe = "kinora-setup.exe"
+          (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower() + "  $exe" | Out-File -Encoding ascii "$exe.sha256"
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             kinora-windows-amd64.zip
             kinora-windows-amd64.zip.sha256
+            kinora-setup.exe
+            kinora-setup.exe.sha256
