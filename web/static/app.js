@@ -2,20 +2,89 @@
 'use strict';
 
 // ===================================================================== strings
-// Every user-visible text lives in i18n/<lang>.js. Hungarian is the base: other languages fall back to it key by key.
-const I18N = window.KINORA_I18N || {};
-const LANGS = [['hu', 'Magyar'], ['en', 'English'], ['de', 'Deutsch']];
+// Every user-visible text lives in a language file: the built-in ones are i18n/<code>.js, the ones an admin
+// imported or edited (Admin → Languages) come from /i18n/custom.js and override a built-in language key by key.
+// Language files are pure data: "{0}", "{1}"… are arguments, "{0:00}" pads a number to two digits, and an
+// object with "one"/"other"/"=0"… keys picks a plural form by the first argument. Hungarian is the base
+// language; any other falls back to English, then to Hungarian.
+const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+const PLURAL_KEY = /^(=\d+|zero|one|two|few|many|other)$/;
+const isPluralVal = v => isObj(v) && 'other' in v && Object.keys(v).every(k => PLURAL_KEY.test(k));
+const isTemplateVal = v => typeof v === 'string' ? /\{\d(:0+)?\}/.test(v) : isPluralVal(v);
+function mergeStrings(a, b) {
+  const o = Object.assign({}, a);
+  for (const [k, v] of Object.entries(b || {})) {
+    if (k === 'srvRe' && Array.isArray(v) && Array.isArray(o[k])) {
+      // patterns merge by pattern: the more specific language's come first
+      const mine = new Set(v.map(p => Array.isArray(p) && p[0]));
+      o[k] = [...v, ...o[k].filter(p => !(Array.isArray(p) && mine.has(p[0])))];
+    } else o[k] = isObj(v) && isObj(o[k]) && !isPluralVal(v) ? mergeStrings(o[k], v) : v;
+  }
+  return o;
+}
+const I18N = (() => {
+  const all = {};
+  for (const l of Object.values(window.KINORA_I18N || {})) if (l && l.code && isObj(l.strings)) all[l.code] = Object.assign({ builtin: true }, l);
+  for (const l of window.KINORA_I18N_CUSTOM || []) {
+    if (!l || !l.code || !isObj(l.strings)) continue;
+    const b = all[l.code];
+    all[l.code] = b ? Object.assign({}, b, { name: l.name || b.name, strings: mergeStrings(b.strings, l.strings), custom: l, original: b })
+      : Object.assign({}, l, { custom: l });
+  }
+  return all;
+})();
+const LANGS = Object.values(I18N).sort((a, b) => (b.builtin ? 1 : 0) - (a.builtin ? 1 : 0) || (a.builtin && b.builtin ? 0 : a.name.localeCompare(b.name))).map(l => [l.code, l.name]);
 const LANG = (() => {
-  const ok = l => LANGS.some(([c]) => c === l) && I18N[l];
+  const ok = l => !!l && !!I18N[l];
   const saved = localStorage.getItem('kinora-lang');
   if (ok(saved)) return saved;
-  for (const l of navigator.languages || [navigator.language || '']) { const c = String(l).slice(0, 2).toLowerCase(); if (ok(c)) return c; }
+  for (const l of navigator.languages || [navigator.language || '']) { const c = String(l).toLowerCase(); if (ok(c)) return c; if (ok(c.slice(0, 2))) return c.slice(0, 2); }
   return I18N.en ? 'en' : 'hu';
 })();
-const T = Object.assign({}, I18N.hu, I18N[LANG]);
+const okLocale = l => { try { return Intl.NumberFormat.supportedLocalesOf([l]).length > 0; } catch { return false; } };
+// Raw (uncompiled) strings of a language with its fallbacks, as the language editor and the export see them.
+const langChain = code => [...new Set(['hu', code === 'hu' ? null : 'en', code])].filter(c => c && I18N[c]).map(c => I18N[c].strings);
+function compileTemplate(s) {
+  return (...a) => String(s).replace(/\{(\d)(?::(0+))?\}/g, (_, i, pad) => {
+    let v = a[i];
+    if (Array.isArray(v)) v = v.join(', ');
+    v = v == null ? '' : String(v);
+    return pad ? v.padStart(pad.length, '0') : v;
+  });
+}
+function compileStrings(chain) {
+  const base = chain[0] || {};
+  const raw = chain.reduce(mergeStrings, {});
+  const locale = typeof raw.locale === 'string' && okLocale(raw.locale) ? raw.locale : (okLocale(base.locale) ? base.locale : 'hu-HU');
+  const pr = new Intl.PluralRules(locale);
+  const fn = v => {
+    if (!isPluralVal(v)) return compileTemplate(typeof v === 'string' ? v : '');
+    const f = {};
+    for (const k in v) f[k] = compileTemplate(v[k]);
+    return (...a) => (f['=' + a[0]] || f[pr.select(Number(a[0]))] || f.other)(...a);
+  };
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    // a key is a function when it is one in the base language, whatever the translation looks like
+    const want = k in base ? isTemplateVal(base[k]) : isTemplateVal(v);
+    out[k] = want ? fn(typeof v === 'string' || isPluralVal(v) ? v : base[k]) : v;
+  }
+  out.locale = locale;
+  // the most specific language's patterns win; its fallbacks' patterns still apply after them
+  out.srvRe = [];
+  for (const s of chain.slice().reverse()) for (const p of Array.isArray(s.srvRe) ? s.srvRe : []) {
+    try { if (Array.isArray(p) && typeof p[0] === 'string') out.srvRe.push([new RegExp(p[0], 's'), compileTemplate(p[1] == null ? '' : p[1])]); } catch { /* skip an invalid pattern */ }
+  }
+  return out;
+}
+const T = compileStrings(langChain(LANG));
 document.documentElement.lang = LANG;
 function setLang(l) { if (l === LANG) return; localStorage.setItem('kinora-lang', l); location.reload(); }
 function langSwitch() {
+  if (LANGS.length > 4) {
+    return h('label.lang-switch.lang-select', { onclick: e => e.stopPropagation() }, h('span.small.muted', null, T.language),
+      h('select', { 'aria-label': T.language, onchange: e => setLang(e.target.value) }, LANGS.map(([c, name]) => h('option', { value: c, lang: c, selected: c === LANG }, name))));
+  }
   return h('div.chips.lang-switch', { role: 'group', 'aria-label': T.language },
     LANGS.map(([c, name]) => h('button.chip' + (c === LANG ? '.on' : ''), { type: 'button', lang: c, 'aria-pressed': String(c === LANG), onclick: e => { e.stopPropagation(); setLang(c); } }, name)));
 }
@@ -29,6 +98,13 @@ function srv(msg) {
   const i = msg.indexOf(': ');
   if (i > 0 && d[msg.slice(0, i)]) return d[msg.slice(0, i)] + ': ' + srv(msg.slice(i + 2));
   return msg;
+}
+function ago(s) {
+  const m = Math.round(s / 60);
+  if (m < 1) return T.agoNow;
+  if (m < 60) return T.agoMin(m);
+  const hr = Math.round(m / 60);
+  return hr < 48 ? T.agoHour(hr) : T.agoDay(Math.round(hr / 24));
 }
 const lbl = (map, key, fallback) => (map && map[key]) || fallback;
 const num = (v, digits) => Number(v).toLocaleString(T.locale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -1002,7 +1078,7 @@ function deviceRow(d, onChange, showUser) {
   return h('div.entry', null, h('div', null,
     h('div', null, h('strong', null, d.name || T.platforms[d.platform] || d.platform), d.current && h('span.muted', null, ' · ' + T.thisDevice)),
     h('p.muted.small', null, [showUser && d.username, T.platforms[d.platform] || d.platform, d.app_version && 'v' + d.app_version, d.ip,
-      T.lastActive + ': ' + T.ago(Date.now() / 1000 - d.last_seen)].filter(Boolean).join(' · ')),
+      T.lastActive + ': ' + ago(Date.now() / 1000 - d.last_seen)].filter(Boolean).join(' · ')),
     !d.current && h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/devices/' + d.id); toast(T.deleted); onChange(); } }, T.signOutDevice)));
 }
 
@@ -1033,7 +1109,7 @@ async function viewQuickConnect(code) {
     const radios = [[0, T.qcAnyProfile, null], ...me.profiles.map(p => [p.id, p.name, p])].map(([id, label, p]) =>
       h('label.check', null, h('input', { type: 'radio', name: 'qcp', value: id, checked: p ? p.id === me.profile.id : false }), ' ', label,
         p && p.is_kids ? ' (' + T.kids + ')' : '', p && p.has_pin ? ' – PIN' : ''));
-    put(box, h('h1', null, T.connectDevice), h('p.lede', null, T.qcWants(info.device_name, T.platforms[info.platform] || info.platform)),
+    put(box, h('h1', null, T.connectDevice), h('p.lede', null, T.qcWants(info.device_name || T.unknownDevice, T.platforms[info.platform] || info.platform)),
       h('div.code', null, info.code),
       h('fieldset', { class: 'mt3' }, h('legend', null, T.qcProfile), radios),
       h('p.muted.small', null, T.qcPinNote, ' ', T.qcKidsNote),
@@ -1610,11 +1686,11 @@ function partyClient(code, player, stage, p) {
 async function viewAdmin(tab) {
   if (!state.me.user.is_admin) return go('#/home');
   const main = shell('admin');
-  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['settings', T.aSettings]];
+  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['languages', T.aLangs], ['settings', T.aSettings]];
   const body = h('div');
   main.append(h('div.page-head', null, h('h1', null, T.admin)), h('div.admin', null,
     h('nav.admin-nav', { 'aria-label': T.admin }, tabs.map(([k, l]) => h('a' + (k === tab ? '.on' : ''), { href: '#/admin/' + k }, l))), body));
-  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, settings: adminSettings }[tab];
+  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, languages: adminLangs, settings: adminSettings }[tab];
   if (fn) await fn(body);
 }
 
@@ -1658,7 +1734,7 @@ async function adminLibs(body) {
           const s = scanOf(l.id);
           return h('tr', null, h('td', null, h('b', null, l.name), h('div.small.muted', null, T.titlesN(l.count))), h('td.mono', null, l.path), h('td', null, T.kinds[l.kind]),
             h('td', { class: 'td-progress' }, s && s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, h('div.bar', null, h('i', { style: { width: (s.total ? s.done / s.total * 100 : 5) + '%' } })))
-              : s && s.error ? h('span.bad', null, srv(s.error)) : l.last_scan_at ? T.ago(Date.now() / 1000 - l.last_scan_at) : T.never,
+              : s && s.error ? h('span.bad', null, srv(s.error)) : l.last_scan_at ? ago(Date.now() / 1000 - l.last_scan_at) : T.never,
               s && s.errors ? h('div.small.bad', { title: srv(s.last_error) }, `${T.badFiles(s.errors)}: ${srv(s.last_error)}`) : null),
             h('td', null, h('div.row-gap', null, h('button.btn', { onclick: async () => { await POST(`/api/libraries/${l.id}/scan`); render(); } }, T.scan),
               h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?library=' + l.id)) }, T.permCheck),
@@ -1834,6 +1910,191 @@ async function adminConnect(body) {
 async function adminDevices(body) {
   const r = await GET('/api/admin/devices');
   put(body, h('div.panel', null, h('h2', null, T.aDevices), r.devices.map(d => deviceRow(d, () => adminDevices(body), true))));
+}
+
+// ------------------------------------------------------------------ languages (export, import, edit, add)
+const clone = v => JSON.parse(JSON.stringify(v));
+const getPath = (o, p) => p.reduce((a, k) => (a == null ? undefined : a[k]), o);
+// Editable leaves of a strings object: [path, value]. Plural forms follow the language's own plural rules.
+function langLeaves(o, locale) {
+  const out = [];
+  let cats = ['one', 'other'];
+  try { cats = new Intl.PluralRules(locale).resolvedOptions().pluralCategories; } catch { /* keep default */ }
+  const walk = (v, p) => {
+    if (typeof v === 'string') { out.push(p); return; }
+    if (p.length === 1 && isPluralVal(v)) {
+      const forms = [...Object.keys(v).filter(k => k.startsWith('=')), ...cats.filter(c => c !== 'other'), 'other'];
+      for (const f of new Set(forms)) out.push([...p, f]);
+      return;
+    }
+    if (p[0] === 'srvRe' && p.length === 1 && Array.isArray(v)) { v.forEach((e, i) => Array.isArray(e) && out.push(['srvRe', i, 1])); return; }
+    if (Array.isArray(v)) v.forEach((e, i) => walk(e, [...p, i]));
+    else if (isObj(v)) for (const [k, e] of Object.entries(v)) walk(e, [...p, k]);
+  };
+  for (const [k, v] of Object.entries(o)) if (!['kinora_language', 'code', 'name'].includes(k)) walk(v, [k]);
+  return out;
+}
+const langFull = code => langChain(code).reduce(mergeStrings, {});
+const langOwn = code => (I18N[code] && I18N[code].strings) || {};
+// A row counts as translated when it has text; an extra plural form may stay empty while "other" is set.
+const langDone = (own, p) => {
+  const v = getPath(own, p);
+  if (typeof v === 'string' && v !== '') return true;
+  const parent = p.length === 2 ? own[p[0]] : null;
+  return isPluralVal(parent) && !!parent.other && p[1] !== 'other' && !String(p[1]).startsWith('=');
+};
+function langStats(code) {
+  const own = langOwn(code), rows = langLeaves(langFull(code), own.locale || code);
+  const done = rows.filter(p => langDone(own, p)).length;
+  return { done, total: rows.length, pct: rows.length ? Math.floor(done / rows.length * 100) : 100 };
+}
+function downloadJSON(name, data) {
+  const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 1) + '\n'], { type: 'application/json' })), download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const langExport = code => ({ kinora_language: 1, code, name: I18N[code].name, strings: code === 'hu' ? clone(langOwn('hu')) : langFull(code) });
+async function saveLang(code, name, strings) {
+  await api('PUT', '/api/admin/languages/' + encodeURIComponent(code), { kinora_language: 1, code, name, strings });
+  toast(T.langSavedReload);
+  setTimeout(() => location.reload(), 600);
+}
+
+async function adminLangs(body) {
+  const file = h('input.hidden', { type: 'file', accept: 'application/json,.json', onchange: async e => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    let d;
+    try { d = JSON.parse(await f.text()); } catch { d = null; }
+    if (!d || !isObj(d.strings) || typeof d.code !== 'string' || typeof d.name !== 'string' || (d.kinora_language && d.kinora_language !== 1)) { toast(T.langBadFile, true); return; }
+    const code = d.code.trim().toLowerCase();
+    if (I18N[code] && !(await askYes(T.langOverwrite(I18N[code].name), T.langImport))) return;
+    try { await saveLang(code, d.name, d.strings); } catch (err) { toast(err.message, true); }
+  } });
+  const row = code => {
+    const l = I18N[code], st = langStats(code);
+    const kind = l.builtin ? (l.custom ? T.langModified : T.langBuiltin) : T.langAdded;
+    return h('tr', null,
+      h('td', null, h('b', { lang: code }, l.name), h('div.small.muted.mono', null, code)),
+      h('td.small', null, kind),
+      h('td', { class: st.pct === 100 ? 'ok' : '' }, T.langComplete(st.pct)),
+      h('td', null, h('div.row-gap', null,
+        h('button.btn', { onclick: () => langEditor(body, code) }, T.edit),
+        h('button.btn', { onclick: () => downloadJSON('kinora-' + code + '.json', langExport(code)) }, T.langExport),
+        l.custom && h('button.btn.danger', { onclick: async () => {
+          if (!(await askYes(l.builtin ? T.langResetAsk(l.name) : T.confirmDelete(l.name), l.builtin ? T.langReset : T.delete))) return;
+          await api('DELETE', '/api/admin/languages/' + encodeURIComponent(code));
+          toast(T.langSavedReload);
+          setTimeout(() => location.reload(), 600);
+        } }, l.builtin ? T.langReset : T.delete))));
+  };
+  put(body, h('div.panel', null, h('h2', null, T.aLangs), h('p.muted', null, T.langsLede),
+    h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.language), h('th', null, T.langType), h('th', null, T.langProgress), h('th'))),
+      h('tbody', null, LANGS.map(([c]) => row(c)))),
+    h('div.row-gap', { class: 'mt4' }, h('button.btn.primary', { onclick: () => newLangDialog(body) }, T.langNew), h('button.btn', { onclick: () => file.click() }, T.langImport), file),
+    h('p.small.muted', { class: 'mt3' }, T.langFormatHint('{0}', '{1}'))));
+}
+
+function askYes(text, yes) {
+  return new Promise(res => {
+    modal(text, null, close => [h('button.btn', { onclick: () => { close(); res(false); } }, T.cancel), h('button.btn.primary', { onclick: () => { close(); res(true); } }, yes)]);
+  });
+}
+
+function newLangDialog(body) {
+  const code = h('input', { required: true, maxlength: 12, placeholder: 'fr, pt-br', autocapitalize: 'off', spellcheck: 'false' });
+  const name = h('input', { required: true, maxlength: 40, placeholder: 'Français' });
+  const locale = h('input', { maxlength: 20, placeholder: 'fr-FR', autocapitalize: 'off', spellcheck: 'false' });
+  const from = h('select', null, h('option', { value: '' }, T.langFromEmpty), LANGS.map(([c, n]) => h('option', { value: c }, n)));
+  const err = h('p.bad.small');
+  modal(T.langNew, h('div', null,
+    h('label.field', null, h('span', null, T.langCode), code), h('label.field', null, h('span', null, T.langName), name),
+    h('label.field', null, h('span', null, T.langLocale), locale), h('label.field', null, h('span', null, T.langCopyFrom), from), err),
+  close => [h('button.btn', { onclick: close }, T.cancel), h('button.btn.primary', { onclick: async () => {
+    const c = code.value.trim().toLowerCase(), n = name.value.trim();
+    if (!/^[a-z]{2,3}(-[a-z0-9]{2,8})?$/.test(c)) { err.textContent = srv('érvénytelen nyelvkód (pl. fr vagy pt-br)'); return; }
+    if (!n) { err.textContent = srv('a nyelv neve 1–40 karakter lehet'); return; }
+    if (I18N[c]) { err.textContent = T.langExists; return; }
+    const strings = from.value ? clone(from.value === 'hu' ? langOwn('hu') : langFull(from.value)) : {};
+    const loc = locale.value.trim() || c;
+    strings.locale = okLocale(loc) ? loc : c;
+    try { await saveLang(c, n, strings); close(); } catch (e) { err.textContent = e.message; }
+  } }, T.langCreate)]);
+}
+
+function langEditor(body, code) {
+  const l = I18N[code];
+  const own = clone(langOwn(code));
+  const full = langFull(code);
+  // what an empty field falls back to, and the text a translator works from
+  const fallback = langChain(code).slice(0, -1).reduce(mergeStrings, {});
+  const refCode = code === 'en' ? 'hu' : 'en';
+  const ref = langFull(refCode);
+  const paths = langLeaves(full, own.locale || code);
+  const name = h('input', { value: l.name, maxlength: 40, 'aria-label': T.langName });
+  const q = h('input', { type: 'search', placeholder: T.langSearch, 'aria-label': T.langSearch });
+  const onlyMissing = h('input', { type: 'checkbox' });
+  const count = h('span.small.muted');
+  const fields = paths.map(p => {
+    const v = getPath(own, p);
+    const refText = p[0] === 'srvRe' ? getPath(full, ['srvRe', p[1], 0]) : p[0] === 'srv' ? p[1] : getPath(ref, p);
+    const fb = getPath(fallback, p);
+    const long = String(refText || fb || '').length > 70;
+    const input = h(long ? 'textarea' : 'input', { value: typeof v === 'string' ? v : '', placeholder: typeof fb === 'string' ? fb : '', rows: long ? 2 : null, spellcheck: 'true', lang: code, 'aria-label': p.join('.') });
+    const label = p[0] === 'srv' ? 'srv' : p[0] === 'srvRe' ? 'srvRe ' + p[1] : p.join('.');
+    const tr = h('tr', null, h('td.mono.small', null, label), h('td.small.muted', { lang: refCode }, refText == null ? '' : String(refText)), h('td', null, input));
+    return { p, input, tr, optional: p.length === 2 && isPluralVal(full[p[0]]) && p[1] !== 'other' && !String(p[1]).startsWith('='), hay: (label + ' ' + (refText || '') + ' ' + (fb || '')).toLowerCase() };
+  });
+  const filter = () => {
+    const s = q.value.trim().toLowerCase();
+    let n = 0;
+    for (const f of fields) { const show = (!s || f.hay.includes(s) || f.input.value.toLowerCase().includes(s)) && (!onlyMissing.checked || !(f.input.value || (f.optional && fields.some(o => o.p[0] === f.p[0] && o.p[1] === 'other' && o.input.value)))); f.tr.classList.toggle('hidden', !show); if (show) n++; }
+    count.textContent = T.langRows(n);
+  };
+  q.addEventListener('input', filter);
+  onlyMissing.addEventListener('change', filter);
+  const collect = () => {
+    const out = clone(own);
+    // server-message patterns: keep the ones that have a translation here
+    out.srvRe = fields.filter(f => f.p[0] === 'srvRe' && f.input.value).map(f => [getPath(full, ['srvRe', f.p[1], 0]), f.input.value]);
+    if (!out.srvRe.length) delete out.srvRe;
+    for (const { p, input } of fields) {
+      if (p[0] === 'srvRe') continue;
+      const v = input.value;
+      let o = out;
+      for (let i = 0; i < p.length - 1; i++) {
+        if (o[p[i]] == null || typeof o[p[i]] !== 'object') {
+          if (!v) { o = null; break; }
+          const r = getPath(full, p.slice(0, i + 1));
+          o[p[i]] = Array.isArray(r) ? clone(r) : {};
+        }
+        o = o[p[i]];
+      }
+      if (!o) continue;
+      const k = p[p.length - 1];
+      if (v) o[k] = v;
+      else if (!Array.isArray(o)) delete o[k];
+    }
+    // a plural form set needs "other"; borrow it from another form rather than drop the translation
+    for (const [k, v] of Object.entries(out)) {
+      if (!isObj(v) || !Object.keys(v).length || !Object.keys(v).every(x => PLURAL_KEY.test(x))) continue;
+      if (!v.other) v.other = Object.values(v).find(Boolean);
+    }
+    for (const k of ['srv', 'sortLabels', 'ruleFields', 'kindOpts', 'langNames', 'platforms']) if (isObj(out[k]) && !Object.keys(out[k]).length) delete out[k];
+    return out;
+  };
+  put(body, h('div.panel', null,
+    h('div.row-gap', null, h('button.btn.ghost', { onclick: () => adminLangs(body) }, '← ' + T.back), h('h2', { style: { margin: 0 } }, l.name), h('span.mono.small.muted', null, code)),
+    h('p.small.muted', { class: 'mt3' }, T.langEditorHint('{0}', '{1}')),
+    h('div.row-gap', { class: 'mt3' }, h('label.field', { style: { margin: 0 } }, h('span', null, T.langName), name), q,
+      h('label.row-gap', null, onlyMissing, T.langOnlyMissing), count),
+    h('table.tbl.lang-tbl', { class: 'mt3' }, h('thead', null, h('tr', null, h('th', null, T.langKey), h('th', null, I18N[refCode] ? I18N[refCode].name : refCode), h('th', null, l.name))),
+      h('tbody', null, fields.map(f => f.tr))),
+    h('div.row-gap', { class: 'mt4 lang-save' },
+      h('button.btn.primary', { onclick: async e => { e.target.disabled = true; try { await saveLang(code, name.value.trim() || l.name, collect()); } catch (err) { toast(err.message, true); e.target.disabled = false; } } }, T.save),
+      h('button.btn', { onclick: () => downloadJSON('kinora-' + code + '.json', { kinora_language: 1, code, name: name.value.trim() || l.name, strings: collect() }) }, T.langExport))));
+  filter();
 }
 
 async function uploadLogo(variant, file) {

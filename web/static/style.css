@@ -616,3 +616,16 @@ pre.code { background: var(--g1); border-left: var(--hair) solid var(--rule-hi);
 .logo-preview img { max-height: 100%; max-width: 100%; object-fit: contain; }
 .logo-preview.light .muted { color: var(--amber-ink); }
 .party-leave { width: 100%; justify-content: center; margin-bottom: var(--s3); }
+
+/* admin → languages */
+.lang-select { display: flex; align-items: center; gap: var(--s2); }
+.menu-pop .lang-select { padding: var(--s2) var(--s3); }
+.lang-tbl td:nth-child(1) { width: 22%; word-break: break-all; }
+.lang-tbl td:nth-child(2) { width: 34%; }
+.lang-tbl input, .lang-tbl textarea { width: 100%; }
+.lang-save { position: sticky; bottom: 0; padding: var(--s3) 0; background: var(--g0); border-top: var(--hair) solid var(--rule); }
+@media (max-width: 720px) {
+  .lang-tbl thead { display: none; }
+  .lang-tbl tr { display: grid; gap: var(--s1); padding: var(--s3) 0; border-bottom: var(--hair) solid var(--rule); }
+  .lang-tbl td, .lang-tbl td:nth-child(1), .lang-tbl td:nth-child(2) { width: auto; padding: 0; border: 0; }
+}

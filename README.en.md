@@ -260,7 +260,21 @@ internal/server/   HTTP API, middleware and web client
 web/static/        vanilla JS SPA (index.html, app.js, style.css, vendor/hls.js, vendor/qrcode-generator)
 ```
 
-The web client is multilingual (Hungarian, English, German). Strings live in `web/static/i18n/<lang>.js`; Hungarian is the base, and missing keys fall back to it. The language follows the browser setting and can be switched in the profile menu, on the account page or on the sign-in screen (the choice is kept in the browser). The server’s Hungarian messages (errors, home rows, playback reasons, watch-party messages) are translated in the client through the `srv`/`srvRe` tables of the language files. To add a language, copy `en.js`, translate it, and add it to `index.html` and to the `LANGS` list in `app.js`.
+The web client is multilingual (Hungarian, English, German). Strings live in `web/static/i18n/<lang>.js`; Hungarian is the base, and missing keys fall back to it. The language follows the browser setting and can be switched in the profile menu, on the account page or on the sign-in screen (the choice is kept in the browser). The server’s Hungarian messages (errors, home rows, playback reasons, watch-party messages) are translated in the client through the `srv`/`srvRe` tables of the language files. For keys missing in English, the other non-Hungarian languages fall back to English first.
+
+**Languages in the admin (Admin → Languages):**
+- **Export:** download any language as a JSON file with every key. Untranslated keys contain the fallback language's text.
+- **Import:** upload a translated file. If the language already exists, you're asked to confirm before it's overwritten.
+- **New language:** enter a code (e.g. `fr`, `pt-br`), a name and a locale (e.g. `fr-FR`; it sets number formats and plural rules). Start from scratch or from a copy of an existing language.
+- **Editor:** shows the reference text and the translation for each key. It has a search box and an "untranslated only" filter; a field left empty uses the fallback text.
+- **Reset:** changes to the built-in languages (hu, en, de) are stored as overrides, which can be reset with one button. Added languages can be deleted.
+
+Saved languages are stored in `<data>/i18n/<code>.json`, and the client loads them from `/i18n/custom.js`. The file format is `{"kinora_language": 1, "code": "fr", "name": "Français", "strings": {…}}`.
+- In templates, `{0}`, `{1}`… are the arguments, and `{0:00}` pads a number to two digits.
+- A plural is an object with `one`/`few`/`many`/`other` keys (plus `=0`, `=1`…).
+- The format is described in full at the top of the built-in `web/static/i18n/*.js` files.
+
+To contribute a translation to the project, turn the exported `strings` object into a new `web/static/i18n/<code>.js` file and add it to `index.html`.
 
 ### Planned for a later version
 

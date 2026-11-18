@@ -286,7 +286,21 @@ internal/server/   HTTP API, middleware, webkliens kiszolgálása
 web/static/        vanilla JS SPA (index.html, app.js, style.css, vendor/hls.js, vendor/qrcode-generator)
 ```
 
-A webkliens többnyelvű (magyar, angol, német). A szövegek a `web/static/i18n/<nyelv>.js` fájlokban vannak; a magyar az alap, a hiányzó kulcsok arra esnek vissza. A nyelvet a böngésző beállítása adja, és a profilmenüben, a fiókoldalon vagy a bejelentkezésnél át lehet váltani (a választás a böngészőben marad meg). A szerver magyar üzeneteit (hibák, ajánlássorok, lejátszási indokok, watch party üzenetek) a kliens a nyelvi fájlok `srv`/`srvRe` táblájával fordítja. Új nyelvhez másold az `en.js`-t, fordítsd le, és vedd fel az `index.html`-be és az `app.js` `LANGS` listájába.
+A webkliens többnyelvű (magyar, angol, német). A szövegek a `web/static/i18n/<nyelv>.js` fájlokban vannak; a magyar az alap, a hiányzó kulcsok arra esnek vissza. A nyelvet a böngésző beállítása adja, és a profilmenüben, a fiókoldalon vagy a bejelentkezésnél át lehet váltani (a választás a böngészőben marad meg). A szerver magyar üzeneteit (hibák, ajánlássorok, lejátszási indokok, watch party üzenetek) a kliens a nyelvi fájlok `srv`/`srvRe` táblájával fordítja. Hiányzó angol kulcsoknál a nem magyar nyelvek először az angolra esnek vissza.
+
+**Nyelvek az adminban (Admin → Nyelvek):**
+- **Exportálás:** bármelyik nyelv letölthető JSON-fájlként, az összes kulccsal együtt. A le nem fordított kulcsok a tartalék nyelv szövegével szerepelnek benne.
+- **Importálás:** egy lefordított fájl visszatölthető. Ha a nyelv már létezik, a felület megerősítést kér a felülírás előtt.
+- **Új nyelv:** megadod a kódot (pl. `fr`, `pt-br`), a nevet és a locale-t (pl. `fr-FR`; ez dönti el a számok formátumát és a többes számot). Indulhat üresen, vagy egy meglévő nyelv másolatából.
+- **Szerkesztő:** kulcsonként mutatja a referenciaszöveget és a fordítást. Van kereső és „csak a fordítatlanok” szűrő; az üresen hagyott mező a tartalék nyelv szövegét használja.
+- **Visszaállítás:** a beépített nyelvek (hu, en, de) módosításai felülírásként tárolódnak, és egy gombbal visszaállíthatók. A hozzáadott nyelvek törölhetők.
+
+A mentett nyelvek a `<data>/i18n/<kód>.json` fájlokban vannak, és a kliens a `/i18n/custom.js` címről tölti be őket. A fájlformátum: `{"kinora_language": 1, "code": "fr", "name": "Français", "strings": {…}}`.
+- A sablonokban `{0}`, `{1}`… jelöli a paramétereket, a `{0:00}` két számjegyre egészít ki.
+- A többes szám egy objektum, `one`/`few`/`many`/`other` (és `=0`, `=1`…) kulcsokkal.
+- A formátum részletes leírása a beépített `web/static/i18n/*.js` fájlok elején található.
+
+Ha egy fordítást a projektbe is beküldenél, az exportált `strings` objektumból készíts új `web/static/i18n/<kód>.js` fájlt, és vedd fel az `index.html`-be.
 
 ### Tudatosan későbbre hagyva (v2)
 
