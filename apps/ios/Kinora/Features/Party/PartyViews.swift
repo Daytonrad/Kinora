@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreImage
 import KinoraKit
 
 #if os(iOS)
@@ -8,10 +9,14 @@ struct PartyPanel: View {
     var leave: () -> Void
     @State private var message = ""
     @FocusState private var typing: Bool
+    /// The QR code is shown: by default while nobody else is in the room yet.
+    @State private var qr: Bool?
+    private var showQR: Bool { qr ?? (party.members.count <= 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+            if showQR { qrCard }
             if let s = party.status {
                 Text(s).font(.caption).foregroundStyle(Theme.amber)
             }
@@ -39,6 +44,11 @@ struct PartyPanel: View {
                     .accessibilityLabel("Kód: " + party.code.map(String.init).joined(separator: " "))
             }
             Spacer()
+            Button { withAnimation(.easeOut(duration: 0.2)) { qr = !showQR } } label: {
+                Image(systemName: "qrcode").frame(width: 36, height: 36).contentShape(.rect)
+            }
+            .foregroundStyle(showQR ? Theme.amber : .primary)
+            .accessibilityLabel(showQR ? "QR-kód elrejtése" : "QR-kód megjelenítése")
             ShareLink(item: inviteText, subject: Text("Watch party"), message: Text(inviteText)) {
                 Image(systemName: "square.and.arrow.up").frame(width: 36, height: 36).contentShape(.rect)
             }
@@ -49,6 +59,19 @@ struct PartyPanel: View {
             .accessibilityLabel("Panel bezárása")
         }
         .buttonStyle(.plain)
+    }
+
+    private var qrCard: some View {
+        HStack(alignment: .center, spacing: 12) {
+            PartyQRCode(url: party.appLink, size: 112)
+            Text("Mutasd meg a barátodnak: a Kinora appban a kezdőlap watch party gombjával, vagy a telefon kamerájával olvassa be.")
+                .font(.caption)
+                .foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Meghívó QR-kód, kód: " + party.code.map(String.init).joined(separator: " "))
     }
 
     /// Code, app link and web link: friends with the app tap the first link, others open the web player.
@@ -177,46 +200,31 @@ struct FloatingReaction: View {
     }
 }
 
-#if os(iOS)
-/// Join a room with the code a friend sent.
-struct PartyJoinView: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var code = ""
-    @FocusState private var focused: Bool
+/// A room's invite as a QR code: the app link, which the in-app scanner reads and the iPhone
+/// camera opens in the app. Black on white with a quiet zone, so any reader takes it.
+struct PartyQRCode: View {
+    var url: URL
+    var size: CGFloat
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("ABC234", text: $code)
-                        .font(.title2.monospaced())
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                        .focused($focused)
-                        .submitLabel(.join)
-                        .onSubmit(join)
-                } header: {
-                    Text("6 karakteres kód")
-                } footer: {
-                    Text("A kódot a party indítója látja a lejátszóban, a meghívó linkjével pedig egyből csatlakozhatsz.")
-                }
+        Group {
+            if let img = Self.image(url.absoluteString) {
+                Image(decorative: img, scale: 1).interpolation(.none).resizable()
+            } else {
+                Color.white
             }
-            .navigationTitle("Csatlakozás watch partyhoz")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Mégse") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if model.partyJoining { ProgressView() } else {
-                        Button("Csatlakozás", action: join).disabled(PartySync.normalizedCode(code) == nil)
-                    }
-                }
-            }
-            .onAppear { focused = true }
-            .onChange(of: model.playerVisible) { _, on in if on { dismiss() } }
         }
+        .frame(width: size, height: size)
+        .padding(size * 0.08)
+        .background(.white, in: .rect(cornerRadius: size * 0.08))
+        .accessibilityHidden(true)
     }
 
-    private func join() { model.joinParty(code) }
+    private static func image(_ text: String) -> CGImage? {
+        guard let f = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        f.setValue(Data(text.utf8), forKey: "inputMessage")
+        f.setValue("M", forKey: "inputCorrectionLevel")
+        guard let out = f.outputImage else { return nil }
+        return CIContext().createCGImage(out, from: out.extent)
+    }
 }
-#endif

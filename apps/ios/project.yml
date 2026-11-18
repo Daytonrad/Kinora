@@ -64,6 +64,8 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIBackgroundModes: [audio]
+        # Joining a watch party by its QR code.
+        NSCameraUsageDescription: A kamerával a watch party QR-kódját olvashatod be, hogy csatlakozz.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft

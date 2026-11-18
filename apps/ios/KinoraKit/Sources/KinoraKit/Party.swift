@@ -190,6 +190,22 @@ public enum PartySync {
         guard code.count == 6, code.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return nil }
         return code
     }
+
+    /// A room code from a scanned QR code: the app link (`kinora://party/ABC234`), the web
+    /// player's link (`https://…/#/party/ABC234`) or the bare code. nil for anything else.
+    public static func code(scanned raw: String) -> String? {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: s), url.scheme != nil {
+            if case .party(let code) = KinoraLink(url: url) { return code }
+            guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+            // The web player routes in the fragment: #/party/ABC234 (a path is accepted too).
+            let route = (url.fragment ?? "").isEmpty ? url.path : url.fragment!
+            let parts = route.split(separator: "?").first.map { $0.split(separator: "/").map(String.init) } ?? []
+            guard let i = parts.lastIndex(where: { $0.lowercased() == "party" }), i + 1 < parts.count else { return nil }
+            return normalizedCode(parts[i + 1])
+        }
+        return normalizedCode(s)
+    }
 }
 
 public extension KinoraClient {

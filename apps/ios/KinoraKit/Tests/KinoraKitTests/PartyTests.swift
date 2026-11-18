@@ -62,6 +62,18 @@ struct PartyTests {
         #expect(PartySync.decide(target: 100, current: 50, playing: false, fromState: true) == .init(seek: 100, rate: 1))
     }
 
+    @Test func scannedCodes() {
+        #expect(PartySync.code(scanned: "kinora://party/abc234") == "ABC234")
+        #expect(PartySync.code(scanned: "https://media.example.com/#/party/ABC234") == "ABC234")
+        #expect(PartySync.code(scanned: "http://192.168.1.5:8096/#/party/xyz789?x=1") == "XYZ789")
+        #expect(PartySync.code(scanned: "https://media.example.com/party/ABC234") == "ABC234")
+        #expect(PartySync.code(scanned: " abc234\n") == "ABC234")
+        #expect(PartySync.code(scanned: "kinora://item/42") == nil)
+        #expect(PartySync.code(scanned: "https://example.com/#/item/42") == nil)
+        #expect(PartySync.code(scanned: "WIFI:S:home;T:WPA;P:secret;;") == nil)
+        #expect(PartySync.code(scanned: "Hello world") == nil)
+    }
+
     @Test func codesAndLinks() {
         #expect(PartySync.normalizedCode(" abc-234 ") == "ABC234")
         #expect(PartySync.normalizedCode("ABC23") == nil)

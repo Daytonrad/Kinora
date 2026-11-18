@@ -89,11 +89,15 @@ Közös nézés a szerver szobáin át, ugyanaz a protokoll és szinkronszabály
 
 - **Indítás:** az adatlapon („Watch party indítása” filmnél és epizódnál), vagy lejátszás közben a beállítások menüből
   (ilyenkor a szoba onnan indul, ahol épp tartasz). Apple TV-n az adatlap „Watch party” gombja vagy a sebesség/minőség menü.
-- **Csatlakozás:** a kezdőlap fejlécének gombja kóddal (6 karakter), vagy a meghívó linkje: `kinora://party/<KÓD>`.
+- **Csatlakozás:** a kezdőlap fejlécének gombja. A képernyő felső része kamera: a házigazda QR-kódját (telefonon a
+  panelen, Apple TV-n a lejátszó sarkában) beolvasva egyből csatlakozik, zseblámpával sötétben is. Alatta a 6 karakteres
+  kód beírható (6 karakternél magától indul, beillesztett meghívó linkből is kiveszi a kódot). Kamera-engedély nélkül vagy
+  kamera nélküli eszközön csak a kódmező látszik, a Beállításokra mutató gombbal. A QR-kód a `kinora://party/<KÓD>` link,
+  így a telefon saját kamerája is az appba nyitja; a beolvasó a webes linket (`…/#/party/<KÓD>`) is elfogadja.
   Apple TV-n a Beállítások → „Csatlakozás watch partyhoz”. Akinek nincs appja, a meghívóban lévő webes linket nyitja meg.
-- **Panel (iPhone, iPad):** kód és meghívó küldése, résztvevők (házigazda, ki tölt), „Mindenki irányíthat” kapcsoló a
+- **Panel (iPhone, iPad):** kód, QR-kód (amíg egyedül vagy, magától látszik) és meghívó küldése, résztvevők (házigazda, ki tölt), „Mindenki irányíthat” kapcsoló a
   házigazdának, csevegés olvasatlan-jelzővel, reakciók a videó fölött úszva, kilépés.
-- **Apple TV:** a kód és a résztvevők a jobb felső sarokban, a csevegés és a reakciók pár másodpercig a videó fölött; a
+- **Apple TV:** a kód, a QR-kód és a résztvevők a jobb felső sarokban (amíg más nincs a szobában, a QR-kód végig látszik), a csevegés és a reakciók pár másodpercig a videó fölött; a
   Watch party menüben reakció, üzenet írása, „Mindenki irányíthat” és kilépés.
 - **Szinkron:** a szerver órája a mérvadó (ping/pong alapján becsülve); 1,5 mp-nél nagyobb eltérésnél tekerés, kisebbnél
   5%-kal gyorsabb vagy lassabb lejátszás. Ha valaki tölt, a szoba megvárja.

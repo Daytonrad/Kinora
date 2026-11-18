@@ -480,6 +480,9 @@ private struct TVPartyOverlay: View {
     var party: PartySession
     var chrome: Bool
 
+    /// Nobody else is here yet: the invite stays up so friends can join.
+    private var alone: Bool { party.members.count <= 1 }
+
     var body: some View {
         ZStack(alignment: .top) {
             GeometryReader { geo in
@@ -510,8 +513,18 @@ private struct TVPartyOverlay: View {
                     .animation(.easeOut(duration: 0.3), value: recent.map(\.id))
                 }
                 Spacer()
-                if chrome || party.status != nil {
+                if chrome || party.status != nil || alone {
                     VStack(alignment: .trailing, spacing: 10) {
+                        if chrome || alone {
+                            // Friends join from their phones: the camera opens the app on this room.
+                            HStack(alignment: .center, spacing: 18) {
+                                Text("Csatlakozz telefonról:\nolvasd be a kódot")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.plaster)
+                                    .multilineTextAlignment(.trailing)
+                                PartyQRCode(url: party.appLink, size: 150)
+                            }
+                        }
                         Text("Watch party · \(party.code)").font(.callout.weight(.semibold).monospaced())
                         HStack(spacing: 16) {
                             ForEach(party.members) { m in
@@ -534,5 +547,6 @@ private struct TVPartyOverlay: View {
         }
         .allowsHitTesting(false)
         .animation(.easeOut(duration: 0.25), value: chrome)
+        .animation(.easeOut(duration: 0.25), value: alone)
     }
 }

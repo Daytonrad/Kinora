@@ -34,8 +34,10 @@ final class AppModel {
     var playerVisible = false
     /// The settings sheet is shown.
     var settingsVisible = false
-    /// A watch party could not be started or joined (shown as an alert).
+    /// A watch party could not be started or joined (shown as an alert, or on the join screen).
     var partyError: String?
+    /// The join screen (code or QR) is shown; it shows join errors itself.
+    var partyJoinVisible = false
     /// Joining a party is in progress (a spinner on the join screen).
     private(set) var partyJoining = false
     /// Bumped when a playback ends, so screens refresh progress and watched marks.
