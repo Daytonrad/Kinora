@@ -110,3 +110,15 @@ func TestBrowseShowsShortcutsAndPermcheck(t *testing.T) {
 		t.Fatalf("missing folder %d", code)
 	}
 }
+
+func TestPermReportWindowsUsesIcacls(t *testing.T) {
+	probs := []PermProblem{{`f:\`, "x"}, {`f:\filmek`, "rX"}, {`f:\filmek`, "rX"}}
+	rep := buildPermReport(`f:\filmek`, "windows", `NT AUTHORITY\SYSTEM`, "S-1-5-18", probs, nil)
+	want := []string{`icacls "f:\" /grant "NT AUTHORITY\SYSTEM:RX"`, `icacls "f:\filmek" /grant "NT AUTHORITY\SYSTEM:(OI)(CI)RX" /T`}
+	if strings.Join(rep.Commands, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("windows commands %q", rep.Commands)
+	}
+	if rep.OK || !strings.Contains(rep.Message, `f:\filmek`) || len(rep.Group) != 0 || !strings.Contains(rep.Hint, "UNC") {
+		t.Fatalf("windows report %+v", rep)
+	}
+}

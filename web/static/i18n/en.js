@@ -1318,6 +1318,10 @@
    [
     "^A konténer a (.+) azonosítójú felhasználóval fut \\(PUID\\)\\. A parancsokat a hoston futtasd; a setfacl az „acl” csomagban van\\.$",
     "The container runs as user ID {0} (PUID). Run the commands on the host; setfacl is in the “acl” package."
+   ],
+   [
+    "^A parancsokat rendszergazdaként futtatott parancssorban futtasd, utána szkenneld újra a könyvtárat\\. A szolgáltatás nem látja a hozzárendelt hálózati meghajtókat \\(pl\\. Z:\\) – hálózati megosztásnál az UNC útvonalat add meg \\((.+)\\)\\.$",
+    "Run the commands in a Command Prompt started as administrator, then rescan the library. The service cannot see mapped network drives (e.g. Z:) – for a network share, enter its UNC path ({0})."
    ]
   ],
   "aLangs": "Languages",

@@ -1312,6 +1312,10 @@
    [
     "^A konténer a (.+) azonosítójú felhasználóval fut \\(PUID\\)\\. A parancsokat a hoston futtasd; a setfacl az „acl” csomagban van\\.$",
     "Der Container läuft mit der Benutzer-ID {0} (PUID). Führe die Befehle auf dem Host aus; setfacl steckt im Paket „acl“."
+   ],
+   [
+    "^A parancsokat rendszergazdaként futtatott parancssorban futtasd, utána szkenneld újra a könyvtárat\\. A szolgáltatás nem látja a hozzárendelt hálózati meghajtókat \\(pl\\. Z:\\) – hálózati megosztásnál az UNC útvonalat add meg \\((.+)\\)\\.$",
+    "Führe die Befehle in einer als Administrator gestarteten Eingabeaufforderung aus und scanne die Bibliothek danach erneut. Der Dienst sieht keine verbundenen Netzlaufwerke (z. B. Z:) – gib für eine Netzwerkfreigabe den UNC-Pfad an ({0})."
    ]
   ],
   "aLangs": "Sprachen",

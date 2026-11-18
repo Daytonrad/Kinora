@@ -345,7 +345,7 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request, c *reqCtx)
 	if p == "" {
 		p = s.cfg.MediaRoot
 		if (p == "" || !fileExists(p)) && installMode() != "docker" {
-			p = "/" // native install: the whole file system, shortcuts lead to /home, /mnt, /media, /srv
+			p = browseRoot() // native install: / (or the system drive), shortcuts lead to the other roots / drives
 		}
 		if p == "" || !fileExists(p) {
 			p, _ = os.UserHomeDir()

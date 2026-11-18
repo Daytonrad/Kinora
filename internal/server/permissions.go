@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -23,6 +24,9 @@ func installMode() string {
 	}
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		return "docker"
+	}
+	if runtime.GOOS == "windows" {
+		return "windows"
 	}
 	return "manual"
 }
@@ -62,8 +66,10 @@ func isPerm(err error) bool { return errors.Is(err, fs.ErrPermission) }
 func findPermProblems(p permProbe, path string) ([]PermProblem, error) {
 	path = filepath.Clean(path)
 	var probs []PermProblem
-	parts := strings.Split(strings.TrimPrefix(path, string(filepath.Separator)), string(filepath.Separator))
-	cur := string(filepath.Separator)
+	// Windows: start at the volume root (f:\), not at \ – filepath.Join(`\`, "f:") is `\f:`.
+	vol := filepath.VolumeName(path)
+	parts := strings.Split(strings.TrimPrefix(path[len(vol):], string(filepath.Separator)), string(filepath.Separator))
+	cur := vol + string(filepath.Separator)
 	for _, part := range parts {
 		if part == "" {
 			continue
@@ -146,6 +152,27 @@ func hostPath(mode, p string) string {
 	return p
 }
 
+// winQuote quotes a path or account for cmd.exe.
+func winQuote(p string) string { return `"` + p + `"` }
+
+// windowsPermCommands are the icacls fixes: RX on the folder, inherited by sub-folders and files,
+// also the existing ones (/T); a parent that cannot be listed gets RX on itself only.
+func windowsPermCommands(userName string, probs []PermProblem) []string {
+	var cmds []string
+	seen := map[string]bool{}
+	for _, pr := range probs {
+		c := fmt.Sprintf("icacls %s /grant %s /T", winQuote(pr.Path), winQuote(userName+":(OI)(CI)RX"))
+		if pr.Need == "x" {
+			c = fmt.Sprintf("icacls %s /grant %s", winQuote(pr.Path), winQuote(userName+":RX"))
+		}
+		if !seen[c] {
+			seen[c] = true
+			cmds = append(cmds, c)
+		}
+	}
+	return cmds
+}
+
 func shellQuote(p string) string {
 	if strings.ContainsAny(p, " '\"$`\\!&;()|<>*?[]{}#~") {
 		return "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
@@ -158,6 +185,12 @@ func buildPermReport(path, mode, userName, uid string, probs []PermProblem, grou
 	rep := PermReport{OK: len(probs) == 0, Path: path, User: userName, Mode: mode, Problems: probs, Commands: []string{}}
 	if rep.OK {
 		rep.Message = fmt.Sprintf("Rendben: a(z) %s felhasználó olvashatja ezt a mappát.", userName)
+		return rep
+	}
+	if mode == "windows" {
+		rep.Message = fmt.Sprintf("A(z) %s felhasználónak nincs olvasási joga ehhez: %s", userName, path)
+		rep.Commands = windowsPermCommands(userName, probs)
+		rep.Hint = "A parancsokat rendszergazdaként futtatott parancssorban futtasd, utána szkenneld újra a könyvtárat. A szolgáltatás nem látja a hozzárendelt hálózati meghajtókat (pl. Z:) – hálózati megosztásnál az UNC útvonalat add meg (\\\\szerver\\megosztás)."
 		return rep
 	}
 	who := userName
@@ -238,7 +271,7 @@ func browseShortcuts(mode, mediaRoot string) []string {
 	if mode == "docker" {
 		cands = []string{"/media", "/host", "/host/home", "/host/mnt", "/host/media", "/host/srv"}
 	} else {
-		cands = []string{"/", "/home", "/mnt", "/media", "/srv"}
+		cands = nativeRoots()
 		if h, err := os.UserHomeDir(); err == nil {
 			cands = append(cands, h)
 		}

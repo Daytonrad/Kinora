@@ -24,3 +24,9 @@ func ownerGroup(path string) string {
 	}
 	return ""
 }
+
+// nativeRoots are the picker shortcuts of a native install.
+func nativeRoots() []string { return []string{"/", "/home", "/mnt", "/media", "/srv"} }
+
+// browseRoot is where the picker opens without a path and a media root: the whole file system.
+func browseRoot() string { return "/" }
