@@ -301,6 +301,16 @@ type Profile struct {
 	SkipIntro      string `json:"skip_intro"` // manual | auto | off
 	CreatedAt      int64  `json:"created_at"`
 	pinHash        string
+	// MetaLang is the TMDB language the current request wants titles and overviews in
+	// ("" = the stored metadata_lang ones). Set per request, never stored.
+	MetaLang string `json:"-"`
+}
+
+func metaLang(p *Profile) string {
+	if p == nil {
+		return ""
+	}
+	return p.MetaLang
 }
 
 // RatingLimit returns the maximum allowed rating_level (-1 = unlimited) and

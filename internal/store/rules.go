@@ -276,7 +276,7 @@ func (rs *RuleSet) orderBy() string {
 		dir = "DESC"
 	}
 	nullsLast := func(expr string) string {
-		return fmt.Sprintf("ORDER BY (%s) IS NULL, %s %s, i.sort_title", expr, expr, dir)
+		return fmt.Sprintf("ORDER BY (%s) IS NULL, %s %s, "+locSort, expr, expr, dir)
 	}
 	switch rs.Sort {
 	case "added":
@@ -292,7 +292,7 @@ func (rs *RuleSet) orderBy() string {
 	case "random":
 		return "ORDER BY RANDOM()"
 	}
-	return "ORDER BY i.sort_title " + dir + ", i.year"
+	return "ORDER BY " + locSort + " " + dir + ", i.year"
 }
 
 // Browse runs a rule set with paging; it returns the page and the total count.
@@ -329,7 +329,7 @@ func (s *Store) Browse(p *Profile, rs RuleSet, offset, limit int) ([]*Item, int,
 	if err != nil {
 		return nil, 0, err
 	}
-	s.fillGenresTags(items)
+	s.fillGenresTags(items, p)
 	return items, total, nil
 }
 

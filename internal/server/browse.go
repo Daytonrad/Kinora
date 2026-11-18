@@ -85,7 +85,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	}
 	if hero != nil {
 		if full, err := s.st.Item(hero.ID, p); err == nil {
-			s.st.FillGenresTags([]*store.Item{full})
+			s.st.FillGenresTags([]*store.Item{full}, p)
 			hero = full
 		}
 	}

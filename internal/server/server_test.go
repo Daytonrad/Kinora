@@ -229,3 +229,44 @@ func TestPlaybackAPI(t *testing.T) {
 func itoa(i int64) string { return json.Number(jsonInt(i)).String() }
 
 func jsonInt(i int64) string { b, _ := json.Marshal(i); return string(b) }
+
+func TestItemTitlesFollowUILanguage(t *testing.T) {
+	c, st := newTestServer(t)
+	var id int64
+	st.DB.QueryRow(`SELECT id FROM items WHERE title='Space Drama'`).Scan(&id)
+	st.DB.Exec(`UPDATE items SET tmdb_id=5 WHERE id=?`, id)
+	if err := st.SetTranslation(id, "en-US", "Space Opera", "Stars."); err != nil {
+		t.Fatal(err)
+	}
+	var p store.Profile
+	if code := c.do("POST", "/api/profiles", map[string]any{"name": "Anna"}, &p); code != 201 {
+		t.Fatalf("create profile %d", code)
+	}
+	if code := c.do("POST", "/api/profiles/"+itoa(p.ID)+"/select", map[string]string{}, nil); code != 200 {
+		t.Fatal("select profile")
+	}
+	title := func(lang string) string {
+		t.Helper()
+		c.hdr = map[string]string{}
+		if lang != "" {
+			c.hdr["X-Kinora-Lang"] = lang
+		}
+		var d struct{ Item store.Item }
+		if code := c.do("GET", "/api/items/"+itoa(id), nil, &d); code != 200 {
+			t.Fatalf("details (%s): %d", lang, code)
+		}
+		return d.Item.Title
+	}
+	if got := title("en"); got != "Space Opera" {
+		t.Fatalf("English UI: %q", got)
+	}
+	if got := title("hu"); got != "Space Drama" {
+		t.Fatalf("Hungarian UI (the stored language): %q", got)
+	}
+	if got := title(""); got != "Space Drama" {
+		t.Fatalf("no language: %q", got)
+	}
+	if st.Setting("metadata_langs") != "en-US" {
+		t.Fatalf("viewer language not registered: %q", st.Setting("metadata_langs"))
+	}
+}

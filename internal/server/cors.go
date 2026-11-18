@@ -81,7 +81,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 		h.Add("Vary", "Origin")
 		if preflight {
 			h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Range")
+			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Range, X-Kinora-Lang")
 			h.Set("Access-Control-Max-Age", "600")
 			w.WriteHeader(http.StatusNoContent)
 			return

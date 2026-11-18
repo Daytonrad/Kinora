@@ -76,6 +76,7 @@ public actor KinoraClient {
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         req.httpMethod = method
         if let token { req.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
+        req.setValue(Language.shared.code, forHTTPHeaderField: "X-Kinora-Lang") // titles and overviews follow the UI language
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONEncoder.kinora.encode(body)

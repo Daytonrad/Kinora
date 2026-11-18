@@ -55,7 +55,7 @@ All settings can also be provided through environment variables. When set this w
 | `KINORA_CACHE` | `/cache` (native: `<data>/cache`) | Transcoding and downloads |
 | `KINORA_PUBLIC_URL` | — | Public URL for invitation links and QR codes |
 | `KINORA_TMDB_KEY` | — | TMDB API key (v3 key or v4 token) |
-| `KINORA_METADATA_LANG` | `hu-HU` | Metadata language |
+| `KINORA_METADATA_LANG` | `hu-HU` | Default metadata language (clients get titles in their own interface language when it differs) |
 | `KINORA_ENCODER` | `auto` | `auto`, `h264_nvenc`, `h264_qsv`, `h264_vaapi`, `libx264`, etc. |
 | `KINORA_VAAPI_DEVICE` | `/dev/dri/renderD128` | VA-API device |
 | `KINORA_SCAN_INTERVAL_MIN` | `15` | Periodic scan interval in minutes (`0` = disabled) |

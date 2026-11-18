@@ -212,7 +212,7 @@ async function api(method, path, body, opts = {}) {
   try {
     res = await fetch(path, {
       method, credentials: 'same-origin', keepalive: !!opts.keepalive,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+      headers: body !== undefined ? { 'Content-Type': 'application/json', 'X-Kinora-Lang': LANG } : { 'X-Kinora-Lang': LANG },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
@@ -755,7 +755,7 @@ async function viewLibrary(libId, q) {
     const c = h('button.chip' + (set.has(x.value) ? '.on' : ''), { type: 'button', 'aria-pressed': set.has(x.value) ? 'true' : 'false', onclick: () => {
       set.has(x.value) ? set.delete(x.value) : set.add(x.value);
       c.classList.toggle('on'); c.setAttribute('aria-pressed', set.has(x.value)); refresh();
-    } }, x.value, h('span.n', null, x.count));
+    } }, x.label || x.value, h('span.n', null, x.count));
     return c;
   }));
   const inp = (key, ph, type = 'number') => { const i = h('input', { type, placeholder: ph, value: sel[key], 'aria-label': ph }); i.addEventListener('input', debounce(() => { sel[key] = i.value.trim(); refresh(); }, 350)); return i; };
@@ -1061,7 +1061,7 @@ async function viewCollectionEdit(id, q) {
     switch (fd.type) {
       case 'enum': return h('select', null, fd.enum.map(o => opt(o.value, lbl(T.kindOpts, o.value, o.label))));
       case 'library': return h('select', null, libs.map(l => opt(l.id, l.name)));
-      case 'genre': return h('select', null, f.genres.map(g => opt(g.value, g.value)));
+      case 'genre': return h('select', null, f.genres.map(g => opt(g.value, g.label || g.value)));
       case 'tag': return h('select', null, f.tags.map(t => opt(t.value, t.value)));
       case 'collection': return h('select', null, allCols.filter(x => x.id !== id).map(x => opt(x.id, x.name)));
       case 'bool': return h('select', null, opt('true', T.yes), opt('false', T.no));
@@ -2011,7 +2011,7 @@ async function adminMeta(body) {
       h('label.check', null, retry, T.retryNoMatch),
       h('div.a-form-foot', null, h('button.btn.primary', { disabled: !m.enabled, onclick: async () => { await POST('/api/admin/metadata/refresh', { retry_no_match: retry.checked }); adminMeta(body); } }, T.refreshMeta)),
       !m.enabled && h('p.note-off', null, T.metaNeedsKey),
-      h('div.a-status', null, h('span.muted', null, T.metaStatus + ': '), st.running ? [T.metaRunning(st.done, st.total), st.relang ? ' · ' + T.metaRelang(st.relang) : '', aBar(st.done, st.total)] : st.finished_at ? T.metaDone(st.matched, st.no_match) : '–',
+      h('div.a-status', null, h('span.muted', null, T.metaStatus + ': '), st.running ? [T.metaRunning(st.done, st.total), st.relang ? ' · ' + T.metaRelang(st.relang) : '', st.translate ? ' · ' + T.metaTranslate(st.translate) : '', aBar(st.done, st.total)] : st.finished_at ? T.metaDone(st.matched, st.no_match) : '–',
         st.last_error ? h('div.bad.small', null, srv(st.last_error)) : null)));
   if (st.running) { t = setTimeout(() => adminMeta(body), 2000); onCleanup(() => clearTimeout(t)); }
 }

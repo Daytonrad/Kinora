@@ -58,7 +58,7 @@ Minden beállítás megadható környezeti változóval is. Ilyenkor az admin fe
 | `KINORA_CACHE` | `/cache` (natívan `<data>/cache`) | átkódolás, letöltések |
 | `KINORA_PUBLIC_URL` | – | nyilvános cím (meghívó linkekhez, QR-kódokhoz) |
 | `KINORA_TMDB_KEY` | – | TMDB API kulcs (v3 kulcs vagy v4 token) |
-| `KINORA_METADATA_LANG` | `hu-HU` | metaadat nyelve |
+| `KINORA_METADATA_LANG` | `hu-HU` | alapértelmezett metaadat-nyelv (a kliensek a saját felületi nyelvükön kapják a címeket, ha az eltér) |
 | `KINORA_ENCODER` | `auto` | `auto`, `h264_nvenc`, `h264_qsv`, `h264_vaapi`, `libx264` … |
 | `KINORA_VAAPI_DEVICE` | `/dev/dri/renderD128` | VA-API eszköz |
 | `KINORA_SCAN_INTERVAL_MIN` | `15` | periodikus szkennelés (perc, 0 = ki) |

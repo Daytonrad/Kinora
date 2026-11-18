@@ -359,6 +359,6 @@ func (s *Store) ItemsByIDs(p *Profile, ids []int64) ([]*Item, error) {
 		pos[id] = i
 	}
 	sort.Slice(items, func(a, b int) bool { return pos[items[a].ID] < pos[items[b].ID] })
-	s.fillGenresTags(items)
+	s.fillGenresTags(items, p)
 	return items, nil
 }

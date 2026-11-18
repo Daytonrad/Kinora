@@ -152,20 +152,22 @@ func (s *Store) Search(p *Profile, q string, limit int) ([]*Item, error) {
 	like := "%" + likeEscape(q) + "%"
 	prefix := likeEscape(q) + "%"
 	items, err := s.QueryItems(p, ` AND i.kind IN ('movie','series','episode') AND i.missing=0 AND (
-		i.title LIKE ? ESCAPE '\' OR i.overview LIKE ? ESCAPE '\' OR
+		i.title LIKE ? ESCAPE '\' OR i.overview LIKE ? ESCAPE '\' OR tr.title LIKE ? ESCAPE '\' OR tr.overview LIKE ? ESCAPE '\' OR
 		EXISTS(SELECT 1 FROM item_tags t WHERE t.item_id=i.id AND t.tag LIKE ? ESCAPE '\'))`,
-		[]any{like, like, like},
-		`ORDER BY CASE WHEN i.title LIKE ? ESCAPE '\' THEN 0 WHEN i.title LIKE ? ESCAPE '\' THEN 1 ELSE 2 END,
-		 CASE i.kind WHEN 'episode' THEN 1 ELSE 0 END, i.sort_title LIMIT ?`, prefix, like, limit)
+		[]any{like, like, like, like, like},
+		`ORDER BY CASE WHEN `+locTitle+` LIKE ? ESCAPE '\' THEN 0 WHEN `+locTitle+` LIKE ? ESCAPE '\' THEN 1 ELSE 2 END,
+		 CASE i.kind WHEN 'episode' THEN 1 ELSE 0 END, `+locSort+` LIMIT ?`, prefix, like, limit)
 	if err == nil {
-		s.fillGenresTags(items)
+		s.fillGenresTags(items, p)
 	}
 	return items, err
 }
 
-// Facet is a value with its count.
+// Facet is a value with its count. Label is the value in the profile's metadata language, when it differs
+// (genres only); filters keep using Value.
 type Facet struct {
 	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
 	Count int    `json:"count"`
 }
 
@@ -196,6 +198,13 @@ func (s *Store) Facets(p *Profile, libID int64) (genres, tags []Facet, err error
 	}
 	if genres, err = q("item_genres", "genre"); err != nil {
 		return
+	}
+	if labels := s.genreLabels(metaLang(p)); len(labels) > 0 {
+		for i := range genres {
+			if l := labels[genres[i].Value]; l != "" && l != genres[i].Value {
+				genres[i].Label = l
+			}
+		}
 	}
 	tags, err = q("item_tags", "tag")
 	return

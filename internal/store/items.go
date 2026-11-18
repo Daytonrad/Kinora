@@ -72,16 +72,26 @@ type StreamInfo struct {
 // TextSubtitleCodecs can be converted to WebVTT.
 var TextSubtitleCodecs = map[string]bool{"subrip": true, "srt": true, "ass": true, "ssa": true, "webvtt": true, "mov_text": true, "text": true}
 
-const itemSelect = `SELECT i.id,i.library_id,i.kind,i.parent_id,i.series_id,i.title,i.sort_title,i.year,i.season_num,i.episode_num,i.episode_end,
- i.overview,i.content_rating,i.rating_level,i.community_rating,i.runtime_sec,i.path,i.size,i.container,i.video_codec,i.audio_codec,
+// Title, sort title and overview in the request's metadata language (tr, from item_i18n), falling back
+// to the stored metadata_lang ones. Usable in the where / tail of QueryItems.
+const (
+	locTitle    = `COALESCE(NULLIF(tr.title,''),i.title)`
+	locSort     = `COALESCE(NULLIF(tr.sort_title,''),i.sort_title)`
+	locOverview = `COALESCE(NULLIF(tr.overview,''),i.overview)`
+)
+
+const itemSelect = `SELECT i.id,i.library_id,i.kind,i.parent_id,i.series_id,` + locTitle + `,` + locSort + `,i.year,i.season_num,i.episode_num,i.episode_end,
+ ` + locOverview + `,i.content_rating,i.rating_level,i.community_rating,i.runtime_sec,i.path,i.size,i.container,i.video_codec,i.audio_codec,
  i.width,i.height,i.bitrate,i.hdr,i.credits_start,i.tmdb_id,i.has_poster,i.has_backdrop,i.missing,i.added_at,i.updated_at,
- COALESCE(sr.title,''),
+ COALESCE(NULLIF(srt.title,''),sr.title,''),
  COALESCE(ud.position,0),COALESCE(ud.played,0),COALESCE(ud.play_count,0),ud.last_played_at,COALESCE(ud.favorite,0),ud.stars,COALESCE(ud.hidden,0),
  CASE WHEN i.kind IN ('series','season') THEN (SELECT COUNT(*) FROM items e WHERE e.kind='episode' AND e.missing=0 AND (e.series_id=i.id OR e.parent_id=i.id) AND COALESCE(e.season_num,1)<>0) ELSE 0 END,
  CASE WHEN i.kind IN ('series','season') THEN (SELECT COUNT(*) FROM items e LEFT JOIN user_data eu ON eu.item_id=e.id AND eu.profile_id=?
    WHERE e.kind='episode' AND e.missing=0 AND (e.series_id=i.id OR e.parent_id=i.id) AND COALESCE(e.season_num,1)<>0 AND COALESCE(eu.played,0)=0) ELSE 0 END
 FROM items i
 LEFT JOIN items sr ON sr.id=i.series_id AND i.kind IN ('season','episode')
+LEFT JOIN item_i18n tr ON tr.item_id=i.id AND tr.lang=? AND COALESCE(i.tmdb_id,0)>=0
+LEFT JOIN item_i18n srt ON srt.item_id=sr.id AND srt.lang=? AND COALESCE(sr.tmdb_id,0)>=0
 LEFT JOIN user_data ud ON ud.item_id=i.id AND ud.profile_id=?`
 
 func scanItem(row interface{ Scan(...any) error }) (*Item, error) {
@@ -142,9 +152,9 @@ func profileID(p *Profile) int64 {
 // is combined with the profile's rating filter. tail holds ORDER BY / LIMIT.
 func (s *Store) QueryItems(p *Profile, where string, args []any, tail string, tailArgs ...any) ([]*Item, error) {
 	rf, rargs := RatingSQL(p, "i")
-	pid := profileID(p)
+	pid, lang := profileID(p), metaLang(p)
 	q := itemSelect + ` WHERE 1=1` + where + rf + " " + tail
-	all := append([]any{pid, pid}, args...)
+	all := append([]any{pid, lang, lang, pid}, args...)
 	all = append(all, rargs...)
 	all = append(all, tailArgs...)
 	rows, err := s.DB.Query(q, all...)
@@ -194,7 +204,7 @@ func (s *Store) ItemFull(id int64, p *Profile) (*Item, error) {
 		it.Chapters = append(it.Chapters, c)
 	}
 	rows.Close()
-	s.fillGenresTags([]*Item{it})
+	s.fillGenresTags([]*Item{it}, p)
 	return it, nil
 }
 
@@ -219,11 +229,12 @@ func (s *Store) Streams(id int64) ([]StreamInfo, error) {
 	return out, rows.Err()
 }
 
-// fillGenresTags loads genres and tags for a batch of items.
-func (s *Store) fillGenresTags(items []*Item) {
+// fillGenresTags loads genres and tags for a batch of items; genres are shown in the profile's metadata language.
+func (s *Store) fillGenresTags(items []*Item, p *Profile) {
 	if len(items) == 0 {
 		return
 	}
+	labels := s.genreLabels(metaLang(p))
 	idx := map[int64]*Item{}
 	ph := make([]string, 0, len(items))
 	args := make([]any, 0, len(items))
@@ -238,6 +249,9 @@ func (s *Store) fillGenresTags(items []*Item) {
 			var id int64
 			var g string
 			rows.Scan(&id, &g)
+			if l := labels[g]; l != "" {
+				g = l
+			}
 			idx[id].Genres = append(idx[id].Genres, g)
 		}
 		rows.Close()
@@ -254,4 +268,4 @@ func (s *Store) fillGenresTags(items []*Item) {
 }
 
 // FillGenresTags is the exported batch loader.
-func (s *Store) FillGenresTags(items []*Item) { s.fillGenresTags(items) }
+func (s *Store) FillGenresTags(items []*Item, p *Profile) { s.fillGenresTags(items, p) }

@@ -255,6 +255,23 @@ CREATE TABLE segment_scans(
 );
 ALTER TABLE profiles ADD COLUMN skip_intro TEXT NOT NULL DEFAULT 'manual';
 `,
+	// 4: online metadata in the viewers' languages (the items table holds the metadata_lang one)
+	`
+CREATE TABLE item_i18n(
+  item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  lang TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  sort_title TEXT NOT NULL DEFAULT '',
+  overview TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(item_id, lang)
+);
+CREATE TABLE genre_i18n(
+  lang TEXT NOT NULL,
+  genre TEXT NOT NULL,
+  label TEXT NOT NULL,
+  PRIMARY KEY(lang, genre)
+);
+`,
 }
 
 func (s *Store) migrate() error {

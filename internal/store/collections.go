@@ -195,10 +195,10 @@ func (s *Store) CollectionItems(p *Profile, c *Collection, offset, limit int) ([
 	var total int
 	s.DB.QueryRow(`SELECT COUNT(*) FROM items i WHERE 1=1`+where+rf, append([]any{c.ID}, rargs...)...).Scan(&total)
 	items, err := s.QueryItems(p, where, []any{c.ID},
-		`ORDER BY (SELECT ci.position FROM collection_items ci WHERE ci.item_id=i.id AND ci.collection_id=?), i.sort_title LIMIT ? OFFSET ?`,
+		`ORDER BY (SELECT ci.position FROM collection_items ci WHERE ci.item_id=i.id AND ci.collection_id=?), `+locSort+` LIMIT ? OFFSET ?`,
 		c.ID, limit, offset)
 	if err == nil {
-		s.fillGenresTags(items)
+		s.fillGenresTags(items, p)
 	}
 	return items, total, err
 }

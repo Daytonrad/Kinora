@@ -38,6 +38,8 @@ type Fetcher struct {
 
 	mu     sync.Mutex
 	status Status
+	langs  map[string]bool // viewer languages (metadata_langs), loaded on first use
+	again  bool            // a Kick arrived while a refresh ran: run once more
 }
 
 // Status is the progress of a refresh.
@@ -48,6 +50,8 @@ type Status struct {
 	Matched   int    `json:"matched"`
 	// Relang is the metadata language matched items are being re-fetched in, set while that runs.
 	Relang    string `json:"relang,omitempty"`
+	// Translate is the viewer language titles are being fetched in, set while that runs.
+	Translate string `json:"translate,omitempty"`
 	NoMatch   int    `json:"no_match"`
 	LastError string `json:"last_error,omitempty"`
 	FinishedAt int64 `json:"finished_at,omitempty"`
@@ -83,7 +87,9 @@ func (f *Fetcher) get(ctx context.Context, path string, q url.Values, out any) e
 	if q == nil {
 		q = url.Values{}
 	}
-	q.Set("language", f.st.Setting("metadata_lang"))
+	if q.Get("language") == "" { // translations ask for their own language
+		q.Set("language", f.st.Setting("metadata_lang"))
+	}
 	bearer := len(key) > 40
 	if !bearer {
 		q.Set("api_key", key)
@@ -134,6 +140,7 @@ var errNotFound = errors.New("not found")
 // ------------------------------------------------------------------ API types
 
 type genre struct {
+	ID   int64  `json:"id"`
 	Name string `json:"name"`
 }
 
@@ -177,6 +184,8 @@ type tvDetails struct {
 }
 
 type seasonDetails struct {
+	Name       string `json:"name"`
+	Overview   string `json:"overview"`
 	PosterPath string `json:"poster_path"`
 	Episodes   []struct {
 		EpisodeNumber int     `json:"episode_number"`
@@ -307,16 +316,45 @@ func (f *Fetcher) Refresh(ctx context.Context, retryNoMatch bool) error {
 		f.status.FinishedAt = time.Now().Unix()
 		f.mu.Unlock()
 	}()
-	if err := f.refresh(ctx, retryNoMatch); err != nil {
-		return err
-	}
-	// the language may have been changed again while this pass ran
-	for i := 0; i < 3 && f.relangNeeded() != ""; i++ {
-		if err := f.refresh(ctx, false); err != nil {
+	for pass := 0; pass < 4; pass++ {
+		if err := f.refresh(ctx, retryNoMatch && pass == 0); err != nil {
 			return err
+		}
+		// the language may have been changed again while this pass ran
+		for i := 0; i < 3 && f.relangNeeded() != ""; i++ {
+			if err := f.refresh(ctx, false); err != nil {
+				return err
+			}
+		}
+		if err := f.translateAll(ctx); err != nil {
+			return err
+		}
+		f.mu.Lock()
+		again := f.again
+		f.again = false
+		f.mu.Unlock()
+		if !again {
+			break
 		}
 	}
 	return nil
+}
+
+// Kick starts a background refresh, or asks the running one for another pass.
+func (f *Fetcher) Kick(ctx context.Context) {
+	if !f.Enabled() {
+		return
+	}
+	go func() {
+		err := f.Refresh(ctx, false)
+		if errors.Is(err, ErrRunning) {
+			f.mu.Lock()
+			f.again = true
+			f.mu.Unlock()
+		} else if err != nil {
+			f.log.Warn("metadata refresh", "err", err)
+		}
+	}()
 }
 
 func (f *Fetcher) refresh(ctx context.Context, retryNoMatch bool) error {
@@ -380,6 +418,7 @@ func (f *Fetcher) refresh(ctx context.Context, retryNoMatch bool) error {
 		if err := f.st.SetSetting(appliedLangKey, relang); err != nil {
 			return err
 		}
+		f.st.ClearGenreLabels() // they map the old language's genre names
 	}
 	f.log.Info("tmdb refresh finished", "items", len(ts))
 	return nil
@@ -395,6 +434,15 @@ func (f *Fetcher) Match(ctx context.Context, itemID, tmdbID int64) error {
 	}
 	if _, err := f.fetchOne(ctx, t, tmdbID); err != nil {
 		return err
+	}
+	// the old translations belong to the previous match
+	if err := f.st.ClearTranslations(t.id); err != nil {
+		return err
+	}
+	for _, lang := range f.viewerLangs() {
+		if err := f.translateOne(ctx, t.id, t.kind, tmdbID, lang); err != nil {
+			f.log.Warn("tmdb translation", "title", t.title, "lang", lang, "err", err)
+		}
 	}
 	return f.st.FinishScan(t.libID)
 }

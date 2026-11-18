@@ -133,8 +133,17 @@ func (s *Server) resolve(r *http.Request) (*reqCtx, error) {
 	if err != nil {
 		return &reqCtx{Token: tok}, err
 	}
+	if ss.Profile != nil && s.Meta != nil {
+		// titles and overviews follow the client's UI language
+		if code := r.Header.Get(langHeader); code != "" {
+			ss.Profile.MetaLang = s.Meta.ViewLang(s.bgCtx, code)
+		}
+	}
 	return &reqCtx{User: ss.User, Profile: ss.Profile, Token: tok, DeviceID: ss.DeviceID, ProfileLock: ss.ProfileLock}, nil
 }
+
+// langHeader carries the client's UI language (hu, en, …); metadata is returned in it when fetched.
+const langHeader = "X-Kinora-Lang"
 
 func (s *Server) public(h handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
