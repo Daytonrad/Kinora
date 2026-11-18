@@ -71,4 +71,4 @@ Remove-Item -Recurse "C:\Program Files\Kinora"
 
 A `kinora-windows-amd64.zip` minden `v*.*.*` tagnél automatikusan elkészül, és felkerül a GitHub Release-be
 (`.github/workflows/ci.yml`, `windows` job). Tartalma: `kinora.exe` (benne a webes felület), `ffmpeg\ffmpeg.exe` és
-`ffprobe.exe` (BtbN 7.1-es GPL build), valamint az `install.ps1` és az `update.ps1`.
+`ffprobe.exe` (BtbN 8.1-es GPL build), valamint az `install.ps1` és az `update.ps1`.

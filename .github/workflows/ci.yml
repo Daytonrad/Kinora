@@ -152,7 +152,7 @@ jobs:
         shell: bash
     env:
       # BtbN's GPL build of the ffmpeg 7.1 branch: NVENC, QSV, AMF and libx264 included
-      FFMPEG_ZIP: https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-7.1.zip
+      FFMPEG_ZIP: https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-gpl-8.1.zip
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
