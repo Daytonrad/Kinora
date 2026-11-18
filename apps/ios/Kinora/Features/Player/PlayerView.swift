@@ -92,7 +92,7 @@ struct PlayerView: View {
     /// holding ⌘ lists them.
     private var keyboardShortcuts: some View {
         Group {
-            Button("Lejátszás / szünet") { player.togglePlay() }
+            Button("Lejátszás / szünet") { Haptic.tap.play(); player.togglePlay() }
                 .keyboardShortcut(.space, modifiers: [])
             Button("Vissza 10 másodpercet") { seekWithFlash(forward: false) }
                 .keyboardShortcut(.leftArrow, modifiers: [])
@@ -116,7 +116,7 @@ struct PlayerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 6)
                 if let party = player.party {
-                    Button { party.panelOpen.toggle() } label: {
+                    Button { Haptic.tap.play(); party.panelOpen.toggle() } label: {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 18, weight: .semibold))
                             .frame(width: 44, height: 44)
@@ -147,10 +147,10 @@ struct PlayerView: View {
             Spacer()
 
             HStack(spacing: 48) {
-                RoundIcon("gobackward.10", size: 30, label: "Vissza 10 másodpercet") { player.seek(by: -10); scheduleHide() }
+                RoundIcon("gobackward.10", size: 30, label: "Vissza 10 másodpercet") { Haptic.tap.play(); player.seek(by: -10); scheduleHide() }
                 RoundIcon(player.isPlaying ? "pause.fill" : "play.fill", size: 44,
-                          label: player.isPlaying ? "Szünet" : "Lejátszás") { player.togglePlay() }
-                RoundIcon("goforward.10", size: 30, label: "Előre 10 másodpercet") { player.seek(by: 10); scheduleHide() }
+                          label: player.isPlaying ? "Szünet" : "Lejátszás") { Haptic.tap.play(); player.togglePlay() }
+                RoundIcon("goforward.10", size: 30, label: "Előre 10 másodpercet") { Haptic.tap.play(); player.seek(by: 10); scheduleHide() }
             }
 
             Spacer()
@@ -223,6 +223,7 @@ struct PlayerView: View {
     /// ±10 s with the flash on the side; seeks in a row add up.
     private func seekWithFlash(forward: Bool) {
         guard player.error == nil else { return }
+        Haptic.tap.play()
         player.seek(by: forward ? 10 : -10)
         let total = (seekFlash?.forward == forward ? seekFlash?.seconds ?? 0 : 0) + 10
         withAnimation(.easeOut(duration: 0.15)) { seekFlash = SeekFlash(forward: forward, seconds: total) }
@@ -284,9 +285,9 @@ private struct PromptsView: View {
                 Spacer()
                 if player.showNext, let next = player.next {
                     NextCard(next: next, countdown: player.nextCountdown,
-                             play: { player.playNext() }, dismiss: { player.dismissNext() })
+                             play: { Haptic.firm.play(); player.playNext() }, dismiss: { player.dismissNext() })
                 } else if let seg = player.currentSegment {
-                    Button { player.skipSegment() } label: {
+                    Button { Haptic.firm.play(); player.skipSegment() } label: {
                         Label(PlayerView.skipLabel(seg.type), systemImage: "forward.end.fill")
                             .font(.subheadline.weight(.semibold))
                     }
@@ -316,12 +317,17 @@ private struct Scrubber: View {
     var body: some View {
         let pos = scrub ?? player.position
         VStack(spacing: 4) {
-            Slider(value: Binding(get: { pos }, set: { scrub = $0 }),
+            Slider(value: Binding(get: { pos }, set: { t in
+                       // A tick at every chapter mark the thumb passes.
+                       if chapterIndex(scrub ?? player.position) != chapterIndex(t) { Haptic.select.play() }
+                       scrub = t
+                   }),
                    in: 0...max(player.duration, 1)) { editing in
                 scrubbing = editing
                 if editing {
                     began()
                 } else if let t = scrub {
+                    Haptic.tap.play()
                     player.seek(to: t)
                     scrub = nil
                     ended()
@@ -344,6 +350,13 @@ private struct Scrubber: View {
             .font(.caption.monospacedDigit())
             .foregroundStyle(.white.opacity(0.8))
         }
+    }
+
+    /// Which chapter a time falls in; nil without chapters (then scrubbing is silent).
+    private func chapterIndex(_ t: Double) -> Int? {
+        let starts = player.chapters.map(\.start)
+        guard starts.count > 1 else { return nil }
+        return starts.lastIndex { $0 <= t } ?? 0
     }
 }
 
@@ -455,7 +468,7 @@ private struct OptionsMenu: View {
         return Menu {
             Group {
             if audio.count > 1, !player.isOffline {
-                Picker(selection: Binding(get: { player.audioIdx ?? -1 }, set: { player.selectAudio($0) })) {
+                Picker(selection: Binding(get: { player.audioIdx ?? -1 }, set: { Haptic.select.play(); player.selectAudio($0) })) {
                     ForEach(audio, id: \.typeIndex) { Text(TrackLabel.audio($0)).tag($0.typeIndex) }
                 } label: {
                     Label("Hang", systemImage: "speaker.wave.2")
@@ -465,7 +478,7 @@ private struct OptionsMenu: View {
             }
             if !subs.isEmpty {
                 Picker(selection: Binding(get: { player.subtitle?.idx ?? -1 },
-                                          set: { i in player.selectSubtitle(subs.first { $0.idx == i }) })) {
+                                          set: { i in Haptic.select.play(); player.selectSubtitle(subs.first { $0.idx == i }) })) {
                     Text("Ki").tag(-1)
                     ForEach(subs) { Text(TrackLabel.subtitle($0)).tag($0.idx) }
                 } label: {
@@ -476,10 +489,10 @@ private struct OptionsMenu: View {
             }
             if player.subtitle != nil {
                 Menu {
-                    Button("Korábban (−0,5 mp)", systemImage: "minus") { player.shiftSubtitles(by: -0.5) }
-                    Button("Később (+0,5 mp)", systemImage: "plus") { player.shiftSubtitles(by: 0.5) }
+                    Button("Korábban (−0,5 mp)", systemImage: "minus") { Haptic.select.play(); player.shiftSubtitles(by: -0.5) }
+                    Button("Később (+0,5 mp)", systemImage: "plus") { Haptic.select.play(); player.shiftSubtitles(by: 0.5) }
                     if player.subtitleDelay != 0 {
-                        Button("Visszaállítás", systemImage: "arrow.counterclockwise") { player.shiftSubtitles(by: 0) }
+                        Button("Visszaállítás", systemImage: "arrow.counterclockwise") { Haptic.select.play(); player.shiftSubtitles(by: 0) }
                     }
                 } label: {
                     Label("Felirat időzítése", systemImage: "timer")
@@ -489,7 +502,7 @@ private struct OptionsMenu: View {
             }
             // In a party the room's clock sets the speed.
             if player.party == nil {
-                Picker(selection: Binding(get: { player.speed }, set: { player.setSpeed($0) })) {
+                Picker(selection: Binding(get: { player.speed }, set: { Haptic.select.play(); player.setSpeed($0) })) {
                     ForEach(PlaybackSpeeds.all, id: \.self) { Text(PlaybackSpeeds.label($0)).tag($0) }
                 } label: {
                     Label("Sebesség", systemImage: "gauge.with.dots.needle.67percent")
@@ -498,7 +511,7 @@ private struct OptionsMenu: View {
                 .pickerStyle(.menu)
             }
             if !player.isOffline {
-                Picker(selection: Binding(get: { player.qualityCap ?? -1 }, set: { player.setQuality($0 < 0 ? nil : $0) })) {
+                Picker(selection: Binding(get: { player.qualityCap ?? -1 }, set: { Haptic.select.play(); player.setQuality($0 < 0 ? nil : $0) })) {
                     Text("Automatikus").tag(-1)
                     ForEach(SettingChoices.bitrates, id: \.0) { Text($0.1).tag($0.0) }
                 } label: {
@@ -533,6 +546,7 @@ private struct ChaptersMenu: View {
                 Group {
                 ForEach(Array(chapters.enumerated()), id: \.offset) { i, c in
                     Button {
+                        Haptic.select.play()
                         player.seek(to: c.start)
                     } label: {
                         let name = c.title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(i + 1). fejezet"

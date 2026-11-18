@@ -74,8 +74,10 @@ struct LoginView: View {
                 try await model.login(username: username.trimmingCharacters(in: .whitespaces), password: password)
             } catch let e as KinoraError where e.status == 401 {
                 error = "Hibás felhasználónév vagy jelszó."
+                Haptic.error.play()
             } catch {
                 self.error = error.localizedDescription
+                Haptic.error.play()
             }
         }
     }

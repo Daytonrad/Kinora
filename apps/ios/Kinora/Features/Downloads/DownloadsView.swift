@@ -17,7 +17,7 @@ struct DownloadsView: View {
                         Section("Folyamatban") {
                             ForEach(store.phases.keys.sorted(), id: \.self) { id in
                                 if let phase = store.phases[id] {
-                                    ActiveRow(title: store.pendingTitle(id), phase: phase) { store.cancel(id) }
+                                    ActiveRow(title: store.pendingTitle(id), phase: phase) { Haptic.warning.play(); store.cancel(id) }
                                 }
                             }
                         }
@@ -29,11 +29,11 @@ struct DownloadsView: View {
                                 Button { model.play(d.item) } label: { SavedRow(download: d) }
                                     .buttonStyle(.plain)
                                     .swipeActions {
-                                        Button("Törlés", systemImage: "trash", role: .destructive) { store.delete(d.id) }
+                                        Button("Törlés", systemImage: "trash", role: .destructive) { Haptic.warning.play(); store.delete(d.id) }
                                     }
                                     .contextMenu {
                                         Button("Lejátszás", systemImage: "play.fill") { model.play(d.item) }
-                                        Button("Törlés az eszközről", systemImage: "trash", role: .destructive) { store.delete(d.id) }
+                                        Button("Törlés az eszközről", systemImage: "trash", role: .destructive) { Haptic.warning.play(); store.delete(d.id) }
                                     }
                             }
                         } header: {
@@ -139,7 +139,7 @@ struct DownloadButton: View {
     var body: some View {
         Button {
             if store.download(for: item.id) == nil, store.phases[item.id] == nil {
-                if let room = store.roomError() { error = room } else { asking = true }
+                if let room = store.roomError() { error = room } else { Haptic.tap.play(); asking = true }
             }
             else { model.tab = .downloads }
         } label: {
@@ -149,6 +149,9 @@ struct DownloadButton: View {
                 .background(Theme.panel, in: .rect(cornerRadius: 10))
         }
         .accessibilityLabel(label)
+        // Done in the background while this page is open: a short "ready".
+        .sensoryFeedback(.success, trigger: store.download(for: item.id) != nil) { _, done in done }
+        .sensoryFeedback(.error, trigger: error) { _, e in e != nil }
         .confirmationDialog("Letöltés offline nézéshez", isPresented: $asking, titleVisibility: .visible) {
             ForEach(Self.qualities, id: \.0) { q in
                 Button(q.1) { start(q.0) }
@@ -185,6 +188,7 @@ struct DownloadButton: View {
     }
 
     private func start(_ quality: String) {
+        Haptic.firm.play()
         Task {
             do { try await model.api { try await DownloadStore.shared.start(item, quality: quality, client: $0) } }
             catch { self.error = error.localizedDescription }

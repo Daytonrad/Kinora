@@ -134,7 +134,7 @@ struct ServersView: View {
         Task {
             defer { busy = false }
             do { try await model.connect(to: input) }
-            catch { self.error = error.localizedDescription }
+            catch { self.error = error.localizedDescription; Haptic.error.play() }
         }
     }
 
@@ -145,7 +145,7 @@ struct ServersView: View {
         Task {
             defer { busy = false }
             do { try await model.open(s) }
-            catch { self.error = error.localizedDescription }
+            catch { self.error = error.localizedDescription; Haptic.error.play() }
         }
     }
 

@@ -83,6 +83,22 @@ megy, ezért távoli eléréshez HTTPS ajánlott (reverse proxy, Cloudflare, Tai
 - Letöltés, kép a képben és widget tvOS-en nincs.
 - Az ikon rétegei és a Top Shelf képek az `apps/branding/brand.mjs`-ből készülnek.
 
+## Rezgések (iPhone)
+
+Egy közös szókészlet (`Kinora/App/Haptics.swift`), csak a néző saját mozdulatára; a rendszer rezgés-beállítását követi.
+
+- **Könnyű koppanás:** lejátszás/szünet, ±10 mp (dupla koppintás és billentyű is), tekerés elengedése, lejátszás
+  indítása az adatlapról, reakció és üzenet küldése, party panel és QR-kód, zseblámpa.
+- **Erősebb koppanás:** intro/stáblista átugrása, következő rész, letöltés (és évad letöltése) indítása, beolvasott QR-kód.
+- **Kattanás:** hang, felirat, felirat-időzítés, sebesség, minőség, fejezet választása; tekerés közben minden
+  fejezethatárnál; kedvenc és megnézett levétele, „Mindenki irányíthat”.
+- **Kedvenc / megnézett bejelölése:** közepes koppanás.
+- **Siker:** watch party indult vagy csatlakoztál, letöltés elkészült (ha nyitva az adatlap), tévé jóváhagyva kóddal.
+- **Figyelmeztetés:** letöltés törlése vagy megszakítása, kilépés a watch partyból, nem party QR-kód, lejárt belépőkód.
+- **Hiba:** hibás jelszó vagy PIN, elérhetetlen szerver, sikertelen letöltés vagy watch party.
+
+A watch party szinkronja, a zárolási képernyő parancsai és az automatikus átugrás nem rezeg. Apple TV-n nincs rezgés.
+
 ## Watch party
 
 Közös nézés a szerver szobáin át, ugyanaz a protokoll és szinkronszabály, mint a weben, így app és böngésző egy szobában lehet.

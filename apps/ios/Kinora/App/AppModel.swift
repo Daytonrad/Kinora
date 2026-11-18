@@ -35,7 +35,7 @@ final class AppModel {
     /// The settings sheet is shown.
     var settingsVisible = false
     /// A watch party could not be started or joined (shown as an alert, or on the join screen).
-    var partyError: String?
+    var partyError: String? { didSet { if partyError != nil { Haptic.error.play() } } }
     /// The join screen (code or QR) is shown; it shows join errors itself.
     var partyJoinVisible = false
     /// Joining a party is in progress (a spinner on the join screen).
@@ -356,6 +356,7 @@ final class AppModel {
                     p.party = session
                     session.player = p
                     session.panelOpen = true
+                    Haptic.success.play()
                 } else {
                     let resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
                     await enterParty(info.code, item: item, client: client, hostFrom: resume)
@@ -399,6 +400,7 @@ final class AppModel {
             partyError = session.status ?? "Nem sikerült csatlakozni a watch partyhoz."
             return
         }
+        Haptic.success.play()
         if let hostFrom {
             session.adopt(position: hostFrom, playing: true)
             session.panelOpen = true

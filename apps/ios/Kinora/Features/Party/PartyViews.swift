@@ -44,7 +44,7 @@ struct PartyPanel: View {
                     .accessibilityLabel("Kód: " + party.code.map(String.init).joined(separator: " "))
             }
             Spacer()
-            Button { withAnimation(.easeOut(duration: 0.2)) { qr = !showQR } } label: {
+            Button { Haptic.tap.play(); withAnimation(.easeOut(duration: 0.2)) { qr = !showQR } } label: {
                 Image(systemName: "qrcode").frame(width: 36, height: 36).contentShape(.rect)
             }
             .foregroundStyle(showQR ? Theme.amber : .primary)
@@ -94,7 +94,7 @@ struct PartyPanel: View {
                 .accessibilityElement(children: .combine)
             }
             if party.isHost {
-                Toggle("Mindenki irányíthat", isOn: Binding(get: { party.everyone }, set: { party.setEveryone($0) }))
+                Toggle("Mindenki irányíthat", isOn: Binding(get: { party.everyone }, set: { Haptic.select.play(); party.setEveryone($0) }))
                     .font(.caption)
                     .tint(Theme.amber)
             } else if !party.canControl {
@@ -131,7 +131,7 @@ struct PartyPanel: View {
     private var reactions: some View {
         HStack(spacing: 2) {
             ForEach(party.reactions, id: \.self) { e in
-                Button(e) { party.react(e) }
+                Button(e) { Haptic.tap.play(); party.react(e) }
                     .font(.title3)
                     .frame(maxWidth: .infinity, minHeight: 36)
                     .accessibilityLabel("Reakció: " + e)
@@ -150,7 +150,7 @@ struct PartyPanel: View {
                     .onSubmit(send)
                 Button("Küldés", action: send).disabled(message.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            Button(role: .destructive, action: leave) {
+            Button(role: .destructive) { Haptic.warning.play(); leave() } label: {
                 Label("Kilépés a watch partyból", systemImage: "rectangle.portrait.and.arrow.right")
                     .font(.footnote.weight(.semibold))
                     .frame(maxWidth: .infinity)
@@ -161,6 +161,8 @@ struct PartyPanel: View {
     }
 
     private func send() {
+        guard !message.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        Haptic.tap.play()
         party.chat(message)
         message = ""
         typing = true

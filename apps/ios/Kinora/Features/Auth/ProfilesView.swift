@@ -50,7 +50,7 @@ struct ProfilesView: View {
         Task {
             defer { busy = false }
             do { try await model.guarded { try await model.selectProfile(p, pin: nil) } }
-            catch { self.error = error.localizedDescription }
+            catch { self.error = error.localizedDescription; Haptic.error.play() }
         }
     }
 }
@@ -132,6 +132,7 @@ private struct PinSheet: View {
                 dismiss()
             } catch {
                 self.error = error.localizedDescription
+                Haptic.error.play()
                 self.pin = ""
                 fieldID += 1
                 try? await Task.sleep(for: .milliseconds(150))

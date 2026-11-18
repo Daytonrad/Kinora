@@ -67,8 +67,8 @@ struct QuickConnectView: View {
                 let st = try await model.pollQuickConnect(s)
                 switch st.status {
                 case .approved: return
-                case .denied: failed = true; message = "A csatlakozást elutasították."; return
-                case .expired: failed = true; message = "A kód lejárt."; return
+                case .denied: failed = true; Haptic.error.play(); message = "A csatlakozást elutasították."; return
+                case .expired: failed = true; Haptic.warning.play(); message = "A kód lejárt."; return
                 case .pending: break
                 }
                 try await Task.sleep(for: .seconds(max(1, s.pollInterval ?? 2)))

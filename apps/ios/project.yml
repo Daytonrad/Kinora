@@ -123,6 +123,7 @@ targets:
     sources:
       - path: KinoraTV
       - Kinora/App/AppModel.swift
+      - Kinora/App/Haptics.swift
       - Kinora/App/Preferences.swift
       - Kinora/App/ProgressQueue.swift
       - Kinora/App/Theme.swift

@@ -114,7 +114,7 @@ struct ItemDetailView: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Button { if let t = playTarget { model.play(t) } } label: {
+                Button { if let t = playTarget { Haptic.tap.play(); model.play(t) } } label: {
                     Label(playLabel, systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PrimaryButtonStyle())
@@ -133,7 +133,7 @@ struct ItemDetailView: View {
                 }
             }
             if let t = playTarget, t.kind == .movie || t.kind == .episode {
-                Button { model.startParty(t) } label: {
+                Button { Haptic.tap.play(); model.startParty(t) } label: {
                     Label("Watch party indítása", systemImage: "person.2")
                         .padding(.vertical, 6)
                         .contentShape(.rect)
@@ -149,7 +149,7 @@ struct ItemDetailView: View {
                         Text("még \(left)").font(.caption).foregroundStyle(Theme.muted)
                     }
                     Spacer()
-                    Button { model.play(t, from: 0) } label: {
+                    Button { Haptic.tap.play(); model.play(t, from: 0) } label: {
                         Label("Lejátszás elölről", systemImage: "arrow.counterclockwise")
                             .padding(.vertical, 12)
                             .contentShape(.rect)
@@ -311,6 +311,7 @@ struct ItemDetailView: View {
     private func downloadSeason(_ quality: String) {
         guard let season, let list = episodes[season] else { return }
         let todo = missing(list)
+        Haptic.firm.play()
         Task {
             do {
                 let n = try await model.api { try await DownloadStore.shared.startAll(todo, quality: quality, client: $0) }
@@ -336,8 +337,10 @@ struct ItemDetailView: View {
     private func download(_ ep: Item) {
         if let room = DownloadStore.shared.roomError() {
             notice = Notice(title: "Nem sikerült a letöltés", message: room)
+            Haptic.error.play()
             return
         }
+        Haptic.firm.play()
         Task {
             do { try await model.api { try await DownloadStore.shared.start(ep, quality: "720p", client: $0) } }
             catch { notice = Notice(title: "Nem sikerült a letöltés", message: error.localizedDescription) }
@@ -391,7 +394,8 @@ private struct IconToggle: View {
         }
         .disabled(busy)
         .accessibilityLabel(label)
-        .sensoryFeedback(.selection, trigger: on)
+        // Switched on (a favourite, a watched mark) knocks; switched off ticks.
+        .sensoryFeedback(trigger: on) { _, new in new ? .impact(weight: .medium) : .selection }
     }
 }
 

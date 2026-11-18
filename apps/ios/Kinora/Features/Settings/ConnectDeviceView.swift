@@ -117,6 +117,7 @@ struct ConnectDeviceView: View {
                 request = try await model.api { try await $0.lookupQuickConnect(c) }
             } catch {
                 self.error = error.localizedDescription
+                Haptic.error.play()
             }
         }
     }
@@ -132,12 +133,14 @@ struct ConnectDeviceView: View {
                 if approve {
                     try await model.api { try await $0.approveQuickConnect(request.code, profileID: pid) }
                     approved = true
+                    Haptic.success.play()
                 } else {
                     try await model.api { try await $0.denyQuickConnect(request.code) }
                     reset()
                 }
             } catch {
                 self.error = error.localizedDescription
+                Haptic.error.play()
             }
         }
     }

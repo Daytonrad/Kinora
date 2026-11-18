@@ -78,7 +78,6 @@ struct PartyJoinView: View {
             model.partyError = nil
             error = e
             scanned = nil
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
         }
         .onChange(of: model.playerVisible) { _, on in if on { dismiss() } }
         .onDisappear { foreignTask?.cancel() }
@@ -99,7 +98,7 @@ struct PartyJoinView: View {
                     HStack {
                         Spacer()
                         if QRScanner.hasTorch {
-                            Button { torch.toggle() } label: {
+                            Button { Haptic.tap.play(); torch.toggle() } label: {
                                 Image(systemName: torch ? "flashlight.on.fill" : "flashlight.off.fill")
                                     .font(.system(size: 17, weight: .semibold))
                                     .frame(width: 44, height: 44)
@@ -192,7 +191,7 @@ struct PartyJoinView: View {
         guard let c = PartySync.code(scanned: raw) else {
             guard foreign == nil else { return }
             foreign = "Ez nem watch party QR-kód"
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            Haptic.warning.play()
             foreignTask?.cancel()
             foreignTask = Task {
                 try? await Task.sleep(for: .seconds(2.5))
@@ -200,7 +199,7 @@ struct PartyJoinView: View {
             }
             return
         }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        Haptic.firm.play()
         torch = false
         scanned = c
         code = c
