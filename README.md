@@ -123,9 +123,9 @@ Van `.deb` és `.rpm` csomag is. Részletek, jogosultságok, SMB/NFS-csatolás: 
 
 ### Windows
 
-Windowsra nincs külön telepítő; az ajánlott út a Docker Desktop (lásd fent). Haladóknak: a forrásból fordított `kinora.exe`
-Windows-szolgáltatásként is futtatható (`kinora.exe service install --data C:\ProgramData\Kinora`, rendszergazdaként; ffmpeg a PATH-on
-vagy a program melletti `ffmpeg\` mappában).
+Windowson (Windows Serveren is) a Kinora natívan, Windows-szolgáltatásként fut, Docker nélkül, automatikus frissítéssel
+(csak kiadott verziókra, hiba esetén visszaállással). Minden kiadáshoz tartozik egy `kinora-windows-amd64.zip`, a telepítés
+egy PowerShell-parancs: [`docs/WINDOWS.md`](docs/WINDOWS.md). Asztali Windowson a Docker Desktop is megfelelő (lásd fent).
 
 ### Saját logó és név
 

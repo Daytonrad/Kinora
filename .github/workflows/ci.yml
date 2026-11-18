@@ -138,3 +138,60 @@ jobs:
             $(printf '${{ env.IMAGE }}@sha256:%s ' *)
       - name: inspect
         run: docker buildx imagetools inspect ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}
+
+  # Native Windows build, only for releases (v*.*.* tags): kinora.exe + ffmpeg + the install/update scripts,
+  # attached to the GitHub Release. scripts/windows/update.ps1 on the servers picks up only these releases.
+  windows:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      # BtbN's GPL build of the ffmpeg 7.1 branch: NVENC, QSV, AMF and libx264 included
+      FFMPEG_ZIP: https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-7.1.zip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: build kinora.exe (cgo/sqlite with MinGW)
+        run: |
+          export PATH="/c/mingw64/bin:$PATH"
+          gcc --version | head -1
+          CGO_ENABLED=1 go build -trimpath \
+            -ldflags "-s -w -extldflags=-static -X github.com/ScotyLucas/kinora/internal/server.Version=${GITHUB_REF_NAME}" \
+            -o dist/kinora/kinora.exe ./cmd/kinora
+      - name: ffmpeg
+        run: |
+          curl -fsSL -o ffmpeg.zip "$FFMPEG_ZIP"
+          unzip -q ffmpeg.zip -d ffmpeg-src
+          mkdir -p dist/kinora/ffmpeg
+          cp ffmpeg-src/*/bin/ffmpeg.exe ffmpeg-src/*/bin/ffprobe.exe dist/kinora/ffmpeg/
+          cp ffmpeg-src/*/LICENSE.txt dist/kinora/ffmpeg/LICENSE.txt
+      - name: package
+        run: |
+          cp scripts/windows/install.ps1 scripts/windows/update.ps1 LICENSE dist/kinora/
+          cp docs/WINDOWS.md dist/kinora/README.md
+      - name: smoke test
+        run: |
+          dist/kinora/kinora.exe version | grep -F "$GITHUB_REF_NAME"
+          dist/kinora/kinora.exe --data "$RUNNER_TEMP/kdata" --addr 127.0.0.1:18096 --discovery-port 0 &
+          pid=$!
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:18096/api/status && break; sleep 1; done
+          curl -fs http://127.0.0.1:18096/api/status
+          kill "$pid" || true
+      - name: zip + checksum
+        shell: pwsh
+        run: |
+          $zip = "kinora-windows-amd64.zip"
+          Compress-Archive -Path dist/kinora/* -DestinationPath $zip
+          (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() + "  $zip" | Out-File -Encoding ascii "$zip.sha256"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            kinora-windows-amd64.zip
+            kinora-windows-amd64.zip.sha256
