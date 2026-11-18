@@ -198,7 +198,9 @@ final class PartySession {
             pendingItem = nil
         }
         state = st
+        let joined = members.count != st.members.count
         members = st.members
+        if joined { player?.refreshPartyActivity() }
         if !gone { status = waitingText }
         guard let player else { return }
         if st.itemId != player.item.id {

@@ -44,6 +44,7 @@ struct PartyPanel: View {
                     .accessibilityLabel("Kód: " + party.code.map(String.init).joined(separator: " "))
             }
             Spacer()
+            SharePlayButton(party: party, title: party.player?.title ?? "Watch party")
             Button { Haptic.tap.play(); withAnimation(.easeOut(duration: 0.2)) { qr = !showQR } } label: {
                 Image(systemName: "qrcode").frame(width: 36, height: 36).contentShape(.rect)
             }

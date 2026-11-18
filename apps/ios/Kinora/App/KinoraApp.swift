@@ -15,7 +15,10 @@ struct KinoraApp: App {
                 .task {
                     _ = NetworkStatus.shared
                     IntentRouter.model = model
+                    SharePlay.shared.model = model
+                    SharePlay.shared.listen()
                     HomeScenes.shared.warmUp()
+                    LiveActivities.cleanUp()
                     await model.start()
                     KinoraShortcuts.updateAppShortcutParameters()
                 }
@@ -24,6 +27,9 @@ struct KinoraApp: App {
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
                     if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
                        let url = URL(string: id) { model.open(url) }
+                }
+                .onContinueUserActivity(Handoff.activityType) { activity in
+                    if let h = Handoff.incoming(activity) { model.continueHandoff(h) }
                 }
         }
         // Watched marks, favorites and the like change what the widgets show;

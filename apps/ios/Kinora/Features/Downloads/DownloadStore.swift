@@ -19,6 +19,9 @@ struct SavedDownload: Codable, Identifiable, Equatable {
 @MainActor @Observable
 final class DownloadStore {
     enum Phase: Equatable {
+        var isFailed: Bool { if case .failed = self { true } else { false } }
+        var isPreparingPhase: Bool { if case .preparing = self { true } else { false } }
+
         /// The server is preparing the file (0...1).
         case preparing(Double)
         /// The file is coming to the device (0...1).
@@ -39,7 +42,7 @@ final class DownloadStore {
     static let shared = DownloadStore()
 
     private(set) var saved: [SavedDownload] = []
-    private(set) var phases: [Int: Phase] = [:]
+    private(set) var phases: [Int: Phase] = [:] { didSet { phasesChanged(from: oldValue) } }
     private var pending: [Int: Pending] = [:]
     private var client: KinoraClient?
     private var poller: Task<Void, Never>?
@@ -243,6 +246,34 @@ final class DownloadStore {
     fileprivate func failed(_ id: Int, _ message: String) {
         guard pending[id] != nil else { return }
         phases[id] = .failed(message)
+    }
+
+    // MARK: - Live Activity
+
+    /// Counts what ended and shows the running downloads on the lock screen.
+    private func phasesChanged(from old: [Int: Phase]) {
+        for (id, was) in old where !was.isFailed {
+            switch phases[id] {
+            case .failed?: LiveActivities.downloadEnded(failed: true)
+            case nil where download(for: id) != nil: LiveActivities.downloadEnded(failed: false)
+            default: break
+            }
+        }
+        let running = phases.filter { !$0.value.isFailed }.sorted { $0.key < $1.key }
+        let front = running.first { if case .transferring = $0.value { true } else { false } } ?? running.first
+        let total = running.reduce(0.0) { sum, e in
+            switch e.value {
+            // Preparing on the server counts as the first half, the transfer as the second.
+            case .preparing(let f): sum + f * 0.5
+            case .transferring(let f): sum + 0.5 + f * 0.5
+            case .failed: sum
+            }
+        }
+        LiveActivities.downloadsChanged(
+            active: running.count,
+            title: front.map { pendingTitle($0.key) } ?? "",
+            fraction: running.isEmpty ? 1 : total / Double(running.count),
+            preparing: running.allSatisfy { $0.value.isPreparingPhase })
     }
 
     // MARK: - persistence

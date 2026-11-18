@@ -160,6 +160,9 @@ final class PlayerModel: NSObject {
         stopSession()
         #if os(iOS)
         HomeScenes.shared.stopped()
+        Handoff.stop()
+        LiveActivities.endParty()
+        if let code = party?.code { SharePlay.shared.left(room: code) }
         #endif
         countdown?.cancel()
         subtitleLoad?.cancel()
@@ -590,6 +593,9 @@ final class PlayerModel: NSObject {
         lastReport = .now
         let p = position, id = item.id, c = client
         guard p >= 1 || ended else { return }
+        #if os(iOS)
+        if !closed, !ended { Handoff.watching(id, title: title, at: p, party: party?.code) }
+        #endif
         Task {
             await ProgressQueue.report(id, position: p, ended: ended, client: c)
             #if os(iOS)
@@ -613,6 +619,17 @@ final class PlayerModel: NSObject {
         }
         if let nowPlayingArtwork, nowPlayingArtwork.id == item.id { info[MPMediaItemPropertyArtwork] = nowPlayingArtwork.art }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        refreshPartyActivity()
+    }
+
+    /// The room on the lock screen and in the Dynamic Island: title, people, where it is.
+    func refreshPartyActivity() {
+        #if os(iOS)
+        guard let party, !closed else { return }
+        LiveActivities.partyChanged(code: party.code, .init(
+            title: title, members: max(1, party.members.count), playing: player.rate > 0,
+            position: position, duration: duration, at: .now))
+        #endif
     }
 
     /// Still or backdrop of the title on the lock screen and in Control Center.

@@ -49,6 +49,8 @@ final class AppModel {
     var homePath = NavigationPath()
     /// A link that arrived before the user reached home (still launching, picking a profile).
     private var pendingLink: KinoraLink?
+    /// Where a pending play link starts (a handoff from another device); nil resumes.
+    private var pendingStart: Double?
 
     private let store = ServerStore.shared()
     private(set) var client: KinoraClient?
@@ -157,6 +159,7 @@ final class AppModel {
         me = nil
         #if os(iOS)
         DownloadStore.shared.attach(c)
+        Handoff.serverId = s.id
         #endif
     }
 
@@ -365,6 +368,12 @@ final class AppModel {
                     let resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
                     await enterParty(info.code, item: item, client: client, hostFrom: resume)
                 }
+                #if os(iOS)
+                // In a FaceTime call the system offers to SharePlay the new room.
+                if SharePlay.shared.callActive, let serverId = server?.id, player?.party?.code == info.code {
+                    await SharePlay.shared.share(code: info.code, serverId: serverId, title: player?.title ?? item.title)
+                }
+                #endif
             } catch {
                 partyError = error.localizedDescription
             }
@@ -445,14 +454,62 @@ final class AppModel {
 
     /// kinora://item/42, kinora://play/42 or kinora://party/ABC234; waits until the user is on home.
     func open(_ url: URL) {
+        #if os(iOS)
+        // kinora://downloads, from the downloads Live Activity.
+        if url.scheme == KinoraLink.scheme, url.host() == "downloads" {
+            if screen == .home, player == nil || !playerVisible { tab = .downloads }
+            return
+        }
+        #endif
         guard let link = KinoraLink(url: url) else { return }
         pendingLink = link
+        pendingStart = nil
         handlePendingLink()
     }
+
+    #if os(iOS)
+    /// Someone in the FaceTime call shared a watch party (or this device did): join its room.
+    func sharePlayRoom(_ a: WatchTogether) {
+        guard player?.party?.code != a.code else { return }
+        joinRoom(a.code, on: a.serverId,
+                 elsewhere: "Ez a SharePlay egy másik Kinora-szerver watch partyja, amelyre ezen az eszközön nem vagy bejelentkezve.")
+    }
+
+    /// A title handed off from the user's other device: same server, same second (or same room).
+    func continueHandoff(_ h: Handoff.Incoming) {
+        pendingLink = h.party.map(KinoraLink.party) ?? .play(h.itemId)
+        pendingStart = h.party == nil ? h.position : nil
+        goToServer(h.serverId, elsewhere: "Ez a cím egy másik Kinora-szerveren megy, amelyre ezen az eszközön nem vagy bejelentkezve.")
+    }
+
+    private func joinRoom(_ code: String, on serverId: String, elsewhere: String) {
+        pendingLink = .party(code)
+        pendingStart = nil
+        goToServer(serverId, elsewhere: elsewhere)
+    }
+
+    /// Runs the pending link on the given server: right away on the current one, after
+    /// switching on another saved one with a login, and not at all on an unknown one.
+    private func goToServer(_ serverId: String, elsewhere: String) {
+        if server?.id == serverId { return handlePendingLink() }
+        guard let saved = store.servers.first(where: { $0.id == serverId }),
+              store.token(for: saved.id) != nil else {
+            pendingLink = nil
+            partyError = elsewhere
+            return
+        }
+        player?.close()
+        Task {
+            do { try await open(saved) } catch { partyError = error.localizedDescription }
+        }
+    }
+    #endif
 
     func handlePendingLink() {
         guard screen == .home, let link = pendingLink, client != nil else { return }
         pendingLink = nil
+        let start = pendingStart
+        pendingStart = nil
         Task {
             switch link {
             case .item(let id):
@@ -466,7 +523,7 @@ final class AppModel {
                 guard let detail = try? await api({ try await $0.item(id) }) else { return }
                 // A series or season has nothing to play itself: show it instead.
                 if detail.item.kind == .movie || detail.item.kind == .episode {
-                    play(detail.item)
+                    play(detail.item, from: start)
                 } else {
                     tab = .home
                     homePath = NavigationPath([detail.item])
