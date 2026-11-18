@@ -178,11 +178,14 @@ func Decide(it *store.Item, req PlaybackRequest, audioLangs []string, maxKbps in
 
 	// H.264 and HEVC can be copied into HLS when the client plays them (HEVC goes in fMP4 segments).
 	remux := (vc == "h264" || vc == "hevc") && videoOK && !overBitrate && req.BurnSubIdx == nil && !hdrBlocked && req.Force != "transcode"
-	d.AudioCopy = audioCodec == "aac" && has(req.Caps.Audio, "aac")
+	// AAC, and AC-3 / E-AC-3 (keeps 5.1/Atmos instead of a stereo downmix) are copied when the client plays them.
+	surround := audioCodec == "ac3" || audioCodec == "eac3"
+	d.AudioCopy = (audioCodec == "aac" || surround) && has(req.Caps.Audio, audioCodec)
 	if remux {
 		d.Mode = "remux"
 		d.VideoCopy = true
-		d.FMP4 = vc == "hevc"
+		// HEVC and copied AC-3/E-AC-3 go in fMP4 segments: hls.js can't demux AC-3 from MPEG-TS.
+		d.FMP4 = vc == "hevc" || (d.AudioCopy && surround)
 		if !d.AudioCopy && audioCodec != "" {
 			why = append(why, fmt.Sprintf("hang átkódolása: %s → AAC", audioCodec))
 		}

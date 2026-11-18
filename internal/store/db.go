@@ -322,6 +322,7 @@ var SettingDefaults = map[string]string{
 	"tmdb_key":          "",
 	"metadata_lang":     "hu-HU",
 	"encoder":           "auto",
+	"video_codec":       "auto",
 	"public_url":        "",
 	"scan_interval_min": "15",
 	"quickconnect_enabled": "1",

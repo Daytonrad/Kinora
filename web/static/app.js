@@ -1990,11 +1990,12 @@ async function adminTranscode(body) {
     tdl('', T.result, h('span', { class: r.ok ? 'ok' : missing(r) ? 'off' : 'bad' }, r.ok ? T.works : missing(r) ? T.unavailable : T.encFailed)), tdl('', T.time, r.ok ? r.ms + ' ms' : ''), tdl('.small.muted', T.details, srv(r.error) || ''))), '.a-stack');
   const tbl = h('div', null, table(d.encoders || [], d.encoder_selected.name));
   const btn = h('button.btn', { onclick: async () => { btn.disabled = true; btn.textContent = T.hwTesting; try { const r = await POST('/api/admin/hwtest'); put(tbl, table(r.results, r.selected.name)); toast(T.selectedEnc + ': ' + r.selected.label); } finally { btn.disabled = false; btn.textContent = T.hwTest; } } }, T.hwTest);
-  const encOpts = [['auto', T.encAuto], ...(d.encoders || []).filter(e => e.ok).map(e => [e.name, srv(e.label)])];
+  const encOpts = [['auto', T.encAuto], ...(d.encoders || []).filter(e => e.ok && (e.codec || 'h264') === 'h264').map(e => [e.name, srv(e.label)])];
+  const codecOpts = [['auto', T.codecAuto], ['h264', T.codecH264]];
   put(body, aHead(T.aTranscode, T.aLedeTranscode),
-    aSplit(T.encSetting, T.encSettingHint,
+    aSplit(T.encSetting, T.encSettingHint + ' ' + T.codecSettingHint,
       h('dl.side-info.a-facts', null, h('dt', null, T.selectedEnc), h('dd', null, srv(d.encoder_selected.label)), h('dt', null, T.tonemap), h('dd', null, d.tonemap ? T.yes : T.no)),
-      settingsForm(s.values, s.env, [['encoder', T.encSetting, 'select', encOpts]], () => adminTranscode(body))),
+      settingsForm(s.values, s.env, [['encoder', T.encSetting, 'select', encOpts], ['video_codec', T.codecSetting, 'select', codecOpts]], () => adminTranscode(body))),
     await segmentsPanel(s),
     aSec(T.encTest, T.encTestHint, btn, tbl));
 }

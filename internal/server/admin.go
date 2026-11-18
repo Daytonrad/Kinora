@@ -150,7 +150,7 @@ func (s *Server) handleInviteDelete(w http.ResponseWriter, r *http.Request, c *r
 
 // ------------------------------------------------------------------ settings
 
-var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder",
+var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder", "video_codec",
 	"quickconnect_enabled", "discovery_enabled", "brand_accent", "intro_detection", "intro_window_min"}
 
 // SettingEnv maps settings to the environment variables that can force them.
@@ -161,6 +161,7 @@ var SettingEnv = map[string]string{
 	"tmdb_key":          "KINORA_TMDB_KEY",
 	"metadata_lang":     "KINORA_METADATA_LANG",
 	"encoder":           "KINORA_ENCODER",
+	"video_codec":       "KINORA_VIDEO_CODEC",
 	"quickconnect_enabled": "KINORA_QUICKCONNECT",
 	"discovery_enabled":    "KINORA_DISCOVERY",
 	"brand_accent":         "KINORA_ACCENT",

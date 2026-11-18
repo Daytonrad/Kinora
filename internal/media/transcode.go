@@ -115,9 +115,11 @@ func BuildHLSArgs(sp HLSSpec, dir string) []string {
 	args = append(args, "-i", sp.Item.Path)
 
 	opts := EncodeOpts{Bitrate: d.Bitrate, Width: d.Width, ToneMap: d.ToneMap, GOP: true}
+	// HEVC/AV1 output can't go in MPEG-TS for Apple players / hls.js either.
+	fmp4 := d.FMP4 || (!d.VideoCopy && sp.Encoder.Codec != "" && sp.Encoder.Codec != "h264")
 	if d.VideoCopy {
 		args = append(args, "-map", "0:v:0", "-c:v", "copy")
-		if d.FMP4 {
+		if codecName(sp.Item.VideoCodec) == "hevc" {
 			args = append(args, "-tag:v", "hvc1") // Apple players only accept the hvc1 sample entry
 		}
 	} else if d.BurnSubIdx != nil {
@@ -141,7 +143,7 @@ func BuildHLSArgs(sp HLSSpec, dir string) []string {
 		"-hls_flags", "independent_segments+temp_file")
 	// Output paths use forward slashes: ffmpeg's HLS muxer finds the playlist folder by the last '/',
 	// so with Windows backslashes it wrote init.mp4 into the working directory instead of the session.
-	if d.FMP4 {
+	if fmp4 {
 		args = append(args, "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4",
 			"-hls_segment_filename", filepath.ToSlash(filepath.Join(dir, "seg%05d.m4s")))
 	} else {

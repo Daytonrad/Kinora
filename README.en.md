@@ -57,6 +57,7 @@ All settings can also be provided through environment variables. When set this w
 | `KINORA_TMDB_KEY` | — | TMDB API key (v3 key or v4 token) |
 | `KINORA_METADATA_LANG` | `hu-HU` | Default metadata language (clients get titles in their own interface language when it differs) |
 | `KINORA_ENCODER` | `auto` | `auto`, `h264_nvenc`, `h264_qsv`, `h264_vaapi`, `libx264`, etc. |
+| `KINORA_VIDEO_CODEC` | `auto` | `auto`: HEVC/AV1 output when the client reports it and the hardware encoder works; `h264`: H.264 only |
 | `KINORA_VAAPI_DEVICE` | `/dev/dri/renderD128` | VA-API device |
 | `KINORA_SCAN_INTERVAL_MIN` | `15` | Periodic scan interval in minutes (`0` = disabled) |
 | `KINORA_SERVER_NAME` | `Kinora` | Server name |
@@ -87,7 +88,7 @@ Both images are available for amd64 and arm64 (multi-architecture manifests). If
 - **Intel / AMD (VA-API, Quick Sync):** AMD GPUs require the `latest-amd` image. Uncomment `devices: ["/dev/dri:/dev/dri"]`. The entrypoint automatically joins the group that owns `/dev/dri/*` (the render/video GID varies by system), so the `group_add` line can be omitted.
 - **NVIDIA:** Install the NVIDIA driver and [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/), then run:
   `docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d`
-- Under **Admin → Transcoding**, Kinora actually encodes a one-second test clip with each encoder and reports which ones work, how long they take, and any error message. Automatic selection order: configured encoder if it works → first working hardware encoder → software `libx264`.
+- Under **Admin → Transcoding**, Kinora actually encodes a one-second test clip with each encoder and reports which ones work, how long they take, and any error message. Automatic selection order: configured encoder if it works → first working hardware encoder → software `libx264`. With `KINORA_VIDEO_CODEC=auto`, the same hardware's HEVC (or AV1) encoder is used instead when the client reports the codec and that encoder passed the self-test; HEVC/AV1 go in fMP4 HLS segments.
 
 ### NAS tips
 

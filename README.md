@@ -60,6 +60,7 @@ Minden beállítás megadható környezeti változóval is. Ilyenkor az admin fe
 | `KINORA_TMDB_KEY` | – | TMDB API kulcs (v3 kulcs vagy v4 token) |
 | `KINORA_METADATA_LANG` | `hu-HU` | alapértelmezett metaadat-nyelv (a kliensek a saját felületi nyelvükön kapják a címeket, ha az eltér) |
 | `KINORA_ENCODER` | `auto` | `auto`, `h264_nvenc`, `h264_qsv`, `h264_vaapi`, `libx264` … |
+| `KINORA_VIDEO_CODEC` | `auto` | `auto`: HEVC/AV1 kimenet, ha a kliens jelzi és a hardveres encoder működik; `h264`: csak H.264 |
 | `KINORA_VAAPI_DEVICE` | `/dev/dri/renderD128` | VA-API eszköz |
 | `KINORA_SCAN_INTERVAL_MIN` | `15` | periodikus szkennelés (perc, 0 = ki) |
 | `KINORA_SERVER_NAME` | `Kinora` | szerver neve |
@@ -94,7 +95,8 @@ Mindkettő amd64-re és arm64-re is elérhető (multi-arch manifest). Ha nem tud
   `docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d`
 - Az **Admin → Átkódolás** oldalon a Kinora minden encoderrel *ténylegesen* lekódol egy 1 másodperces tesztklipet, és megmutatja,
   melyik működik, mennyi idő alatt, és ha nem, mi a hibaüzenet. Az automatikus választás sorrendje: a beállított encoder, ha működik → az első működő
-  hardveres encoder → szoftveres libx264.
+  hardveres encoder → szoftveres libx264. `KINORA_VIDEO_CODEC=auto` mellett ugyanannak a hardvernek a HEVC (vagy AV1) encodere megy helyette,
+  ha a kliens jelzi a kodeket és az encoder átment a próbán; a HEVC/AV1 fMP4 HLS-szegmensekbe kerül.
 
 ### NAS tippek
 

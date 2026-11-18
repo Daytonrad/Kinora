@@ -10,11 +10,21 @@ import (
 	"time"
 )
 
-// Encoder is an H.264 encoder with the filter chain it needs.
+// Encoder is a video encoder (H.264, HEVC or AV1) with the filter chain it needs.
 type Encoder struct {
 	Name     string `json:"name"`
 	Label    string `json:"label"`
 	Hardware bool   `json:"hardware"`
+	Codec    string `json:"codec"` // h264 | hevc | av1 (client caps names)
+}
+
+// Family is the hardware backend shared by an encoder's codec variants
+// (h264_nvenc, hevc_nvenc, av1_nvenc → nvenc).
+func (e Encoder) Family() string {
+	if i := strings.IndexByte(e.Name, '_'); i >= 0 {
+		return e.Name[i+1:]
+	}
+	return e.Name
 }
 
 // EncoderResult is the outcome of a real 1 s test encode.
@@ -28,15 +38,29 @@ type EncoderResult struct {
 // VAAPIDevice is the render node used by h264_vaapi (KINORA_VAAPI_DEVICE).
 var VAAPIDevice = "/dev/dri/renderD128"
 
-// AllEncoders in preference order (hardware first).
+// AllEncoders in preference order (hardware first). The H.264 ones are the
+// baseline every client plays; HEVC/AV1 variants of the same hardware are used
+// on top when the client reports the codec. libx264 must stay last.
 var AllEncoders = []Encoder{
-	{"h264_nvenc", "NVIDIA NVENC", true},
-	{"h264_qsv", "Intel Quick Sync (QSV)", true},
-	{"h264_vaapi", "VA-API (Intel/AMD)", true},
-	{"h264_videotoolbox", "Apple VideoToolbox", true},
-	{"h264_v4l2m2m", "V4L2 M2M (Raspberry Pi / ARM)", true},
-	{"libx264", "Szoftveres (libx264, veryfast)", false},
+	{"h264_nvenc", "NVIDIA NVENC", true, "h264"},
+	{"h264_qsv", "Intel Quick Sync (QSV)", true, "h264"},
+	{"h264_vaapi", "VA-API (Intel/AMD)", true, "h264"},
+	{"h264_videotoolbox", "Apple VideoToolbox", true, "h264"},
+	{"h264_v4l2m2m", "V4L2 M2M (Raspberry Pi / ARM)", true, "h264"},
+	{"hevc_nvenc", "NVIDIA NVENC (HEVC)", true, "hevc"},
+	{"hevc_qsv", "Intel Quick Sync (HEVC)", true, "hevc"},
+	{"hevc_vaapi", "VA-API (HEVC)", true, "hevc"},
+	{"hevc_videotoolbox", "Apple VideoToolbox (HEVC)", true, "hevc"},
+	{"av1_nvenc", "NVIDIA NVENC (AV1)", true, "av1"},
+	{"av1_qsv", "Intel Quick Sync (AV1)", true, "av1"},
+	{"av1_vaapi", "VA-API (AV1)", true, "av1"},
+	{"libx264", "Szoftveres (libx264, veryfast)", false, "h264"},
 }
+
+// codecPreference is the order efficient codecs are tried in. HEVC comes before
+// AV1: browsers may report AV1 with software-only decoding (dav1d), which can
+// stutter on weak devices, while HEVC support practically means hardware decode.
+var codecPreference = []string{"hevc", "av1"}
 
 // EncodeOpts parameterizes a video encode.
 type EncodeOpts struct {
@@ -49,10 +73,10 @@ type EncodeOpts struct {
 
 // InitArgs are global args placed before -i (hardware device setup).
 func (e Encoder) InitArgs() []string {
-	switch e.Name {
-	case "h264_qsv":
+	switch e.Family() {
+	case "qsv":
 		return []string{"-init_hw_device", "qsv=hw", "-filter_hw_device", "hw"}
-	case "h264_vaapi":
+	case "vaapi":
 		return []string{"-init_hw_device", "vaapi=va:" + VAAPIDevice, "-filter_hw_device", "va"}
 	}
 	return nil
@@ -68,10 +92,10 @@ func (e Encoder) Filter(o EncodeOpts) string {
 	if o.Width > 0 {
 		f = append(f, fmt.Sprintf("scale=w='min(%d,iw)':h=-2", o.Width))
 	}
-	switch e.Name {
-	case "h264_qsv":
+	switch e.Family() {
+	case "qsv":
 		f = append(f, "format=nv12", "hwupload=extra_hw_frames=64")
-	case "h264_vaapi":
+	case "vaapi":
 		f = append(f, "format=nv12", "hwupload")
 	default:
 		f = append(f, "format=yuv420p")
@@ -80,31 +104,57 @@ func (e Encoder) Filter(o EncodeOpts) string {
 }
 
 // Args are the codec arguments (after the filter).
+//
+// Rate control is quality based with the bitrate as a ceiling: the target
+// bitrate is the client/profile limit, so it is used as -maxrate and the
+// encoder spends less on easy scenes instead of padding every segment to it.
 func (e Encoder) Args(o EncodeOpts) []string {
 	br := o.Bitrate
 	if br <= 0 {
 		br = 4_000_000
 	}
-	rate := []string{"-b:v", fmt.Sprint(br), "-maxrate", fmt.Sprint(br), "-bufsize", fmt.Sprint(br * 2)}
+	ceiling := []string{"-maxrate", fmt.Sprint(br), "-bufsize", fmt.Sprint(br * 2)}
+	// VBR for encoders without a capped constant-quality mode: average at 3/4 of the ceiling.
+	vbr := append([]string{"-b:v", fmt.Sprint(br / 4 * 3)}, ceiling...)
 	var a []string
 	switch e.Name {
 	case "libx264":
-		a = []string{"-c:v", "libx264", "-preset", "veryfast", "-profile:v", "high", "-level", "4.1"}
+		a = []string{"-c:v", "libx264", "-preset", "veryfast", "-profile:v", "high", "-level", "4.1", "-crf", "21"}
+		a = append(a, ceiling...)
 		if o.GOP {
 			a = append(a, "-sc_threshold", "0")
 		}
 	case "h264_nvenc":
-		a = []string{"-c:v", "h264_nvenc", "-preset", "p4", "-profile:v", "high"}
+		a = []string{"-c:v", "h264_nvenc", "-preset", "p5", "-tune", "hq", "-profile:v", "high", "-rc", "vbr", "-cq", "23", "-b:v", "0"}
+		a = append(a, ceiling...)
+	case "hevc_nvenc":
+		a = []string{"-c:v", "hevc_nvenc", "-preset", "p5", "-tune", "hq", "-profile:v", "main", "-rc", "vbr", "-cq", "25", "-b:v", "0"}
+		a = append(a, ceiling...)
+	case "av1_nvenc":
+		a = append([]string{"-c:v", "av1_nvenc", "-preset", "p5", "-tune", "hq", "-rc", "vbr"}, vbr...)
 	case "h264_qsv":
-		a = []string{"-c:v", "h264_qsv", "-preset", "veryfast", "-profile:v", "high"}
+		a = append([]string{"-c:v", "h264_qsv", "-preset", "veryfast", "-profile:v", "high"}, vbr...)
+	case "hevc_qsv":
+		a = append([]string{"-c:v", "hevc_qsv", "-preset", "veryfast", "-profile:v", "main"}, vbr...)
+	case "av1_qsv":
+		a = append([]string{"-c:v", "av1_qsv", "-preset", "veryfast"}, vbr...)
 	case "h264_vaapi":
-		a = []string{"-c:v", "h264_vaapi", "-profile:v", "high"}
+		a = append([]string{"-c:v", "h264_vaapi", "-profile:v", "high", "-rc_mode", "VBR"}, vbr...)
+	case "hevc_vaapi":
+		a = append([]string{"-c:v", "hevc_vaapi", "-profile:v", "main", "-rc_mode", "VBR"}, vbr...)
+	case "av1_vaapi":
+		a = append([]string{"-c:v", "av1_vaapi", "-rc_mode", "VBR"}, vbr...)
 	case "h264_videotoolbox":
-		a = []string{"-c:v", "h264_videotoolbox", "-profile:v", "high"}
+		a = append([]string{"-c:v", "h264_videotoolbox", "-profile:v", "high", "-realtime", "1"}, vbr...)
+	case "hevc_videotoolbox":
+		a = append([]string{"-c:v", "hevc_videotoolbox", "-profile:v", "main", "-realtime", "1"}, vbr...)
 	case "h264_v4l2m2m":
-		a = []string{"-c:v", "h264_v4l2m2m"}
+		a = []string{"-c:v", "h264_v4l2m2m", "-b:v", fmt.Sprint(br)}
+		a = append(a, ceiling...)
 	}
-	a = append(a, rate...)
+	if e.Codec == "hevc" {
+		a = append(a, "-tag:v", "hvc1") // Apple players only accept the hvc1 sample entry
+	}
 	if o.GOP {
 		a = append(a, "-g", "48", "-keyint_min", "48", "-force_key_frames", "expr:gte(t,n_forced*4)")
 	}
@@ -149,7 +199,7 @@ func (e *Encoders) SelfTest(ctx context.Context) []EncoderResult {
 			results[i].Error = "az ffmpeg nem tartalmazza ezt az encodert"
 			continue
 		}
-		if enc.Name == "h264_vaapi" {
+		if enc.Family() == "vaapi" {
 			if _, err := os.Stat(VAAPIDevice); err != nil {
 				results[i].Error = VAAPIDevice + " nem elérhető (Dockerben: devices: /dev/dri)"
 				continue
@@ -199,38 +249,74 @@ func testEncoder(ctx context.Context, enc Encoder) EncoderResult {
 	return r
 }
 
-// Pick returns the encoder to use: configured one if it works, otherwise the
-// first working hardware encoder, otherwise libx264.
+// Pick returns the H.264 encoder to use: configured one if it works, otherwise
+// the first working hardware encoder, otherwise libx264. A configured HEVC/AV1
+// encoder selects its hardware family's H.264 variant here.
 func (e *Encoders) Pick(configured string) Encoder {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	okNames := map[string]bool{}
+	return e.pickH264(configured)
+}
+
+func (e *Encoders) okNames() map[string]bool {
+	ok := map[string]bool{}
 	for _, r := range e.results {
 		if r.OK {
-			okNames[r.Name] = true
+			ok[r.Name] = true
 		}
 	}
-	byName := func(n string) (Encoder, bool) {
-		for _, enc := range AllEncoders {
-			if enc.Name == n {
-				return enc, true
+	return ok
+}
+
+func encoderByName(n string) (Encoder, bool) {
+	for _, enc := range AllEncoders {
+		if enc.Name == n {
+			return enc, true
+		}
+	}
+	return Encoder{}, false
+}
+
+func (e *Encoders) pickH264(configured string) Encoder {
+	ok := e.okNames()
+	if configured != "" && configured != "auto" {
+		if c, found := encoderByName(configured); found {
+			if c.Codec != "h264" {
+				c, found = encoderByName("h264_" + c.Family())
+			}
+			if found && ok[c.Name] {
+				return c
 			}
 		}
-		return Encoder{}, false
 	}
-	if configured != "" && configured != "auto" && okNames[configured] {
-		enc, _ := byName(configured)
-		return enc
-	}
-	hw := []Encoder{}
 	for _, enc := range AllEncoders {
-		if enc.Hardware && okNames[enc.Name] {
-			hw = append(hw, enc)
+		if enc.Hardware && enc.Codec == "h264" && ok[enc.Name] {
+			return enc
 		}
 	}
-	if len(hw) > 0 {
-		return hw[0]
-	}
-	enc, _ := byName("libx264")
+	enc, _ := encoderByName("libx264")
 	return enc
+}
+
+// PickFor returns the most efficient encoder for a client: the HEVC or AV1
+// variant of the chosen H.264 encoder's hardware when it passed the self-test
+// and the client reported the codec, otherwise the H.264 encoder itself.
+// With codecMode "h264" (setting video_codec) only H.264 is produced.
+func (e *Encoders) PickFor(configured, codecMode string, caps Caps) Encoder {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	base := e.pickH264(configured)
+	if codecMode == "h264" || !base.Hardware {
+		return base
+	}
+	ok := e.okNames()
+	for _, codec := range codecPreference {
+		if !has(caps.Video, codec) {
+			continue
+		}
+		if enc, found := encoderByName(codec + "_" + base.Family()); found && ok[enc.Name] {
+			return enc
+		}
+	}
+	return base
 }

@@ -122,11 +122,11 @@ var apple = Caps{Video: []string{"h264", "hevc"}, Audio: []string{"aac", "ac3", 
 
 func TestDecideHEVCRemux(t *testing.T) {
 	d := Decide(item("mkv", "hevc", "eac3", 12_000_000), PlaybackRequest{Caps: apple}, nil, 0, true)
-	if d.Mode != "remux" || !d.VideoCopy || !d.FMP4 || d.AudioCopy {
-		t.Fatalf("mkv hevc on an hevc client → fMP4 remux, got %+v", d)
+	if d.Mode != "remux" || !d.VideoCopy || !d.FMP4 || !d.AudioCopy {
+		t.Fatalf("mkv hevc+eac3 on an hevc/eac3 client → fMP4 remux with audio copy, got %+v", d)
 	}
-	args := strings.Join(BuildHLSArgs(HLSSpec{Item: &store.Item{Path: "/x.mkv"}, Decision: d}, "/tmp/s"), " ")
-	for _, want := range []string{"-c:v copy", "-tag:v hvc1", "-hls_segment_type fmp4", "seg%05d.m4s"} {
+	args := strings.Join(BuildHLSArgs(HLSSpec{Item: &store.Item{Path: "/x.mkv", VideoCodec: "hevc"}, Decision: d}, "/tmp/s"), " ")
+	for _, want := range []string{"-c:v copy", "-tag:v hvc1", "-c:a copy", "-hls_segment_type fmp4", "seg%05d.m4s"} {
 		if !strings.Contains(args, want) {
 			t.Fatalf("missing %q in %s", want, args)
 		}
@@ -154,5 +154,77 @@ func TestDecideHEVCRemux(t *testing.T) {
 	}
 	if d := Decide(item("mkv", "hevc", "aac", 12_000_000), PlaybackRequest{Caps: chrome}, nil, 0, true); d.Mode != "transcode" {
 		t.Fatalf("no hevc caps → transcode, got %+v", d)
+	}
+}
+
+func TestSurroundAudioCopy(t *testing.T) {
+	// h264 + eac3 on a client with eac3: audio copied, fMP4 (hls.js can't take AC-3 from TS), no hvc1 tag
+	d := Decide(item("mkv", "h264", "eac3", 4_000_000), PlaybackRequest{Caps: apple}, nil, 0, true)
+	if d.Mode != "remux" || !d.AudioCopy || !d.FMP4 {
+		t.Fatalf("eac3 copy: %+v", d)
+	}
+	a := strings.Join(BuildHLSArgs(HLSSpec{Item: &store.Item{Path: "/x.mkv", VideoCodec: "h264"}, Decision: d}, "/tmp/s"), " ")
+	if !strings.Contains(a, "-c:a copy") || !strings.Contains(a, "fmp4") || strings.Contains(a, "hvc1") {
+		t.Fatalf("eac3 copy args: %s", a)
+	}
+	// a client without eac3 gets AAC on MPEG-TS
+	d = Decide(item("mkv", "h264", "eac3", 4_000_000), PlaybackRequest{Caps: chrome}, nil, 0, true)
+	if d.AudioCopy || d.FMP4 {
+		t.Fatalf("eac3 without caps: %+v", d)
+	}
+}
+
+func testEncoders(ok ...string) *Encoders {
+	e := NewEncoders()
+	for _, enc := range AllEncoders {
+		r := EncoderResult{Encoder: enc}
+		for _, n := range ok {
+			r.OK = r.OK || n == enc.Name
+		}
+		e.results = append(e.results, r)
+	}
+	return e
+}
+
+func TestPickFor(t *testing.T) {
+	e := testEncoders("h264_nvenc", "hevc_nvenc", "av1_nvenc", "h264_qsv", "libx264")
+	cases := []struct {
+		configured, mode string
+		caps             Caps
+		want             string
+	}{
+		{"auto", "auto", apple, "hevc_nvenc"},
+		{"auto", "auto", Caps{Video: []string{"h264", "av1"}}, "av1_nvenc"},
+		{"auto", "auto", chrome, "av1_nvenc"}, // chrome reports av1, no hevc
+		{"auto", "auto", Caps{Video: []string{"h264"}}, "h264_nvenc"},
+		{"auto", "h264", apple, "h264_nvenc"},
+		{"h264_qsv", "auto", apple, "h264_qsv"}, // hevc_qsv failed the self-test
+		{"libx264", "auto", apple, "libx264"},   // no software HEVC/AV1
+		{"hevc_nvenc", "auto", Caps{Video: []string{"h264"}}, "h264_nvenc"},
+	}
+	for _, c := range cases {
+		if got := e.PickFor(c.configured, c.mode, c.caps).Name; got != c.want {
+			t.Errorf("PickFor(%q,%q,%v)=%s want %s", c.configured, c.mode, c.caps.Video, got, c.want)
+		}
+	}
+	if got := e.Pick("hevc_nvenc").Name; got != "h264_nvenc" {
+		t.Errorf("Pick(hevc_nvenc)=%s want the family's H.264", got)
+	}
+}
+
+func TestHEVCTranscodeArgs(t *testing.T) {
+	it := item("mkv", "mpeg4", "aac", 6_000_000)
+	d := Decide(it, PlaybackRequest{Caps: apple}, nil, 0, true)
+	enc, _ := encoderByName("hevc_nvenc")
+	a := strings.Join(BuildHLSArgs(HLSSpec{Item: it, Decision: d, Encoder: enc}, "/tmp/s"), " ")
+	for _, want := range []string{"-c:v hevc_nvenc", "-tag:v hvc1", "-cq 25", "-maxrate", "-hls_segment_type fmp4"} {
+		if !strings.Contains(a, want) {
+			t.Fatalf("missing %q in %s", want, a)
+		}
+	}
+	x, _ := encoderByName("libx264")
+	a = strings.Join(BuildHLSArgs(HLSSpec{Item: it, Decision: d, Encoder: x}, "/tmp/s"), " ")
+	if !strings.Contains(a, "-crf 21") || strings.Contains(a, "fmp4") || strings.Contains(a, "-b:v") {
+		t.Fatalf("libx264 args: %s", a)
 	}
 }

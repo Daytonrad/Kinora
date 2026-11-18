@@ -99,7 +99,7 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request, c *reqCt
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
-	enc := s.Encoders.Pick(s.encoderSetting())
+	enc := s.Encoders.PickFor(s.encoderSetting(), s.st.Setting("video_codec"), req.Caps)
 	sess, err := s.Media.Start(r.Context(), media.HLSSpec{Item: it, UserID: c.User.ID, Decision: d, Start: req.Start, Encoder: enc})
 	if err != nil {
 		s.log.Warn("playback failed", "item", it.Title, "mode", d.Mode, "err", err)
