@@ -369,6 +369,11 @@ function shell(active, ...content) {
       me.user.is_admin && h('a' + (active === 'admin' ? '.on' : ''), { href: '#/admin' }, T.admin)),
     searchField(searchInput, 'search-box'),
     h('div.menu', null, avatarBtn, menuPop));
+  if (active === 'home') { // over the hero the bar is see-through; once scrolled it gets a fill so rows don't show through it
+    const onScroll = () => top.classList.toggle('solid', window.scrollY > 24);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onCleanup(() => window.removeEventListener('scroll', onScroll));
+  }
   const main = h('main', null, content);
   root.append(top, main);
   (state.libs ? Promise.resolve(state.libs) : GET('/api/libraries').then(l => (state.libs = l))).then(libs => {
@@ -883,7 +888,7 @@ async function viewItem(id) {
         playTarget && h('button.btn.primary.big', { onclick: () => go('#/play/' + playTarget.id) }, icon('play'), playLabel),
         playedBtn, favBtn, hideBtn, stars, moreBtn)))));
   main.append(h('div.below', null,
-    h('section', null, h('h2', null, T.data), sideInfo),
+    sideInfo.childElementCount > 0 && h('section', null, h('h2', null, T.data), sideInfo), // a series without metadata has nothing to list
     tagBox && h('section', null, h('h2', null, T.tags), tagBox)));
 
   if (it.kind === 'series' && d.seasons) {
@@ -1801,12 +1806,13 @@ async function adminDash(body) {
   const render = async () => {
     const d = await GET('/api/admin/dashboard');
     const up = d.uptime_sec, uptime = up < 60 ? T.uptimeUnder1 : up < 3600 ? T.min(Math.floor(up / 60)) : up > 86400 ? T.uptimeDH(Math.floor(up / 86400), Math.floor(up / 3600) % 24) : T.uptimeHM(Math.floor(up / 3600), Math.floor(up / 60) % 60);
-    const stat = (v, l) => h('div.stat', null, h('b', null, v), h('span', null, l));
-    const group = (title, ...stats) => h('div.a-ledger-g', null, h('h2.a-eyebrow', null, title), h('div.a-stats', null, stats));
+    const stat = (v, l) => h('div.stat', null, h('b', { title: String(v) }, v), h('span', null, l));
+    const group = (title, stats, foot) => h('div.a-ledger-g', null, h('h2.a-eyebrow', null, title), h('div.a-stats', null, stats), foot);
     put(body, aHead(T.aDash, T.aLedeDash),
       h('div.a-ledger', null,
-        group(T.aGroupLibrary, stat(d.library.movies, T.statMovies), stat(d.library.series, T.statSeries), stat(d.library.episodes, T.statEpisodes), stat(fmtBytes(d.library.bytes), T.size)),
-        group(T.aServer, stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime), stat(d.version, T.version))),
+        group(T.aGroupLibrary, [stat(d.library.movies, T.statMovies), stat(d.library.series, T.statSeries), stat(d.library.episodes, T.statEpisodes), stat(fmtBytes(d.library.bytes), T.size)]),
+        group(T.aServer, [stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime)],
+          h('p.a-ver', null, T.version + ' ', h('span', null, d.version)))),
       d.library.missing > 0 && h('p.a-warn', null, T.missingFiles(d.library.missing)),
       aSec(T.activeTranscodes, null, null, d.transcodes.length
         ? aTable([T.title, T.aColMode, T.encoder, T.time], d.transcodes.map(s => h('tr', null, tdl('', T.title, h('b', null, s.title)), tdl('', T.aColMode, s.mode), tdl('.mono.small', T.encoder, s.encoder), tdl('', T.time, fmtTime(s.seconds)))), '.a-stack')
