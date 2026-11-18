@@ -1075,11 +1075,11 @@ async function viewAccount() {
 }
 
 function deviceRow(d, onChange, showUser) {
-  return h('div.entry', null, h('div', null,
-    h('div', null, h('strong', null, d.name || T.platforms[d.platform] || d.platform), d.current && h('span.muted', null, ' · ' + T.thisDevice)),
+  return h('div.entry.device', null, h('div', null,
+    h('div', null, h('strong', null, d.name || T.platforms[d.platform] || d.platform), d.current && ['\u00a0', h('span.badge.amber', null, T.thisDevice)]),
     h('p.muted.small', null, [showUser && d.username, T.platforms[d.platform] || d.platform, d.app_version && 'v' + d.app_version, d.ip,
-      T.lastActive + ': ' + ago(Date.now() / 1000 - d.last_seen)].filter(Boolean).join(' · ')),
-    !d.current && h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/devices/' + d.id); toast(T.deleted); onChange(); } }, T.signOutDevice)));
+      T.lastActive + ': ' + ago(Date.now() / 1000 - d.last_seen)].filter(Boolean).join(' · '))),
+    !d.current && h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/devices/' + d.id); toast(T.deleted); onChange(); } }, T.signOutDevice));
 }
 
 function devicesPanel() {
@@ -1687,27 +1687,31 @@ async function viewAdmin(tab) {
   if (!state.me.user.is_admin) return go('#/home');
   const main = shell('admin');
   const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['languages', T.aLangs], ['settings', T.aSettings]];
+  const label = Object.fromEntries(tabs);
+  const groups = [[T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], [T.aGroupAccess, ['users', 'invites', 'devices', 'connect']], [T.aGroupSystem, ['languages', 'settings']]];
   const body = h('div');
   main.append(h('div.page-head', null, h('h1', null, T.admin)), h('div.admin', null,
-    h('nav.admin-nav', { 'aria-label': T.admin }, tabs.map(([k, l]) => h('a' + (k === tab ? '.on' : ''), { href: '#/admin/' + k }, l))), body));
+    h('nav.admin-nav', { 'aria-label': T.admin }, groups.map(([g, ks]) => [h('div.admin-nav-h', { 'aria-hidden': 'true' }, g),
+      ks.map(k => h('a' + (k === tab ? '.on' : ''), { href: '#/admin/' + k, 'aria-current': k === tab && 'page' }, label[k]))])), body));
   const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, languages: adminLangs, settings: adminSettings }[tab];
   if (fn) await fn(body);
 }
+
+const emptyNote = (title, hint, action) => h('div.empty-note', null, h('p', null, title), hint && h('p.muted.small', null, hint), action);
 
 async function adminDash(body) {
   let t;
   const render = async () => {
     const d = await GET('/api/admin/dashboard');
-    const up = d.uptime_sec, uptime = up > 86400 ? T.uptimeDH(Math.floor(up / 86400), Math.floor(up / 3600) % 24) : T.uptimeHM(Math.floor(up / 3600), Math.floor(up / 60) % 60);
+    const up = d.uptime_sec, uptime = up < 60 ? T.uptimeUnder1 : up < 3600 ? T.min(Math.floor(up / 60)) : up > 86400 ? T.uptimeDH(Math.floor(up / 86400), Math.floor(up / 3600) % 24) : T.uptimeHM(Math.floor(up / 3600), Math.floor(up / 60) % 60);
     const stat = (v, l) => h('div.stat', null, h('b', null, v), h('span', null, l));
     put(body, 
-      h('div.ledger', null, stat(d.library.movies, T.statMovies), stat(d.library.series, T.statSeries), stat(d.library.episodes, T.statEpisodes), stat(fmtBytes(d.library.bytes), T.size),
-        stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime), stat(d.version, T.version)),
+      h('div.ledger', null, h('div.ledger-group', null, stat(d.library.movies, T.statMovies), stat(d.library.series, T.statSeries), stat(d.library.episodes, T.statEpisodes), stat(fmtBytes(d.library.bytes), T.size)),
+        h('div.ledger-group', null, stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime), stat(d.version, T.version))),
       d.library.missing > 0 && h('p.muted', null, T.missingFiles(d.library.missing)),
-      h('div.panel', null, h('h2', null, T.activeTranscodes), d.transcodes.length ? h('table.tbl', null, h('tbody', null, d.transcodes.map(s => h('tr', null, h('td', null, s.title), h('td', null, s.mode), h('td', null, s.encoder), h('td', null, fmtTime(s.seconds)))))) : h('p.muted', null, T.none)),
+      h('div.panel', null, h('h2', null, T.activeTranscodes), d.transcodes.length ? h('table.tbl', null, h('tbody', null, d.transcodes.map(s => h('tr', null, h('td', null, s.title), h('td', null, s.mode), h('td', null, s.encoder), h('td', null, fmtTime(s.seconds)))))) : h('p.muted', null, T.noActiveTranscodes)),
       h('div.panel', null, h('h2', null, T.scans), scanTable(d.scans)),
-      h('div.panel', null, h('h2', null, T.selectedEnc), h('p', null, srv(d.encoder_selected.label)), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))),
-      h('div.panel', null, h('h2', null, T.backupTitle), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
+      h('div.panel', null, h('h2', null, T.selectedEnc), h('p', null, srv(d.encoder_selected.label)), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))));
     t = setTimeout(render, 5000);
   };
   onCleanup(() => clearTimeout(t));
@@ -1732,14 +1736,14 @@ async function adminLibs(body) {
       libs.length ? h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.libName), h('th', null, T.libPath), h('th', null, T.libKind), h('th', null, T.lastScan), h('th', null, ''))),
         h('tbody', null, libs.map(l => {
           const s = scanOf(l.id);
-          return h('tr', null, h('td', null, h('b', null, l.name), h('div.small.muted', null, T.titlesN(l.count))), h('td.mono', null, l.path), h('td', null, T.kinds[l.kind]),
+          return h('tr', null, h('td', null, h('b', null, l.name), h('div.small.muted', null, T.titlesN(l.count))), h('td.mono.path', null, l.path), h('td', null, T.kinds[l.kind]),
             h('td', { class: 'td-progress' }, s && s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, h('div.bar', null, h('i', { style: { width: (s.total ? s.done / s.total * 100 : 5) + '%' } })))
               : s && s.error ? h('span.bad', null, srv(s.error)) : l.last_scan_at ? ago(Date.now() / 1000 - l.last_scan_at) : T.never,
               s && s.errors ? h('div.small.bad', { title: srv(s.last_error) }, `${T.badFiles(s.errors)}: ${srv(s.last_error)}`) : null),
-            h('td', null, h('div.row-gap', null, h('button.btn', { onclick: async () => { await POST(`/api/libraries/${l.id}/scan`); render(); } }, T.scan),
+            h('td.acts', null, h('div.row-gap', null, h('button.btn', { onclick: async () => { await POST(`/api/libraries/${l.id}/scan`); render(); } }, T.scan),
               h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?library=' + l.id)) }, T.permCheck),
               h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(l.name))) { await api('DELETE', '/api/libraries/' + l.id); state.libs = null; render(); } } }, T.delete))));
-        })))) : h('p.muted', null, T.homeEmptyAdmin)));
+        })))) : emptyNote(T.homeEmptyAdmin, null, h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary))));
     clearTimeout(t);
     if (scans.some(s => s.running)) t = setTimeout(render, 1500);
   };
@@ -1794,8 +1798,9 @@ async function adminUsers(body) {
   const users = await GET('/api/admin/users');
   put(body, h('div.panel', null, h('div.row-gap', { class: 'spread mb3' }, h('h2', { class: 'm0' }, T.aUsers), h('button.btn.primary', { onclick: newUser }, icon('plus'), T.newUser)),
     h('div.scroll-x', null, h('table.tbl', null, h('tbody', null, users.map(u => h('tr', null,
-      h('td', null, h('b', null, u.username), u.id === state.me.user.id && h('span.muted', null, ' ' + T.you)), h('td', null, T.profilesN(u.profiles)), h('td', null, u.is_admin ? T.isAdmin : ''),
-      h('td', null, h('div.row-gap', null,
+      h('td', null, h('div.u-cell', null, h('span.u-ini', { 'aria-hidden': 'true' }, (u.username[0] || '?').toUpperCase()), h('b', null, u.username), u.id === state.me.user.id && h('span.muted', null, '\u00a0' + T.you))),
+      h('td.muted', null, T.profilesN(u.profiles)), h('td', null, u.is_admin && h('span.badge.amber', null, T.isAdmin)),
+      h('td.acts', null, h('div.row-gap', null,
         h('button.btn', { onclick: () => resetPw(u) }, T.resetPw),
         u.id !== state.me.user.id && h('button.btn', { onclick: async () => { await api('PATCH', '/api/admin/users/' + u.id, { is_admin: !u.is_admin }); adminUsers(body); } }, u.is_admin ? T.revokeAdmin : T.grantAdmin),
         u.id !== state.me.user.id && h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(u.username))) { await api('DELETE', '/api/admin/users/' + u.id); adminUsers(body); } } }, T.delete))))))))));
@@ -1821,7 +1826,7 @@ async function adminInvites(body) {
       h('div', null, h('div.code', null, i.code), i.note && h('p', null, i.note),
         h('p.muted.small', null, T.usesLeft(i.uses_left), i.expires_at ? ` · ${T.expires}: ${new Date(i.expires_at * 1000).toLocaleString(T.locale)}` : ''),
         h('p.mono.small', { class: 'break-all' }, linkOf(i.code)),
-        h('div.row-gap', null, h('button.btn', { onclick: () => copyText(linkOf(i.code)) }, T.copy), h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/admin/invites/' + i.code); adminInvites(body); } }, T.delete)))))) : h('p.muted', null, T.noInvites)));
+        h('div.row-gap', null, h('button.btn', { onclick: () => copyText(linkOf(i.code)) }, T.copy), h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/admin/invites/' + i.code); adminInvites(body); } }, T.delete)))))) : emptyNote(T.noInvites, T.invitesEmptyHint)));
   function newInv() {
     const note = h('input', { type: 'text', placeholder: T.egNote }), uses = h('input', { type: 'number', value: 1, min: 1, max: 100 }), hours = h('input', { type: 'number', value: 72, min: 0 });
     modal(T.newInvite, h('div', null, field(T.note, note), h('div.grid2', null, field(T.uses, uses), field(T.validHours, hours))), close => [h('button.btn', { onclick: close }, T.cancel),
@@ -1831,9 +1836,16 @@ async function adminInvites(body) {
 
 function settingsForm(values, env, keys, onSaved) {
   const inputs = {};
-  const rows = keys.map(([k, label, kind, opts]) => {
+  const fields = keys.filter(key => typeof key !== 'string');
+  const rows = keys.map(key => {
+    if (typeof key === 'string') return h('h3.form-h', null, key);
+    const [k, label, kind, opts] = key;
     const locked = env[k];
     let el;
+    if (kind === 'toggle') {
+      el = inputs[k] = h('input.switch', { type: 'checkbox', role: 'switch', checked: values[k] !== '0', disabled: !!locked });
+      return h('div.form-row', null, h('label.switch-row', null, h('span', null, label), el), locked && h('div.env-lock', null, T.envLocked(locked)));
+    }
     if (kind === 'select') el = h('select', { disabled: !!locked }, opts.map(([v, l]) => h('option', { value: v, selected: values[k] === v }, l)));
     else el = h('input', { type: kind || 'text', value: values[k] ?? '', disabled: !!locked });
     inputs[k] = el;
@@ -1841,7 +1853,7 @@ function settingsForm(values, env, keys, onSaved) {
   });
   const save = h('button.btn.primary', { onclick: async () => {
     const body = {};
-    for (const [k] of keys) if (!env[k]) body[k] = inputs[k].value;
+    for (const [k, , kind] of fields) if (!env[k]) body[k] = kind === 'toggle' ? (inputs[k].checked ? '1' : '0') : inputs[k].value;
     await api('PATCH', '/api/admin/settings', body); toast(T.saved); onSaved && onSaved();
   } }, T.save);
   return h('div', null, rows, save);
@@ -1849,10 +1861,12 @@ function settingsForm(values, env, keys, onSaved) {
 
 async function adminTranscode(body) {
   const [d, s] = await Promise.all([GET('/api/admin/dashboard'), GET('/api/admin/settings')]);
-  const table = res => h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.encoder), h('th', null, T.result), h('th', null, T.time), h('th', null, T.details))),
-    h('tbody', null, res.map(r => h('tr', null, h('td', null, h('b', null, srv(r.label)), h('div.small.muted.mono', null, r.name)), h('td', { class: r.ok ? 'ok' : 'bad' }, r.ok ? T.works : T.unavailable), h('td', null, r.ok ? r.ms + ' ms' : ''), h('td.small.muted', null, srv(r.error) || ''))))));
-  const tbl = h('div', null, table(d.encoders || []));
-  const btn = h('button.btn', { onclick: async () => { btn.disabled = true; btn.textContent = T.hwTesting; try { const r = await POST('/api/admin/hwtest'); put(tbl, table(r.results)); toast(T.selectedEnc + ': ' + r.selected.label); } finally { btn.disabled = false; btn.textContent = T.hwTest; } } }, T.hwTest);
+  const missing = r => r.error === 'az ffmpeg nem tartalmazza ezt az encodert';
+  const table = (res, sel) => h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.encoder), h('th', null, T.result), h('th', null, T.time), h('th', null, T.details))),
+    h('tbody', null, res.map(r => h('tr', { class: r.name === sel && 'sel' }, h('td', null, h('b', null, srv(r.label)), r.name === sel && ['\u00a0', h('span.badge.amber', null, T.inUse)], h('div.small.muted.mono', null, r.name)),
+      h('td', { class: r.ok ? 'ok' : missing(r) ? 'off' : 'bad' }, r.ok ? T.works : missing(r) ? T.unavailable : T.encFailed), h('td', null, r.ok ? r.ms + ' ms' : ''), h('td.small.muted', null, srv(r.error) || ''))))));
+  const tbl = h('div', null, table(d.encoders || [], d.encoder_selected.name));
+  const btn = h('button.btn', { onclick: async () => { btn.disabled = true; btn.textContent = T.hwTesting; try { const r = await POST('/api/admin/hwtest'); put(tbl, table(r.results, r.selected.name)); toast(T.selectedEnc + ': ' + r.selected.label); } finally { btn.disabled = false; btn.textContent = T.hwTest; } } }, T.hwTest);
   const encOpts = [['auto', T.encAuto], ...(d.encoders || []).filter(e => e.ok).map(e => [e.name, srv(e.label)])];
   put(body, 
     h('div.panel', null, h('h2', null, T.encTest), h('p.muted', null, T.encTestHint), btn, h('div', { class: 'mt3' }, tbl),
@@ -1863,7 +1877,6 @@ async function adminTranscode(body) {
 
 async function segmentsPanel(s) {
   const st = await GET('/api/admin/segments').catch(() => null);
-  const onoff = [['1', T.on], ['0', T.off]];
   return h('div.panel', null, h('h2', null, T.aSegments),
     st && h('dl.side-info', null,
       h('dt', null, T.segBackend), h('dd', { class: st.available ? 'ok' : 'bad' }, srv(st.backend)),
@@ -1871,7 +1884,7 @@ async function segmentsPanel(s) {
       h('dt', null, T.segQueue), h('dd', null, String(st.queue || 0)),
       st.running && [h('dt', null, T.segRunning), h('dd', null, st.running)],
       st.last_error && [h('dt', null, T.lastError), h('dd.bad.small', null, srv(st.last_error))]),
-    settingsForm(s.values, s.env, [['intro_detection', T.segDetection, 'select', onoff], ['intro_window_min', T.segWindow, 'number']]));
+    settingsForm(s.values, s.env, [['intro_detection', T.segDetection, 'toggle'], ['intro_window_min', T.segWindow, 'number']]));
 }
 
 async function adminMeta(body) {
@@ -1884,19 +1897,20 @@ async function adminMeta(body) {
       settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]]]], () => adminMeta(body))),
     h('div.panel', null, h('h2', null, T.refreshMeta), h('label.check', null, retry, T.retryNoMatch),
       h('button.btn.primary', { disabled: !m.enabled, onclick: async () => { await POST('/api/admin/metadata/refresh', { retry_no_match: retry.checked }); adminMeta(body); } }, T.refreshMeta),
-      h('p.muted', { class: 'mt3' }, T.metaStatus + ': ', st.running ? T.metaRunning(st.done, st.total) : st.finished_at ? T.metaDone(st.matched, st.no_match) : '–', st.last_error ? h('div.bad.small', null, srv(st.last_error)) : null)));
+      !m.enabled && h('p.note-off', null, T.metaNeedsKey),
+      h('div.muted', { class: 'mt3' }, T.metaStatus + ': ', st.running ? [T.metaRunning(st.done, st.total), h('div.bar', { style: { maxWidth: '30rem' } }, h('i', { style: { width: (st.total ? st.done / st.total * 100 : 5) + '%' } }))] : st.finished_at ? T.metaDone(st.matched, st.no_match) : '–', st.last_error ? h('div.bad.small', null, srv(st.last_error)) : null)));
   if (st.running) { t = setTimeout(() => adminMeta(body), 2000); onCleanup(() => clearTimeout(t)); }
 }
 
 async function adminConnect(body) {
   const c = await GET('/api/admin/connect');
-  const card = (title, url, sub) => h('div.entry', null, qrImg(url),
-    h('div', null, h('b', null, title), h('p.mono', { class: 'break-all' }, url), sub && h('p.muted.small', null, sub), h('button.btn', { onclick: () => copyText(url) }, T.copy)));
+  const card = (title, url, sub) => h('div.conn-card', null, qrImg(url),
+    h('div', null, h('b', null, title), sub && h('p.muted.small', null, sub), h('div.url-row', null, h('code.mono', null, url), h('button.btn', { onclick: () => copyText(url) }, T.copy))));
   const kindLabel = { lan: T.lan, tailscale: 'Tailscale', other: T.otherNet };
   put(body, 
     h('div.panel', null, h('h2', null, T.aConnect), h('p.muted', null, T.connectLede),
-      h('div', null, c.public_url ? card(T.publicUrl, c.public_url) : h('p.muted', null, T.noPublic),
-        c.addresses.map(a => card(kindLabel[a.kind] + ' (' + a.iface + ')', a.url))),
+      !c.public_url && h('p.muted', null, T.noPublic),
+      h('div.conn-grid', null, c.public_url && card(T.publicUrl, c.public_url), c.addresses.map(a => card(kindLabel[a.kind] + ' (' + a.iface + ')', a.url))),
       c.in_container && h('p.muted.small', { class: 'mt3' }, T.inDocker)),
     h('div.panel', null, h('h2', null, T.tsTitle), h('p', null, T.tsHint),
       h('pre.code', null, 'TS_AUTHKEY=tskey-... docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d')),
@@ -1978,8 +1992,8 @@ async function adminLangs(body) {
     return h('tr', null,
       h('td', null, h('b', { lang: code }, l.name), h('div.small.muted.mono', null, code)),
       h('td.small', null, kind),
-      h('td', { class: st.pct === 100 ? 'ok' : '' }, T.langComplete(st.pct)),
-      h('td', null, h('div.row-gap', null,
+      h('td', null, h('div.pct' + (st.pct === 100 ? '.ok' : ''), null, h('div.bar', null, h('i', { style: { width: st.pct + '%' } })), T.langComplete(st.pct))),
+      h('td.acts', null, h('div.row-gap', null,
         h('button.btn', { onclick: () => langEditor(body, code) }, T.edit),
         h('button.btn', { onclick: () => downloadJSON('kinora-' + code + '.json', langExport(code)) }, T.langExport),
         l.custom && h('button.btn.danger', { onclick: async () => {
@@ -2130,10 +2144,9 @@ function lookPanel(values, env, rerender) {
 async function adminSettings(body) {
   const s = await GET('/api/admin/settings');
   state.branding = await GET('/api/branding').catch(() => state.branding);
-  const onoff = [['1', T.on], ['0', T.off]];
   put(body, 
-    h('div.panel', null, h('h2', null, T.aSettings), settingsForm(s.values, s.env, [['server_name', T.serverName], ['public_url', T.publicUrl, 'url'], ['scan_interval_min', T.scanInterval, 'number'],
-      ['quickconnect_enabled', T.qcEnabled, 'select', onoff], ['discovery_enabled', T.discEnabled, 'select', onoff]], () => { state.status = null; })),
+    h('div.panel', null, h('h2', null, T.aSettings), settingsForm(s.values, s.env, [T.setGeneral, ['server_name', T.serverName], ['public_url', T.publicUrl, 'url'], T.setScanning, ['scan_interval_min', T.scanInterval, 'number'],
+      T.setNetwork, ['quickconnect_enabled', T.qcEnabled, 'toggle'], ['discovery_enabled', T.discEnabled, 'toggle']], () => { state.status = null; })),
     lookPanel(s.values, s.env, () => adminSettings(body)),
     h('div.panel', null, h('h2', null, T.backupTitle), h('p.muted', null, T.backupHint), h('a.btn.primary', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
 }

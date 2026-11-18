@@ -905,6 +905,18 @@
    "one": "{0} Zeile",
    "other": "{0} Zeilen"
   },
-  "langKey": "Schlüssel"
+  "langKey": "Schlüssel",
+  "aGroupLibrary": "Bibliothek",
+  "aGroupAccess": "Zugriff",
+  "aGroupSystem": "System",
+  "uptimeUnder1": "< 1 Min.",
+  "noActiveTranscodes": "Gerade wird nichts transkodiert.",
+  "invitesEmptyHint": "Mit einer Einladung kann jemand ein eigenes Konto auf diesem Server anlegen. Schick den Link oder den QR-Code weiter.",
+  "encFailed": "fehlgeschlagen",
+  "inUse": "in Verwendung",
+  "metaNeedsKey": "Dafür ist ein TMDB-API-Schlüssel nötig: Trag ihn oben ein und speichere.",
+  "setGeneral": "Allgemein",
+  "setScanning": "Scannen",
+  "setNetwork": "Netzwerk und Anmeldung"
  }
 };

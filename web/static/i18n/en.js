@@ -911,6 +911,18 @@
    "one": "{0} row",
    "other": "{0} rows"
   },
-  "langKey": "Key"
+  "langKey": "Key",
+  "aGroupLibrary": "Library",
+  "aGroupAccess": "Access",
+  "aGroupSystem": "System",
+  "uptimeUnder1": "< 1 min",
+  "noActiveTranscodes": "Nothing is being transcoded right now.",
+  "invitesEmptyHint": "An invite lets someone create their own account on this server. Send them the link or the QR code.",
+  "encFailed": "failed",
+  "inUse": "in use",
+  "metaNeedsKey": "This needs a TMDB API key: enter it above and save.",
+  "setGeneral": "General",
+  "setScanning": "Scanning",
+  "setNetwork": "Network and sign-in"
  }
 };

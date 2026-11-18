@@ -532,6 +532,18 @@
   "langSearch": "Keresés kulcsra vagy szövegre…",
   "langOnlyMissing": "Csak a lefordítatlanok",
   "langRows": "{0} sor",
-  "langKey": "Kulcs"
+  "langKey": "Kulcs",
+  "aGroupLibrary": "Könyvtár",
+  "aGroupAccess": "Hozzáférés",
+  "aGroupSystem": "Rendszer",
+  "uptimeUnder1": "< 1 perc",
+  "noActiveTranscodes": "Most nincs futó átkódolás.",
+  "invitesEmptyHint": "Meghívóval valaki saját fiókot hozhat létre ezen a szerveren. Küldd el neki a linket vagy a QR-kódot.",
+  "encFailed": "sikertelen",
+  "inUse": "használatban",
+  "metaNeedsKey": "Ehhez TMDB API kulcs kell: add meg fent, és mentsd.",
+  "setGeneral": "Általános",
+  "setScanning": "Szkennelés",
+  "setNetwork": "Hálózat és belépés"
  }
 };
