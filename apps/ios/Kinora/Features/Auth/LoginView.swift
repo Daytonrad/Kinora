@@ -15,10 +15,10 @@ struct LoginView: View {
     var body: some View {
         AuthPage {
             ServerHeader()
-            Text("Bejelentkezés").font(Theme.display(40, weight: .bold))
+            Text(L("Bejelentkezés")).font(Theme.display(40, weight: .bold))
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Felhasználónév").font(.subheadline).foregroundStyle(Theme.muted)
+                Text(L("Felhasználónév")).font(.subheadline).foregroundStyle(Theme.muted)
                 TextField("", text: $username)
                     .textContentType(.username)
                     .textInputAutocapitalization(.never)
@@ -27,30 +27,30 @@ struct LoginView: View {
                     .focused($field, equals: .username)
                     .onSubmit { field = .password }
                     .kinoraField()
-                    .accessibilityLabel("Felhasználónév")
+                    .accessibilityLabel(L("Felhasználónév"))
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text("Jelszó").font(.subheadline).foregroundStyle(Theme.muted)
+                Text(L("Jelszó")).font(.subheadline).foregroundStyle(Theme.muted)
                 SecureField("", text: $password)
                     .textContentType(.password)
                     .submitLabel(.go)
                     .focused($field, equals: .password)
                     .onSubmit(login)
                     .kinoraField()
-                    .accessibilityLabel("Jelszó")
+                    .accessibilityLabel(L("Jelszó"))
             }
 
             ErrorText(message: error ?? model.notice)
 
             Button(action: login) {
-                if busy { ProgressView().tint(Theme.amberInk) } else { Text("Belépés") }
+                if busy { ProgressView().tint(Theme.amberInk) } else { Text(L("Belépés")) }
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(busy || username.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty)
 
             if model.status?.quickconnectEnabled != false {
                 Button { model.notice = nil; model.go(.quickConnect) } label: {
-                    Label("Belépés kóddal", systemImage: "key")
+                    Label(L("Belépés kóddal"), systemImage: "key")
                 }
                 .buttonStyle(SecondaryButtonStyle())
             }
@@ -73,7 +73,7 @@ struct LoginView: View {
             do {
                 try await model.login(username: username.trimmingCharacters(in: .whitespaces), password: password)
             } catch let e as KinoraError where e.status == 401 {
-                error = "Hibás felhasználónév vagy jelszó."
+                error = L("Hibás felhasználónév vagy jelszó.")
                 Haptic.error.play()
             } catch {
                 self.error = error.localizedDescription

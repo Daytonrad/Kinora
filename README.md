@@ -300,6 +300,8 @@ A mentett nyelvek a `<data>/i18n/<kód>.json` fájlokban vannak, és a kliens a 
 - A többes szám egy objektum, `one`/`few`/`many`/`other` (és `=0`, `=1`…) kulcsokkal.
 - A formátum részletes leírása a beépített `web/static/i18n/*.js` fájlok elején található.
 
+**Az iPhone/iPad és az Apple TV app** ugyanezeket a nyelveket használja. Az appok saját szövegei a nyelvi fájlok `app` táblájában vannak; a kulcs az app magyar szövege, mint az `srv`-nél, így az adminban felvett új nyelv az appokat is fordítja, és a szerkesztő ezeket is mutatja. A szerver a `GET /api/languages` (lista verzióval) és a `GET /api/languages/<kód>` címen adja ki őket, bejelentkezés nélkül, a felülírásokkal és az angol tartalékkal együtt, csak a `locale`, `app`, `srv`, `srvRe` részt. Az app minden szerverhez csatlakozáskor szinkronizál: letölti az új vagy megváltozott nyelveket, és mindet megtartja az eszközön, akkor is, ha a szerver nem érhető el, vagy a nyelvet később törölték róla. A nyelv az app Beállítások → Nyelv oldalán (Apple TV-n a Beállítások fülön) választható; az „Automatikus” a készülék nyelvét követi, és ha az nincs meg, angolra, végül magyarra esik vissza. A widgetek és a Top Shelf ugyanazt a nyelvet használják. Ami magyar marad: a Siri/Parancsok rögzített szövegei és a rendszer engedélykérő szövegei.
+
 Ha egy fordítást a projektbe is beküldenél, az exportált `strings` objektumból készíts új `web/static/i18n/<kód>.js` fájlt, és vedd fel az `index.html`-be.
 
 ### Tudatosan későbbre hagyva (v2)

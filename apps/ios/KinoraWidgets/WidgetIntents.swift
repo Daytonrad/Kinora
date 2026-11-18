@@ -117,7 +117,7 @@ struct SeriesEntry: TimelineEntry {
 struct SeriesProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> SeriesEntry {
         SeriesEntry(date: .now, feed: FeedEntry(date: .now, state: .cards([Sample.cards(.continueWatching)[1]])),
-                    seriesTitle: "A sorozat")
+                    seriesTitle: L("A sorozat"))
     }
 
     func snapshot(for config: SeriesConfig, in context: Context) async -> SeriesEntry {
@@ -132,6 +132,7 @@ struct SeriesProvider: AppIntentTimelineProvider {
     }
 
     private func load(_ config: SeriesConfig) async -> SeriesEntry {
+        Language.shared.reloadIfNeeded()
         guard let series = config.series else {
             return SeriesEntry(date: .now, feed: FeedEntry(date: .now, state: .empty), seriesTitle: nil)
         }
@@ -168,7 +169,7 @@ struct WatchedButton: View {
                 .foregroundStyle(Palette.muted)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Megnézettnek jelölés")
+        .accessibilityLabel(L("Megnézettnek jelölés"))
     }
 }
 
@@ -179,8 +180,8 @@ struct SeriesWidget: Widget {
         AppIntentConfiguration(kind: "series", intent: SeriesConfig.self, provider: SeriesProvider()) { entry in
             SeriesView(entry: entry)
         }
-        .configurationDisplayName("Következő rész")
-        .description("Egy kiválasztott sorozat következő része, egy koppintással indítható.")
+        .configurationDisplayName(L("Következő rész"))
+        .description(L("Egy kiválasztott sorozat következő része, egy koppintással indítható."))
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
         .contentMarginsDisabled()
     }
@@ -198,22 +199,22 @@ struct SeriesView: View {
         let card = entry.feed.cards.first
         if family == .accessoryRectangular {
             VStack(alignment: .leading, spacing: 2) {
-                Label(entry.seriesTitle ?? "Következő rész", systemImage: "play.rectangle.fill")
+                Label(entry.seriesTitle ?? L("Következő rész"), systemImage: "play.rectangle.fill")
                     .font(.caption2.weight(.semibold)).lineLimit(1)
-                Text(card?.subtitle ?? (entry.seriesTitle == nil ? "Válassz sorozatot" : "Minden részt láttál"))
+                Text(card?.subtitle ?? (entry.seriesTitle == nil ? L("Válassz sorozatot") : L("Minden részt láttál")))
                     .font(.headline).lineLimit(2)
                 if let p = card?.progress { ProgressView(value: p).tint(.primary) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .widgetURL(card?.link)
         } else if entry.seriesTitle == nil {
-            message("Tartsd lenyomva, és válassz egy sorozatot a widget szerkesztésénél.")
+            message(L("Tartsd lenyomva, és válassz egy sorozatot a widget szerkesztésénél."))
         } else if let card {
             ZStack(alignment: .bottomLeading) {
                 Artwork(data: card.image, seed: card.id)
                 LinearGradient(colors: [.clear, Palette.black.opacity(0.95)], startPoint: .center, endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("KÖVETKEZŐ RÉSZ").font(.caption2.weight(.bold)).foregroundStyle(Palette.amber)
+                    Text(L("KÖVETKEZŐ RÉSZ")).font(.caption2.weight(.bold)).foregroundStyle(Palette.amber)
                     Text(card.title).font(Palette.display(family == .systemSmall ? 17 : 20))
                         .foregroundStyle(Palette.bright).lineLimit(1)
                     if let sub = card.subtitle {
@@ -230,7 +231,7 @@ struct SeriesView: View {
             }
             .widgetURL(card.link)
         } else if entry.feed.state == .empty {
-            message("\(entry.seriesTitle ?? "") – minden részt láttál.")
+            message(L("{0} – minden részt láttál.", entry.seriesTitle ?? ""))
         } else {
             EmptyState(state: entry.feed.state, empty: "")
         }

@@ -53,8 +53,8 @@ private struct ProfileFooter: View {
             Text(text)
         } else {
             Label(model.me?.profile?.isKids == true
-                  ? "Gyerekprofilon ez nem módosítható."
-                  : "Ezen az eszközön a profil rögzített, ez nem módosítható.",
+                  ? L("Gyerekprofilon ez nem módosítható.")
+                  : L("Ezen az eszközön a profil rögzített, ez nem módosítható."),
                   systemImage: "lock.fill")
         }
     }
@@ -85,42 +85,42 @@ struct PlaybackSettingsView: View {
                 Picker(selection: model.profileSetting(\.maxBitrate, default: 0, error: $error) { ProfileUpdate(maxBitrate: $0) }) {
                     ForEach(SettingChoices.bitrates, id: \.0) { Text($0.1).tag($0.0) }
                 } label: {
-                    Label("Maximális minőség", systemImage: "sparkles.tv")
+                    Label(L("Maximális minőség"), systemImage: "sparkles.tv")
                 }
                 Toggle(isOn: model.profileSetting(\.autoplayNext, default: true, error: $error) { ProfileUpdate(autoplayNext: $0) }) {
-                    Label("Következő rész automatikusan", systemImage: "forward.end.fill")
+                    Label(L("Következő rész automatikusan"), systemImage: "forward.end.fill")
                 }
                 Picker(selection: model.profileSetting(\.skipIntro, default: "manual", error: $error) { ProfileUpdate(skipIntro: $0) }) {
                     ForEach(SettingChoices.skipModes, id: \.0) { Text($0.1).tag($0.0) }
                 } label: {
-                    Label("Intró átugrása", systemImage: "arrow.uturn.forward")
+                    Label(L("Intró átugrása"), systemImage: "arrow.uturn.forward")
                 }
             } header: {
-                Text("Profil")
+                Text(L("Profil"))
             } footer: {
-                ProfileFooter(text: "Minden eszközödön érvényes, ahol ezzel a profillal nézel.")
+                ProfileFooter(text: L("Minden eszközödön érvényes, ahol ezzel a profillal nézel."))
             }
             .disabled(!model.canEditSettings)
             .listRowBackground(Theme.panel)
 
             Section {
                 Picker(selection: $cellularMax) {
-                    Text("Nincs korlát").tag(0)
+                    Text(L("Nincs korlát")).tag(0)
                     ForEach(SettingChoices.bitrates.filter { $0.0 > 0 }, id: \.0) { Text($0.1).tag($0.0) }
                 } label: {
-                    Label("Minőség mobilneten", systemImage: "antenna.radiowaves.left.and.right")
+                    Label(L("Minőség mobilneten"), systemImage: "antenna.radiowaves.left.and.right")
                 }
                 Toggle(isOn: $backgroundAudio) {
-                    Label("Hang a háttérben", systemImage: "speaker.wave.2.fill")
+                    Label(L("Hang a háttérben"), systemImage: "speaker.wave.2.fill")
                 }
             } header: {
-                Text("Ezen az eszközön")
+                Text(L("Ezen az eszközön"))
             } footer: {
-                Text("Mobilneten és hotspoton a lejátszás legfeljebb ekkora sávszélességet használ; a lejátszóban videónként felülírhatod. A háttérhang akkor szól tovább, ha kilépsz az appból vagy lezárod a telefont, és nem indul el a kép a képben.")
+                Text(L("Mobilneten és hotspoton a lejátszás legfeljebb ekkora sávszélességet használ; a lejátszóban videónként felülírhatod. A háttérhang akkor szól tovább, ha kilépsz az appból vagy lezárod a telefont, és nem indul el a kép a képben."))
             }
             .listRowBackground(Theme.panel)
         }
-        .settingsPage("Lejátszás")
+        .settingsPage(L("Lejátszás"))
         .onChange(of: cellularMax) { _, v in AppSettings.cellularMaxBitrate = v }
         .onChange(of: backgroundAudio) { _, on in AppSettings.backgroundAudio = on }
     }
@@ -144,35 +144,35 @@ struct SubtitleSettingsView: View {
             Section {
                 SubtitlePreview(style: style)
                     .listRowInsets(EdgeInsets())
-                Picker("Méret", selection: $style.size) {
+                Picker(L("Méret"), selection: $style.size) {
                     ForEach(SubtitleStyle.Size.allCases, id: \.self) { Text(SubtitleStyle.label($0)).tag($0) }
                 }
-                Picker("Háttér", selection: $style.background) {
+                Picker(L("Háttér"), selection: $style.background) {
                     ForEach(SubtitleStyle.Background.allCases, id: \.self) { Text(SubtitleStyle.label($0)).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .listRowSeparator(.hidden, edges: .bottom)
-                Picker("Szín", selection: $style.color) {
+                Picker(L("Szín"), selection: $style.color) {
                     ForEach(SubtitleStyle.Color.allCases, id: \.self) { Text(SubtitleStyle.label($0)).tag($0) }
                 }
                 .pickerStyle(.segmented)
             } header: {
-                Text("Megjelenés ezen az eszközön")
+                Text(L("Megjelenés ezen az eszközön"))
             }
             .listRowBackground(Theme.panel)
 
             Section {
-                Picker("Feliratok", selection: model.profileSetting(\.subMode, default: "auto", error: $error) { ProfileUpdate(subMode: $0) }) {
+                Picker(L("Feliratok"), selection: model.profileSetting(\.subMode, default: "auto", error: $error) { ProfileUpdate(subMode: $0) }) {
                     ForEach(SettingChoices.subModes, id: \.0) { Text($0.1).tag($0.0) }
                 }
-                LabeledContent("Feliratnyelvek") {
+                LabeledContent(L("Feliratnyelvek")) {
                     TextField("hun, eng", text: $subLangs)
                         .multilineTextAlignment(.trailing)
                         .focused($focused, equals: .sub)
                         .submitLabel(.next)
                         .onSubmit { focused = .audio }
                 }
-                LabeledContent("Hangsávnyelvek") {
+                LabeledContent(L("Hangsávnyelvek")) {
                     TextField("hun, eng", text: $audioLangs)
                         .multilineTextAlignment(.trailing)
                         .focused($focused, equals: .audio)
@@ -180,20 +180,20 @@ struct SubtitleSettingsView: View {
                         .onSubmit { focused = nil }
                 }
             } header: {
-                Text("Profil")
+                Text(L("Profil"))
             } footer: {
-                ProfileFooter(text: "Nyelvkódok vesszővel, fontossági sorrendben (például hun, eng). Ha a filmben van ilyen sáv, ezzel indul.")
+                ProfileFooter(text: L("Nyelvkódok vesszővel, fontossági sorrendben (például hun, eng). Ha a filmben van ilyen sáv, ezzel indul."))
             }
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .disabled(!model.canEditSettings)
             .listRowBackground(Theme.panel)
         }
-        .settingsPage("Feliratok és nyelvek")
+        .settingsPage(L("Feliratok és nyelvek"))
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Kész") { focused = nil }
+                Button(L("Kész")) { focused = nil }
             }
         }
         .onAppear {
@@ -224,7 +224,7 @@ private struct SubtitlePreview: View {
         ZStack(alignment: .bottom) {
             LinearGradient(colors: [Color(hex: 0x5A4632), Color(hex: 0x2E3A44), Color(hex: 0x15181C)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
-            Text("Így néz ki a felirat a filmben.")
+            Text(L("Így néz ki a felirat a filmben."))
                 .font(.system(size: style.points * 0.8, weight: .semibold))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(style.color == .yellow ? Color(hex: 0xFFE14D) : .white)
@@ -239,7 +239,7 @@ private struct SubtitlePreview: View {
         .aspectRatio(16 / 9, contentMode: .fit)
         .frame(maxWidth: .infinity)
         .accessibilityElement()
-        .accessibilityLabel("Felirat előnézete")
+        .accessibilityLabel(L("Felirat előnézete"))
     }
 }
 
@@ -259,7 +259,7 @@ struct DownloadSettingsView: View {
                         Text(bytes(downloads.usedBytes))
                             .font(Theme.display(28, weight: .bold))
                             .foregroundStyle(Theme.plasterBright)
-                        Text(limit > 0 ? "/ \(limit) GB" : "felhasználva")
+                        Text(limit > 0 ? "/ \(limit) GB" : L("felhasználva"))
                             .foregroundStyle(Theme.muted)
                     }
                     if limit > 0 {
@@ -270,30 +270,30 @@ struct DownloadSettingsView: View {
                 .padding(.vertical, 6)
                 .accessibilityElement(children: .combine)
             } header: {
-                Text("Tárhely")
+                Text(L("Tárhely"))
             }
             .listRowBackground(Theme.panel)
 
             Section {
                 Picker(selection: $limit) {
                     ForEach([0, 5, 10, 20, 50, 100], id: \.self) { gb in
-                        Text(gb == 0 ? "Nincs" : "\(gb) GB").tag(gb)
+                        Text(gb == 0 ? L("Nincs") : "\(gb) GB").tag(gb)
                     }
                 } label: {
-                    Label("Tárhelykeret", systemImage: "internaldrive")
+                    Label(L("Tárhelykeret"), systemImage: "internaldrive")
                 }
                 Toggle(isOn: $wifiOnly) {
-                    Label("Csak Wi-Fi-n", systemImage: "wifi")
+                    Label(L("Csak Wi-Fi-n"), systemImage: "wifi")
                 }
                 Toggle(isOn: $deleteWatched) {
-                    Label("Megnézettek törlése", systemImage: "trash")
+                    Label(L("Megnézettek törlése"), systemImage: "trash")
                 }
             } footer: {
-                Text("A keret elérése után új letöltés nem indul. Csak Wi-Fi-n: mobilneten a letöltés megvárja a Wi-Fi-t. A megnézett rész a végignézés után törlődik az eszközről.")
+                Text(L("A keret elérése után új letöltés nem indul. Csak Wi-Fi-n: mobilneten a letöltés megvárja a Wi-Fi-t. A megnézett rész a végignézés után törlődik az eszközről."))
             }
             .listRowBackground(Theme.panel)
         }
-        .settingsPage("Letöltések")
+        .settingsPage(L("Letöltések"))
         .onChange(of: wifiOnly) { _, on in AppSettings.downloadsWifiOnly = on }
         .onChange(of: deleteWatched) { _, on in AppSettings.deleteWatchedDownloads = on }
         .onChange(of: limit) { _, gb in AppSettings.downloadLimitGB = gb }
@@ -326,18 +326,18 @@ struct DevicesSettingsView: View {
                         DeviceRow(device: d)
                             .swipeActions {
                                 if !d.current && model.canEditSettings {
-                                    Button("Kiléptetés", role: .destructive) { remove(d) }
+                                    Button(L("Kiléptetés"), role: .destructive) { remove(d) }
                                 }
                             }
                             .contextMenu {
                                 if !d.current && model.canEditSettings {
-                                    Button("Kiléptetés", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { remove(d) }
+                                    Button(L("Kiléptetés"), systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { remove(d) }
                                 }
                             }
                     }
                 } footer: {
                     if model.canEditSettings, devices.count > 1 {
-                        Text("Egy eszköz kiléptetéséhez húzd balra a sorát, vagy tartsd rajta az ujjad.")
+                        Text(L("Egy eszköz kiléptetéséhez húzd balra a sorát, vagy tartsd rajta az ujjad."))
                     }
                 }
                 .listRowBackground(Theme.panel)
@@ -345,7 +345,7 @@ struct DevicesSettingsView: View {
                 if model.canEditSettings && devices.count > 1 {
                     Section {
                         Button(role: .destructive) { confirmRemoveOthers = true } label: {
-                            Text("Kiléptetés minden más eszközről")
+                            Text(L("Kiléptetés minden más eszközről"))
                                 .foregroundStyle(Theme.danger)
                                 .frame(maxWidth: .infinity)
                         }
@@ -355,7 +355,7 @@ struct DevicesSettingsView: View {
             } else if let error {
                 Section {
                     ErrorText(message: error)
-                    Button("Újra") { Task { await load() } }
+                    Button(L("Újra")) { Task { await load() } }
                 }
                 .listRowBackground(Theme.panel)
             } else {
@@ -363,13 +363,13 @@ struct DevicesSettingsView: View {
                     .listRowBackground(Theme.panel)
             }
         }
-        .settingsPage("Eszközök")
+        .settingsPage(L("Eszközök"))
         .task { await load() }
         .refreshable { await load() }
-        .confirmationDialog("Kiléptetsz minden más eszközt?", isPresented: $confirmRemoveOthers, titleVisibility: .visible) {
-            Button("Kiléptetés mindenhonnan", role: .destructive) { removeOthers() }
+        .confirmationDialog(L("Kiléptetsz minden más eszközt?"), isPresented: $confirmRemoveOthers, titleVisibility: .visible) {
+            Button(L("Kiléptetés mindenhonnan"), role: .destructive) { removeOthers() }
         } message: {
-            Text("Ezen az eszközön bejelentkezve maradsz; a többin újra be kell lépni.")
+            Text(L("Ezen az eszközön bejelentkezve maradsz; a többin újra be kell lépni."))
         }
     }
 
@@ -423,7 +423,7 @@ private struct DeviceRow: View {
                         .font(.body.weight(device.current ? .semibold : .regular))
                         .foregroundStyle(Theme.plasterBright)
                     if device.current {
-                        Text("ez az eszköz")
+                        Text(L("ez az eszköz"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(Theme.amber)
                             .padding(.horizontal, 6)
@@ -461,9 +461,9 @@ struct ServerSettingsView: View {
             if let error { Section { ErrorText(message: error) }.listRowBackground(Theme.panel) }
             if let server = model.server {
                 Section {
-                    LabeledContent("Név", value: model.me?.serverName ?? server.name)
+                    LabeledContent(L("Név"), value: model.me?.serverName ?? server.name)
                     if let version = model.me?.version {
-                        LabeledContent("Verzió", value: version)
+                        LabeledContent(L("Verzió"), value: version)
                     }
                 }
                 .listRowBackground(Theme.panel)
@@ -477,7 +477,7 @@ struct ServerSettingsView: View {
                             if url == server.url {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(Theme.amber)
-                                    .accessibilityLabel("Most ezt használja")
+                                    .accessibilityLabel(L("Most ezt használja"))
                             }
                         }
                     }
@@ -485,30 +485,30 @@ struct ServerSettingsView: View {
                         addingAddress = true
                     } label: {
                         if busy {
-                            HStack(spacing: 10) { ProgressView(); Text("Cím ellenőrzése…") }
+                            HStack(spacing: 10) { ProgressView(); Text(L("Cím ellenőrzése…")) }
                         } else {
-                            Label("Külső cím hozzáadása", systemImage: "plus.circle.fill")
+                            Label(L("Külső cím hozzáadása"), systemImage: "plus.circle.fill")
                         }
                     }
                     .disabled(busy)
                 } header: {
-                    Text("Címek")
+                    Text(L("Címek"))
                 } footer: {
-                    Text(notice ?? "A Kinora mindig a pipával jelölt, elérhető címet használja. Adj meg egy külső címet, hogy otthonon kívül is működjön.")
+                    Text(notice ?? L("A Kinora mindig a pipával jelölt, elérhető címet használja. Adj meg egy külső címet, hogy otthonon kívül is működjön."))
                 }
                 .listRowBackground(Theme.panel)
             }
         }
-        .settingsPage("Szerver")
-        .alert("Külső cím hozzáadása", isPresented: $addingAddress) {
+        .settingsPage(L("Szerver"))
+        .alert(L("Külső cím hozzáadása"), isPresented: $addingAddress) {
             TextField("https://kinora.pelda.hu", text: $newAddress)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
-            Button("Mégse", role: .cancel) { newAddress = "" }
-            Button("Hozzáadás") { addAddress() }
+            Button(L("Mégse"), role: .cancel) { newAddress = "" }
+            Button(L("Hozzáadás")) { addAddress() }
         } message: {
-            Text("Az a cím, amelyen a szerver otthonon kívül is elérhető.")
+            Text(L("Az a cím, amelyen a szerver otthonon kívül is elérhető."))
         }
     }
 
@@ -522,7 +522,7 @@ struct ServerSettingsView: View {
             defer { busy = false }
             do {
                 try await model.addAddress(input)
-                notice = "Cím hozzáadva."
+                notice = L("Cím hozzáadva.")
                 error = nil
                 Haptic.success.play()
             } catch {
@@ -530,5 +530,55 @@ struct ServerSettingsView: View {
                 Haptic.error.play()
             }
         }
+    }
+}
+
+// MARK: - Nyelv
+
+/// The app's language. The languages come from the server (the same ones the web client has, including those
+/// an admin added), and the device keeps every one it downloaded.
+struct LanguageSettingsView: View {
+    @Environment(AppModel.self) private var model
+
+    static func summary(_ model: AppModel) -> String {
+        let name = model.languages.first { $0.code == Language.shared.code }?.name ?? Language.shared.code
+        return model.languageChoice.isEmpty ? L("Automatikus ({0})", name) : name
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                row(L("Automatikus"), detail: L("A készülék nyelve szerint"), code: "")
+                ForEach(model.languages) { l in
+                    row(l.name, detail: nil, code: l.code)
+                }
+            } footer: {
+                Text(L("A nyelveket a szerver adja: ha az adminisztrátor a webes felületen új nyelvet ad hozzá, itt is megjelenik. A letöltött nyelvek ezen az eszközön maradnak, a szerver nélkül is."))
+            }
+            .listRowBackground(Theme.panel)
+        }
+        .settingsPage(L("Nyelv"))
+    }
+
+    private func row(_ title: String, detail: String?, code: String) -> some View {
+        Button {
+            Haptic.select.play()
+            model.languageChoice = code
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).foregroundStyle(Theme.plasterBright)
+                    if let detail { Text(detail).font(.caption).foregroundStyle(Theme.muted) }
+                }
+                Spacer()
+                if model.languageLoading && model.languageChoice == code && Language.shared.code != code {
+                    ProgressView()
+                } else if model.languageChoice == code {
+                    Image(systemName: "checkmark").foregroundStyle(Theme.amber).accessibilityHidden(true)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .accessibilityAddTraits(model.languageChoice == code ? .isSelected : [])
     }
 }

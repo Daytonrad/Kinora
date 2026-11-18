@@ -14,7 +14,7 @@ struct ProfilesView: View {
         ScrollView {
             VStack(spacing: 28) {
                 BrandMark(size: 32)
-                Text("Ki néz?").font(Theme.display(44, weight: .bold))
+                Text(L("Ki néz?")).font(Theme.display(44, weight: .bold))
                 if let profiles = model.me?.profiles {
                     LazyVGrid(columns: columns, spacing: 24) {
                         ForEach(profiles) { p in
@@ -78,7 +78,7 @@ struct ProfileFace: View {
             }
             if showsName { Text(profile.name).font(.headline).lineLimit(1) }
             if showsName, profile.isKids {
-                Text("Gyerek").font(.caption).foregroundStyle(Theme.muted)
+                Text(L("Gyerek")).font(.caption).foregroundStyle(Theme.muted)
             }
         }
         .accessibilityElement(children: .combine)
@@ -97,7 +97,7 @@ private struct PinSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("\(profile.name) profilja PIN-nel védett").font(.title3.bold())
+            Text(L("{0} profilja PIN-nel védett", profile.name)).font(.title3.bold())
             SecureField("PIN", text: $pin)
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
@@ -109,7 +109,7 @@ private struct PinSheet: View {
                 .id(fieldID)
             ErrorText(message: error)
             Button(action: submit) {
-                if busy { ProgressView().tint(Theme.amberInk) } else { Text("Belépés") }
+                if busy { ProgressView().tint(Theme.amberInk) } else { Text(L("Belépés")) }
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(digits.isEmpty || busy)

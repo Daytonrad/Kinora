@@ -83,6 +83,8 @@ func (s *Server) routes() {
 	m.HandleFunc("DELETE /api/admin/branding/logo", s.admin(s.handleLogoDelete))
 	m.HandleFunc("GET /manifest.json", s.public(s.handleManifest))
 	m.HandleFunc("GET /i18n/custom.js", s.public(s.handleCustomLangsJS))
+	m.HandleFunc("GET /api/languages", s.public(s.handleAppLangs))
+	m.HandleFunc("GET /api/languages/{code}", s.public(s.handleAppLang))
 	m.HandleFunc("PUT /api/admin/languages/{code}", s.admin(s.handleLangPut))
 	m.HandleFunc("DELETE /api/admin/languages/{code}", s.admin(s.handleLangDelete))
 	m.HandleFunc("GET /api/admin/dashboard", s.admin(s.handleDashboard))

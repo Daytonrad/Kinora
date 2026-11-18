@@ -46,29 +46,29 @@ struct TVServersView: View {
     @State private var error: String?
 
     var body: some View {
-        TVAuthPage(title: "Válassz szervert") {
-            Text("A Kinora a saját médiaszerveredről játszik le. Ha a szerver ezen a hálózaton fut, lent megjelenik; különben írd be a címét.")
+        TVAuthPage(title: L("Válassz szervert")) {
+            Text(L("A Kinora a saját médiaszerveredről játszik le. Ha a szerver ezen a hálózaton fut, lent megjelenik; különben írd be a címét."))
                 .font(.title3).foregroundStyle(Theme.plaster)
             TVErrorText(message: error ?? model.notice)
         } content: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     if !model.servers.isEmpty {
-                        TVHeading(text: "Mentett szerverek")
+                        TVHeading(text: L("Mentett szerverek"))
                         ForEach(model.servers) { s in
                             Button { open(s) } label: {
                                 row(s.name, ServerAddress.host(of: s.url), icon: "server.rack")
                             }
                             .buttonStyle(TVRowStyle())
                             .contextMenu {
-                                Button("Elfelejtés", systemImage: "trash", role: .destructive) { model.forget(s) }
+                                Button(L("Elfelejtés"), systemImage: "trash", role: .destructive) { model.forget(s) }
                             }
                         }
-                        Text("Egy mentett szerver elfelejtéséhez tartsd lenyomva a sorát.")
+                        Text(L("Egy mentett szerver elfelejtéséhez tartsd lenyomva a sorát."))
                             .font(.callout).foregroundStyle(Theme.muted)
                     }
                     HStack {
-                        TVHeading(text: "Ezen a hálózaton")
+                        TVHeading(text: L("Ezen a hálózaton"))
                         if scanning { ProgressView().padding(.leading, 12) }
                     }
                     ForEach(found) { f in
@@ -78,20 +78,20 @@ struct TVServersView: View {
                         .buttonStyle(TVRowStyle())
                     }
                     if !scanning && found.isEmpty {
-                        Text("Nem találtam szervert a helyi hálózaton.").foregroundStyle(Theme.muted)
+                        Text(L("Nem találtam szervert a helyi hálózaton.")).foregroundStyle(Theme.muted)
                     }
-                    TVHeading(text: "Cím megadása").padding(.top, 10)
-                    TextField("pl. 192.168.1.20:8096 vagy kinora.pelda.hu", text: $address)
+                    TVHeading(text: L("Cím megadása")).padding(.top, 10)
+                    TextField(L("pl. 192.168.1.20:8096 vagy kinora.pelda.hu"), text: $address)
                         .textContentType(.URL)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .onSubmit { connect(address) }
                     HStack(spacing: 24) {
-                        Button { connect(address) } label: { Label("Csatlakozás", systemImage: "arrow.right") }
+                        Button { connect(address) } label: { Label(L("Csatlakozás"), systemImage: "arrow.right") }
                             .buttonStyle(TVPillStyle(prominent: true))
                             .disabled(address.trimmingCharacters(in: .whitespaces).isEmpty || busy)
-                        Button { scan() } label: { Label("Keresés újra", systemImage: "arrow.clockwise") }
+                        Button { scan() } label: { Label(L("Keresés újra"), systemImage: "arrow.clockwise") }
                             .buttonStyle(TVPillStyle())
                             .disabled(scanning)
                         if busy { ProgressView() }
@@ -161,32 +161,32 @@ struct TVLoginView: View {
     @State private var error: String?
 
     var body: some View {
-        TVAuthPage(title: "Belépés") {
+        TVAuthPage(title: L("Belépés")) {
             TVServerLine()
-            Text("A legegyszerűbb a kóddal belépés: a tévén megjelenő kódot egy már bejelentkezett telefonon vagy gépen hagyod jóvá.")
+            Text(L("A legegyszerűbb a kóddal belépés: a tévén megjelenő kódot egy már bejelentkezett telefonon vagy gépen hagyod jóvá."))
                 .font(.title3).foregroundStyle(Theme.plaster)
             TVErrorText(message: error ?? model.notice)
         } content: {
             if model.status?.quickconnectEnabled != false {
                 Button { model.notice = nil; model.go(.quickConnect) } label: {
-                    Label("Belépés kóddal", systemImage: "key")
+                    Label(L("Belépés kóddal"), systemImage: "key")
                 }
                 .buttonStyle(TVPillStyle(prominent: true))
                 .padding(.bottom, 20)
             }
-            TVHeading(text: "Felhasználónév és jelszó")
-            TextField("Felhasználónév", text: $username)
+            TVHeading(text: L("Felhasználónév és jelszó"))
+            TextField(L("Felhasználónév"), text: $username)
                 .textContentType(.username)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-            SecureField("Jelszó", text: $password)
+            SecureField(L("Jelszó"), text: $password)
                 .textContentType(.password)
                 .onSubmit(login)
             HStack(spacing: 24) {
-                Button(action: login) { Label("Belépés", systemImage: "person.fill.checkmark") }
+                Button(action: login) { Label(L("Belépés"), systemImage: "person.fill.checkmark") }
                     .buttonStyle(TVPillStyle())
                     .disabled(username.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty || busy)
-                Button("Másik szerver") { model.showServers() }
+                Button(L("Másik szerver")) { model.showServers() }
                     .buttonStyle(TVPillStyle())
                 if busy { ProgressView() }
             }
@@ -204,7 +204,7 @@ struct TVLoginView: View {
             do {
                 try await model.login(username: username.trimmingCharacters(in: .whitespaces), password: password)
             } catch let e as KinoraError where e.status == 401 {
-                error = "Hibás felhasználónév vagy jelszó."
+                error = L("Hibás felhasználónév vagy jelszó.")
             } catch {
                 self.error = error.localizedDescription
             }
@@ -222,13 +222,13 @@ struct TVQuickConnectView: View {
     @State private var attempt = 0
 
     var body: some View {
-        TVAuthPage(title: "Belépés kóddal") {
+        TVAuthPage(title: L("Belépés kóddal")) {
             TVServerLine()
             if let server = model.server {
-                Text("Egy már bejelentkezett telefonon vagy gépen nyisd meg a Kinorát (\(server.url)), és írd be a kódot.")
+                Text(L("Egy már bejelentkezett telefonon vagy gépen nyisd meg a Kinorát ({0}), és írd be a kódot.", server.url))
                     .font(.title3).foregroundStyle(Theme.plaster)
             }
-            Text("iPhone-on: Beállítások → Eszköz csatlakoztatása. A webes felületen: profil menü → Eszköz csatlakoztatása.")
+            Text(L("iPhone-on: Beállítások → Eszköz csatlakoztatása. A webes felületen: profil menü → Eszköz csatlakoztatása."))
                 .font(.callout).foregroundStyle(Theme.muted)
         } content: {
             if let start {
@@ -242,7 +242,7 @@ struct TVQuickConnectView: View {
                     .accessibilityLabel(start.code.map(String.init).joined(separator: " "))
                 HStack(spacing: 18) {
                     if !failed { ProgressView() }
-                    Text(message ?? "Várakozás a jóváhagyásra…")
+                    Text(message ?? L("Várakozás a jóváhagyásra…"))
                         .foregroundStyle(failed ? Theme.danger : Theme.muted)
                 }
             } else if failed {
@@ -252,12 +252,12 @@ struct TVQuickConnectView: View {
             }
             HStack(spacing: 24) {
                 if failed {
-                    Button { attempt += 1 } label: { Label("Új kód", systemImage: "arrow.clockwise") }
+                    Button { attempt += 1 } label: { Label(L("Új kód"), systemImage: "arrow.clockwise") }
                         .buttonStyle(TVPillStyle(prominent: true))
                 }
-                Button { model.go(.login) } label: { Label("Jelszóval", systemImage: "person") }
+                Button { model.go(.login) } label: { Label(L("Jelszóval"), systemImage: "person") }
                     .buttonStyle(TVPillStyle())
-                Button("Másik szerver") { model.showServers() }
+                Button(L("Másik szerver")) { model.showServers() }
                     .buttonStyle(TVPillStyle())
             }
             .padding(.top, 20)
@@ -281,8 +281,8 @@ struct TVQuickConnectView: View {
                 let st = try await model.pollQuickConnect(s)
                 switch st.status {
                 case .approved: return
-                case .denied: failed = true; message = "A csatlakozást elutasították."; return
-                case .expired: failed = true; message = "A kód lejárt."; return
+                case .denied: failed = true; message = L("A csatlakozást elutasították."); return
+                case .expired: failed = true; message = L("A kód lejárt."); return
                 case .pending: break
                 }
                 try await Task.sleep(for: .seconds(max(1, s.pollInterval ?? 2)))
@@ -306,7 +306,7 @@ struct TVProfilesView: View {
     var body: some View {
         VStack(spacing: 70) {
             BrandMark(size: 60)
-            Text("Ki néz?").font(Theme.display(72, weight: .bold))
+            Text(L("Ki néz?")).font(Theme.display(72, weight: .bold))
             if let profiles = model.me?.profiles {
                 // Centered when they fit; a scrolling row when there are more than the screen is wide.
                 ViewThatFits(in: .horizontal) {
@@ -320,7 +320,7 @@ struct TVProfilesView: View {
                 ProgressView()
             }
             TVErrorText(message: error)
-            Button("Másik szerver") { model.showServers() }
+            Button(L("Másik szerver")) { model.showServers() }
                 .buttonStyle(TVPillStyle())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -379,7 +379,7 @@ struct TVProfileFace: View {
             Text(profile.name).font(.title3.weight(.semibold))
                 .foregroundStyle(focused ? Theme.plasterBright : Theme.plaster)
             if profile.isKids {
-                Text("Gyerek").font(.callout).foregroundStyle(Theme.muted)
+                Text(L("Gyerek")).font(.callout).foregroundStyle(Theme.muted)
             }
         }
     }
@@ -396,17 +396,17 @@ private struct TVPinSheet: View {
     var body: some View {
         VStack(spacing: 40) {
             TVProfileFace(profile: profile, size: 160)
-            Text("Add meg a PIN-kódot").font(.title2.bold())
+            Text(L("Add meg a PIN-kódot")).font(.title2.bold())
             SecureField("PIN", text: $pin)
                 .keyboardType(.numberPad)
                 .frame(width: 500)
                 .onSubmit(submit)
             TVErrorText(message: error)
             HStack(spacing: 24) {
-                Button("Belépés", action: submit)
+                Button(L("Belépés"), action: submit)
                     .buttonStyle(TVPillStyle(prominent: true))
                     .disabled(pin.isEmpty || busy)
-                Button("Mégse") { dismiss() }
+                Button(L("Mégse")) { dismiss() }
                     .buttonStyle(TVPillStyle())
             }
         }

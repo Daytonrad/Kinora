@@ -519,7 +519,7 @@ final class PlayerModel: NSObject {
             }
         case .failed:
             loading = false
-            error = message ?? "A videó nem játszható le."
+            error = message ?? L("A videó nem játszható le.")
         default:
             break
         }

@@ -9,16 +9,16 @@ struct HomeView: View {
         @Bindable var model = model
         TabView(selection: $model.tab) {
             NavigationStack(path: $model.homePath) { HomeTab().browseDestinations() }
-                .tabItem { Label("Kezdőlap", systemImage: "house") }
+                .tabItem { Label(L("Kezdőlap"), systemImage: "house") }
                 .tag(AppModel.Tab.home)
             NavigationStack { LibrariesView().browseDestinations() }
-                .tabItem { Label("Könyvtárak", systemImage: "square.grid.2x2") }
+                .tabItem { Label(L("Könyvtárak"), systemImage: "square.grid.2x2") }
                 .tag(AppModel.Tab.libraries)
             NavigationStack { SearchView().browseDestinations() }
-                .tabItem { Label("Keresés", systemImage: "magnifyingglass") }
+                .tabItem { Label(L("Keresés"), systemImage: "magnifyingglass") }
                 .tag(AppModel.Tab.search)
             NavigationStack { DownloadsView() }
-                .tabItem { Label("Letöltések", systemImage: "arrow.down.circle") }
+                .tabItem { Label(L("Letöltések"), systemImage: "arrow.down.circle") }
                 .tag(AppModel.Tab.downloads)
         }
         // A widget link that arrived while signing in.
@@ -26,7 +26,7 @@ struct HomeView: View {
         // A new profile sees its own home: rebuild everything when it changes.
         .id(model.me?.profile?.id)
         .sheet(isPresented: $model.settingsVisible) { SettingsView() }
-        .alert("Watch party", isPresented: Binding(get: { model.partyError != nil && !model.playerVisible && !model.partyJoinVisible },
+        .alert(L("Watch party"), isPresented: Binding(get: { model.partyError != nil && !model.playerVisible && !model.partyJoinVisible },
                                                    set: { if !$0 { model.partyError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -54,9 +54,9 @@ struct HomeTab: View {
                         if !row.items.isEmpty { Shelf(row: row) }
                     }
                     if data.hero == nil && data.rows.allSatisfy({ $0.items.isEmpty }) {
-                        ContentUnavailableView("Még üres a könyvtár",
+                        ContentUnavailableView(L("Még üres a könyvtár"),
                                                systemImage: "film.stack",
-                                               description: Text("Az adminisztrátor a webes felületen adhat hozzá könyvtárat."))
+                                               description: Text(L("Az adminisztrátor a webes felületen adhat hozzá könyvtárat.")))
                             .padding(.top, 60)
                     }
                 }
@@ -69,7 +69,7 @@ struct HomeTab: View {
         .task { if data == nil { await load() } }
         .onChange(of: model.playbackGeneration) { Task { await load() } }
         .kinoraScreen()
-        .navigationTitle("Kezdőlap")
+        .navigationTitle(L("Kezdőlap"))
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .top) { header }
         .sheet(isPresented: Binding(get: { model.partyJoinVisible }, set: { model.partyJoinVisible = $0 })) {
@@ -88,7 +88,7 @@ struct HomeTab: View {
                     .contentShape(.rect)
             }
             .foregroundStyle(Theme.plaster)
-            .accessibilityLabel("Csatlakozás watch partyhoz")
+            .accessibilityLabel(L("Csatlakozás watch partyhoz"))
             AccountMenu()
         }
         .padding(.horizontal, metrics.gutter)
@@ -148,7 +148,7 @@ private struct Shelf: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(row.title)
+            Text(Language.shared.server(row.title))
                 .font(Theme.display(metrics.sectionTitle, weight: .bold))
                 .padding(.horizontal, metrics.gutter)
                 .accessibilityAddTraits(.isHeader)
@@ -162,7 +162,7 @@ private struct Shelf: View {
                         .contextMenu {
                             if let why = row.reasons?[String(item.id)] { Text(why) }
                             if item.kind == .movie || item.kind == .episode {
-                                Button(item.progress != nil ? "Folytatás" : "Lejátszás", systemImage: "play.fill") {
+                                Button(item.progress != nil ? L("Folytatás") : L("Lejátszás"), systemImage: "play.fill") {
                                     model.play(item)
                                 }
                             }

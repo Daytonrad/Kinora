@@ -14,7 +14,7 @@ enum Spotlight {
             attrs.displayName = item.title
             attrs.contentDescription = [item.year.map(String.init), item.genres?.prefix(3).joined(separator: ", "), item.overview]
                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-            attrs.keywords = [item.kind == .series ? "sorozat" : "film"] + (item.genres ?? [])
+            attrs.keywords = [item.kind == .series ? L("sorozat") : L("film")] + (item.genres ?? [])
             return CSSearchableItem(uniqueIdentifier: "kinora://item/\(item.id)", domainIdentifier: domain, attributeSet: attrs)
         }
         guard !entries.isEmpty else { return }

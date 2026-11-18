@@ -42,6 +42,12 @@ final class AppModel {
     private(set) var partyJoining = false
     /// Bumped when a playback ends, so screens refresh progress and watched marks.
     private(set) var playbackGeneration = 0
+    /// Bumped when the app's language changes; the root view is rebuilt with it.
+    private(set) var languageGeneration = 0
+    /// The languages the picker offers (the device's and the server's last list).
+    private(set) var languages: [LanguageInfo] = Language.shared.known
+    /// A language is being downloaded for the picker.
+    private(set) var languageLoading = false
 
     enum Tab: Hashable { case home, libraries, search, downloads }
     /// The selected tab and the home tab's stack, so links from widgets can open a title.
@@ -85,6 +91,44 @@ final class AppModel {
             screen = .servers
         }
         Task { await refreshStatus() }
+    }
+
+    // MARK: - language
+
+    /// "" follows the system language; a code picks that language. Languages come from the server and stay on the device.
+    var languageChoice: String {
+        get { _ = languageGeneration; return Language.shared.choice }
+        set {
+            guard newValue != Language.shared.choice else { return }
+            let before = Language.shared.code
+            Language.shared.choice = newValue
+            if Language.shared.code != before { languageChanged() }
+            // picked one the device does not have yet: fetch it, then switch
+            if !newValue.isEmpty, Language.shared.code != newValue, let client {
+                languageLoading = true
+                Task {
+                    await syncLanguages(client)
+                    languageLoading = false
+                }
+            }
+        }
+    }
+
+    private func syncLanguages(_ c: KinoraClient) async {
+        let before = Language.shared.code
+        let changed = await Language.shared.sync(c)
+        languages = Language.shared.known
+        // a new version of the language in use applies quietly; a different language rebuilds the screens
+        if Language.shared.code != before { languageChanged() } else if changed { reloadWidgets() }
+    }
+
+    private func languageChanged() {
+        languages = Language.shared.known
+        languageGeneration += 1
+        reloadWidgets()
+        #if os(iOS)
+        KinoraShortcuts.updateAppShortcutParameters()
+        #endif
     }
 
     // MARK: - servers
@@ -157,6 +201,7 @@ final class AppModel {
         }
         client = c
         me = nil
+        Task { await syncLanguages(c) }
         #if os(iOS)
         DownloadStore.shared.attach(c)
         Handoff.serverId = s.id
@@ -188,7 +233,7 @@ final class AppModel {
         do {
             return try await client.post("/api/quickconnect/initiate", device)
         } catch KinoraError.http(403, _) {
-            throw KinoraError.http(403, "A belépés kóddal ki van kapcsolva ezen a szerveren.")
+            throw KinoraError.http(403, L("A belépés kóddal ki van kapcsolva ezen a szerveren."))
         }
     }
 
@@ -234,7 +279,7 @@ final class AppModel {
         do {
             try await client.selectProfile(p.id, pin: pin)
         } catch KinoraError.http(403, let message) where message.localizedCaseInsensitiveContains("PIN") {
-            throw KinoraError.http(403, "Hibás PIN.")
+            throw KinoraError.http(403, L("Hibás PIN."))
         }
         try await loadMe()
         screen = .home
@@ -282,7 +327,7 @@ final class AppModel {
         guard var saved = server else { return }
         let found = try await Discovery.resolve(input)
         if let other = found.status.serverId, !saved.id.hasPrefix("http"), other != saved.id {
-            throw KinoraError.http(409, "Ezen a címen egy másik Kinora-szerver válaszol.")
+            throw KinoraError.http(409, L("Ezen a címen egy másik Kinora-szerver válaszol."))
         }
         saved.urls = ServerAddress.merge(saved.urls, [found.url])
         store.upsert(saved)
@@ -384,7 +429,7 @@ final class AppModel {
     func joinParty(_ typed: String) {
         guard let client else { return }
         guard let code = PartySync.normalizedCode(typed) else {
-            partyError = "A kód 6 betű vagy szám."
+            partyError = L("A kód 6 betű vagy szám.")
             return
         }
         guard !partyJoining else { return }
@@ -396,7 +441,7 @@ final class AppModel {
                 let detail = try await guarded { try await client.item(info.itemId) }
                 await enterParty(code, item: detail.item, client: client)
             } catch KinoraError.http(404, _) {
-                partyError = "Nincs ilyen watch party. Ellenőrizd a kódot."
+                partyError = L("Nincs ilyen watch party. Ellenőrizd a kódot.")
             } catch {
                 partyError = error.localizedDescription
             }
@@ -410,7 +455,7 @@ final class AppModel {
         let st = await session.firstState()
         if session.gone {
             session.leave()
-            partyError = session.status ?? "Nem sikerült csatlakozni a watch partyhoz."
+            partyError = session.status ?? L("Nem sikerült csatlakozni a watch partyhoz.")
             return
         }
         Haptic.success.play()
@@ -472,14 +517,14 @@ final class AppModel {
     func sharePlayRoom(_ a: WatchTogether) {
         guard player?.party?.code != a.code else { return }
         joinRoom(a.code, on: a.serverId,
-                 elsewhere: "Ez a SharePlay egy másik Kinora-szerver watch partyja, amelyre ezen az eszközön nem vagy bejelentkezve.")
+                 elsewhere: L("Ez a SharePlay egy másik Kinora-szerver watch partyja, amelyre ezen az eszközön nem vagy bejelentkezve."))
     }
 
     /// A title handed off from the user's other device: same server, same second (or same room).
     func continueHandoff(_ h: Handoff.Incoming) {
         pendingLink = h.party.map(KinoraLink.party) ?? .play(h.itemId)
         pendingStart = h.party == nil ? h.position : nil
-        goToServer(h.serverId, elsewhere: "Ez a cím egy másik Kinora-szerveren megy, amelyre ezen az eszközön nem vagy bejelentkezve.")
+        goToServer(h.serverId, elsewhere: L("Ez a cím egy másik Kinora-szerveren megy, amelyre ezen az eszközön nem vagy bejelentkezve."))
     }
 
     private func joinRoom(_ code: String, on serverId: String, elsewhere: String) {

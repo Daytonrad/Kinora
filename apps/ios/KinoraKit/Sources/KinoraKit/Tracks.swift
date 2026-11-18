@@ -62,14 +62,14 @@ public enum TrackLabel {
     }
 
     public static func audio(_ s: MediaStream, locale: Locale = .current) -> String {
-        var parts = [language(s.lang, locale: locale) ?? "\(s.typeIndex + 1). hangsáv"]
+        var parts = [language(s.lang, locale: locale) ?? L("{0}. hangsáv", s.typeIndex + 1)]
         if let t = s.title, !t.isEmpty, t != parts[0] { parts.append(t) }
         var tech: [String] = []
         if let c = s.codec, !c.isEmpty { tech.append(c.uppercased()) }
         switch s.channels {
         case 1: tech.append("mono")
-        case 2: tech.append("sztereó")
-        case let n? where n > 2: tech.append(n == 6 ? "5.1" : n == 8 ? "7.1" : "\(n) csatorna")
+        case 2: tech.append(L("sztereó"))
+        case let n? where n > 2: tech.append(n == 6 ? "5.1" : n == 8 ? "7.1" : L("{0} csatorna", n))
         default: break
         }
         if !tech.isEmpty { parts.append(tech.joined(separator: " ")) }
@@ -77,9 +77,9 @@ public enum TrackLabel {
     }
 
     public static func subtitle(_ s: SubtitleTrack, locale: Locale = .current) -> String {
-        var parts = [language(s.lang, locale: locale) ?? "\(s.idx + 1). felirat"]
+        var parts = [language(s.lang, locale: locale) ?? L("{0}. felirat", s.idx + 1)]
         if let t = s.title, !t.isEmpty, t != parts[0] { parts.append(t) }
-        if s.forced == true { parts.append("kényszerített") }
+        if s.forced == true { parts.append(L("kényszerített")) }
         return parts.joined(separator: " · ")
     }
 }

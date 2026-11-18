@@ -140,10 +140,10 @@ final class PartySession {
                 // The handshake was refused: the room is gone or not for this profile.
                 if let http = ws.response as? HTTPURLResponse, [403, 404].contains(http.statusCode) {
                     gone = true
-                    status = http.statusCode == 404 ? "Ez a watch party már nem létezik." : "Ez a watch party nem érhető el ezzel a profillal."
+                    status = http.statusCode == 404 ? L("Ez a watch party már nem létezik.") : L("Ez a watch party nem érhető el ezzel a profillal.")
                     return
                 }
-                status = "A kapcsolat megszakadt, újracsatlakozás…"
+                status = L("A kapcsolat megszakadt, újracsatlakozás…")
                 let wait = min(8.0, 0.5 * pow(2, Double(retry)))
                 retry += 1
                 try? await Task.sleep(for: .seconds(wait))
@@ -188,7 +188,7 @@ final class PartySession {
 
     private var waitingText: String? {
         guard let st = state, st.intended, !st.waiting.isEmpty else { return nil }
-        return "Várunk rá: " + st.waiting.joined(separator: ", ")
+        return L("Várunk rá: ") + st.waiting.joined(separator: ", ")
     }
 
     private func onState(_ st: PartyState) {

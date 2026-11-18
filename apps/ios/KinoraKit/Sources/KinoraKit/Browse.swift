@@ -77,7 +77,7 @@ public struct Item: Codable, Sendable, Identifiable, Hashable {
         guard kind == .episode else { return nil }
         switch (seasonNum, episodeNum) {
         case let (s?, e?): return "S\(s) · E\(e)"
-        case let (nil, e?): return "\(e). rész"
+        case let (nil, e?): return L("{0}. rész", e)
         default: return nil
         }
     }
@@ -127,10 +127,10 @@ public enum ItemSort: String, CaseIterable, Sendable, Identifiable {
     public var id: String { rawValue }
     public var label: String {
         switch self {
-        case .title: "Cím"
-        case .added: "Hozzáadás"
-        case .year: "Év"
-        case .communityRating: "Értékelés"
+        case .title: L("Cím")
+        case .added: L("Hozzáadás")
+        case .year: L("Év")
+        case .communityRating: L("Értékelés")
         }
     }
     /// Natural direction: A→Z for titles, newest/best first otherwise.

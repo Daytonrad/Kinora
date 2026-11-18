@@ -1,5 +1,6 @@
 import HomeKit
 import Observation
+import KinoraKit
 
 /// Runs a Home app scene when playback starts, pauses or stops ("Movie night": lights off).
 /// The scenes are picked in Settings and kept on this device only.
@@ -12,9 +13,9 @@ final class HomeScenes: NSObject, HMHomeManagerDelegate {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .start: "Lejátszás indul"
-            case .pause: "Szünet"
-            case .stop: "Lejátszás vége"
+            case .start: L("Lejátszás indul")
+            case .pause: L("Szünet")
+            case .stop: L("Lejátszás vége")
             }
         }
     }

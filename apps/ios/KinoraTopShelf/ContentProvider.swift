@@ -16,6 +16,7 @@ final class ContentProvider: TVTopShelfContentProvider {
     }
 
     private static func load() async -> Shelf? {
+        Language.shared.reloadIfNeeded()
         let store = ServerStore.shared()
         guard let server = store.current, let token = store.token(for: server.id) else { return nil }
         let client = KinoraClient(server: server, token: token)
@@ -51,8 +52,8 @@ struct Shelf: Codable, Sendable {
 
     var content: (any TVTopShelfContent)? {
         var sections: [TVTopShelfItemCollection<TVTopShelfSectionedItem>] = []
-        if !resume.isEmpty { sections.append(Self.section("Folytatás", resume, resume: true)) }
-        if !recent.isEmpty { sections.append(Self.section("Új a könyvtárban", recent, resume: false)) }
+        if !resume.isEmpty { sections.append(Self.section(L("Folytatás"), resume, resume: true)) }
+        if !recent.isEmpty { sections.append(Self.section(L("Új a könyvtárban"), recent, resume: false)) }
         return sections.isEmpty ? nil : TVTopShelfSectionedContent(sections: sections)
     }
 

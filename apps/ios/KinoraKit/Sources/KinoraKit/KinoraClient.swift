@@ -68,7 +68,7 @@ public actor KinoraClient {
     private func decode<R: Decodable>(_ data: Data) throws -> R {
         if R.self == Empty.self, let e = Empty() as? R { return e }
         do { return try JSONDecoder.kinora.decode(R.self, from: data) }
-        catch { throw KinoraError.http(200, "Váratlan válasz a szervertől.") }
+        catch { throw KinoraError.http(200, L("Váratlan válasz a szervertől.")) }
     }
 
     private func send(_ method: String, _ path: String, body: (some Encodable & Sendable)?, retried: Bool = false) async throws -> Data {

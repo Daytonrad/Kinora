@@ -15,6 +15,8 @@ struct KinoraTVApp: App {
     var body: some Scene {
         WindowGroup {
             TVRootView()
+                .id(model.languageGeneration)
+                .environment(\.locale, Language.shared.locale)
                 .environment(model)
                 .preferredColorScheme(.dark)
                 .tint(Theme.amber)

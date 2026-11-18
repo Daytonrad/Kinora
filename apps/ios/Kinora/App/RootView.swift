@@ -1,4 +1,5 @@
 import SwiftUI
+import KinoraKit
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
@@ -50,7 +51,7 @@ struct OtherServerButton: View {
 
     var body: some View {
         Button { model.showServers() } label: {
-            Label("Másik szerver", systemImage: "server.rack")
+            Label(L("Másik szerver"), systemImage: "server.rack")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.plaster)
                 .frame(minHeight: 44)

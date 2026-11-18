@@ -57,7 +57,7 @@ struct TVPlayerView: View {
             }
 
             if let s = seekFlash {
-                Text(s > 0 ? "+\(Int(s)) mp" : "−\(Int(-s)) mp")
+                Text(s > 0 ? L("+{0} mp", Int(s)) : L("−{0} mp", Int(-s)))
                     .font(.system(size: 44, weight: .bold).monospacedDigit())
                     .padding(.horizontal, 36).padding(.vertical, 18)
                     .background(.black.opacity(0.55), in: .capsule)
@@ -141,10 +141,10 @@ struct TVPlayerView: View {
     @ViewBuilder private var promptButtons: some View {
         if player.showNext, let next = player.next {
             VStack(alignment: .trailing, spacing: 16) {
-                Text("Következő rész" + (player.nextCountdown.map { " · \($0) mp" } ?? ""))
+                Text(L("Következő rész") + (player.nextCountdown.map { L(" · {0} mp", $0) } ?? ""))
                     .font(.callout.weight(.semibold)).foregroundStyle(Theme.amber)
                 HStack(spacing: 20) {
-                    Button("Mégse") { player.dismissNext(); focus = .timeline }
+                    Button(L("Mégse")) { player.dismissNext(); focus = .timeline }
                         .buttonStyle(TVPillStyle())
                         .focused($focus, equals: .dismissNext)
                     Button { player.playNext() } label: {
@@ -169,21 +169,21 @@ struct TVPlayerView: View {
     private func errorPanel(_ message: String) -> some View {
         VStack(spacing: 30) {
             Image(systemName: "exclamationmark.triangle").font(.system(size: 70)).foregroundStyle(Theme.amber)
-            Text("Nem sikerült lejátszani").font(Theme.display(48, weight: .bold))
+            Text(L("Nem sikerült lejátszani")).font(Theme.display(48, weight: .bold))
             Text(message).font(.title3).multilineTextAlignment(.center).frame(maxWidth: 1100)
             if let reasons = player.info?.reasons, !reasons.isEmpty {
                 Text(reasons.joined(separator: " · ")).font(.callout).foregroundStyle(Theme.muted)
             }
             HStack(spacing: 24) {
-                Button { player.retry() } label: { Label("Újra", systemImage: "arrow.clockwise") }
+                Button { player.retry() } label: { Label(L("Újra"), systemImage: "arrow.clockwise") }
                     .buttonStyle(TVPillStyle(prominent: true))
                     .focused($focus, equals: .retry)
                 if !player.triedTranscode && !player.isOffline {
-                    Button("Lejátszás átkódolással") { player.retry(transcode: true) }
+                    Button(L("Lejátszás átkódolással")) { player.retry(transcode: true) }
                         .buttonStyle(TVPillStyle())
                         .focused($focus, equals: .transcode)
                 }
-                Button("Bezárás") { player.close() }
+                Button(L("Bezárás")) { player.close() }
                     .buttonStyle(TVPillStyle())
                     .focused($focus, equals: .close)
             }
@@ -244,14 +244,14 @@ struct TVPlayerView: View {
     }
 
     static func delayLabel(_ d: Double) -> String {
-        d == 0 ? "eredeti" : String(format: "%+.1f mp", d).replacingOccurrences(of: ".", with: ",")
+        d == 0 ? L("eredeti") : String(format: L("%+.1f mp"), d).replacingOccurrences(of: ".", with: Language.shared.decimalSeparator)
     }
 
     static func skipLabel(_ kind: Segment.Kind) -> String {
         switch kind {
-        case .recap: "Összefoglaló átugrása"
-        case .credits: "Stáblista átugrása"
-        default: "Intró átugrása"
+        case .recap: L("Összefoglaló átugrása")
+        case .credits: L("Stáblista átugrása")
+        default: L("Intró átugrása")
         }
     }
 }
@@ -276,21 +276,21 @@ private struct TVMenuRow: View, Equatable {
         HStack(spacing: 24) {
             if !subs.isEmpty {
                 Menu {
-                    Button { player.selectSubtitle(nil) } label: { check("Ki", player.subtitle == nil) }
+                    Button { player.selectSubtitle(nil) } label: { check(L("Ki"), player.subtitle == nil) }
                     ForEach(subs) { s in
                         Button { player.selectSubtitle(s) } label: { check(TrackLabel.subtitle(s), player.subtitle == s) }
                     }
                     if player.subtitle != nil {
-                        Section("Időzítés: \(TVPlayerView.delayLabel(player.subtitleDelay))") {
-                            Button("Korábban (−0,5 mp)", systemImage: "minus") { player.shiftSubtitles(by: -0.5) }
-                            Button("Később (+0,5 mp)", systemImage: "plus") { player.shiftSubtitles(by: 0.5) }
+                        Section(L("Időzítés: {0}", TVPlayerView.delayLabel(player.subtitleDelay))) {
+                            Button(L("Korábban (−0,5 mp)"), systemImage: "minus") { player.shiftSubtitles(by: -0.5) }
+                            Button(L("Később (+0,5 mp)"), systemImage: "plus") { player.shiftSubtitles(by: 0.5) }
                             if player.subtitleDelay != 0 {
-                                Button("Visszaállítás", systemImage: "arrow.counterclockwise") { player.shiftSubtitles(by: 0) }
+                                Button(L("Visszaállítás"), systemImage: "arrow.counterclockwise") { player.shiftSubtitles(by: 0) }
                             }
                         }
                     }
                 } label: {
-                    Label(player.subtitle.map { TrackLabel.subtitle($0) } ?? "Felirat", systemImage: "captions.bubble")
+                    Label(player.subtitle.map { TrackLabel.subtitle($0) } ?? L("Felirat"), systemImage: "captions.bubble")
                 }
                 .focused(focus, equals: .subtitles)
             }
@@ -300,7 +300,7 @@ private struct TVMenuRow: View, Equatable {
                         Button { player.selectAudio(a.typeIndex) } label: { check(TrackLabel.audio(a), a.typeIndex == player.audioIdx) }
                     }
                 } label: {
-                    Label(audio.first { $0.typeIndex == player.audioIdx }.map { TrackLabel.audio($0) } ?? "Hang",
+                    Label(audio.first { $0.typeIndex == player.audioIdx }.map { TrackLabel.audio($0) } ?? L("Hang"),
                           systemImage: "speaker.wave.2")
                 }
                 .focused(focus, equals: .audio)
@@ -309,31 +309,31 @@ private struct TVMenuRow: View, Equatable {
                 Menu {
                     ForEach(Array(player.chapters.enumerated()), id: \.offset) { i, c in
                         Button { player.seek(to: c.start) } label: {
-                            let name = c.title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(i + 1). fejezet"
+                            let name = c.title.flatMap { $0.isEmpty ? nil : $0 } ?? L("{0}. fejezet", i + 1)
                             check("\(name) · \(TVPlayerView.clock(c.start))", c == player.currentChapter)
                         }
                     }
-                } label: { Label("Fejezetek", systemImage: "list.bullet") }
+                } label: { Label(L("Fejezetek"), systemImage: "list.bullet") }
                 .focused(focus, equals: .chapters)
             }
             if let party = player.party {
                 Menu {
-                    Section("Reakció") {
+                    Section(L("Reakció")) {
                         ForEach(party.reactions, id: \.self) { e in Button(e) { party.react(e) } }
                     }
-                    Button("Üzenet írása…", systemImage: "text.bubble") { message = ""; composing = true }
+                    Button(L("Üzenet írása…"), systemImage: "text.bubble") { message = ""; composing = true }
                     if party.isHost {
-                        Button { party.setEveryone(!party.everyone) } label: { check("Mindenki irányíthat", party.everyone) }
+                        Button { party.setEveryone(!party.everyone) } label: { check(L("Mindenki irányíthat"), party.everyone) }
                     }
-                    Button("Kilépés a watch partyból", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                    Button(L("Kilépés a watch partyból"), systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                         player.close()
                     }
                 } label: { Label("Party · \(party.code)", systemImage: "person.2.fill") }
                 .focused(focus, equals: .party)
-                .alert("Üzenet a partynak", isPresented: $composing) {
-                    TextField("Üzenet", text: $message)
-                    Button("Küldés") { party.chat(message) }
-                    Button("Mégse", role: .cancel) {}
+                .alert(L("Üzenet a partynak"), isPresented: $composing) {
+                    TextField(L("Üzenet"), text: $message)
+                    Button(L("Küldés")) { party.chat(message) }
+                    Button(L("Mégse"), role: .cancel) {}
                 }
             }
             Menu {
@@ -344,13 +344,13 @@ private struct TVMenuRow: View, Equatable {
                     }
                 }
                 if player.party == nil, !player.isOffline {
-                    Section("Watch party") {
-                        Button("Watch party indítása", systemImage: "person.2") { model.startParty(player.item) }
+                    Section(L("Watch party")) {
+                        Button(L("Watch party indítása"), systemImage: "person.2") { model.startParty(player.item) }
                     }
                 }
                 if !player.isOffline {
-                    Section("Minőség") {
-                        Button { player.setQuality(nil) } label: { check("Automatikus", player.qualityCap == nil) }
+                    Section(L("Minőség")) {
+                        Button { player.setQuality(nil) } label: { check(L("Automatikus"), player.qualityCap == nil) }
                         ForEach(SettingChoices.bitrates, id: \.0) { b in
                             Button { player.setQuality(b.0) } label: { check(b.1, player.qualityCap == b.0) }
                         }
@@ -360,7 +360,7 @@ private struct TVMenuRow: View, Equatable {
                 if player.party == nil {
                     Label(PlaybackSpeeds.label(player.speed), systemImage: "gauge.with.dots.needle.67percent")
                 } else {
-                    Label("Minőség", systemImage: "dial.medium")
+                    Label(L("Minőség"), systemImage: "dial.medium")
                 }
             }
             .focused(focus, equals: .speed)
@@ -410,9 +410,9 @@ private struct TVTimeline: View {
         }
         .animation(.easeOut(duration: 0.15), value: focused)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Lejátszási pozíció")
-        .accessibilityValue("\(TVPlayerView.clock(player.position)), hátra \(TVPlayerView.clock(d - player.position))")
-        .accessibilityHint("Balra vagy jobbra 10 másodpercet ugrik.")
+        .accessibilityLabel(L("Lejátszási pozíció"))
+        .accessibilityValue(L("{0}, hátra {1}", TVPlayerView.clock(player.position), TVPlayerView.clock(d - player.position)))
+        .accessibilityHint(L("Balra vagy jobbra 10 másodpercet ugrik."))
     }
 }
 
@@ -518,14 +518,14 @@ private struct TVPartyOverlay: View {
                         if chrome || alone {
                             // Friends join from their phones: the camera opens the app on this room.
                             HStack(alignment: .center, spacing: 18) {
-                                Text("Csatlakozz telefonról:\nolvasd be a kódot")
+                                Text(L("Csatlakozz telefonról:\nolvasd be a kódot"))
                                     .font(.caption)
                                     .foregroundStyle(Theme.plaster)
                                     .multilineTextAlignment(.trailing)
                                 PartyQRCode(url: party.appLink, size: 150)
                             }
                         }
-                        Text("Watch party · \(party.code)").font(.callout.weight(.semibold).monospaced())
+                        Text(L("Watch party · {0}", party.code)).font(.callout.weight(.semibold).monospaced())
                         HStack(spacing: 16) {
                             ForEach(party.members) { m in
                                 HStack(spacing: 6) {

@@ -12,7 +12,7 @@ struct QuickConnectView: View {
     var body: some View {
         AuthPage {
             ServerHeader()
-            Text("Belépés kóddal").font(Theme.display(40, weight: .bold))
+            Text(L("Belépés kóddal")).font(Theme.display(40, weight: .bold))
 
             if let start {
                 Text(spaced(start.code))
@@ -25,26 +25,26 @@ struct QuickConnectView: View {
                     .accessibilityLabel(start.code.map(String.init).joined(separator: " "))
                     .textSelection(.enabled)
                 if let server = model.server {
-                    Text("Egy már bejelentkezett telefonon vagy gépen nyisd meg: \(server.url), és írd be ezt a kódot.")
+                    Text(L("Egy már bejelentkezett telefonon vagy gépen nyisd meg: {0}, és írd be ezt a kódot.", server.url))
                         .foregroundStyle(Theme.plaster)
                 }
-                Text("A webes felületen: profil menü → Eszköz csatlakoztatása")
+                Text(L("A webes felületen: profil menü → Eszköz csatlakoztatása"))
                     .font(.subheadline).foregroundStyle(Theme.muted)
                 HStack(spacing: 10) {
                     if !failed { ProgressView() }
-                    Text(message ?? "Várakozás a jóváhagyásra…").foregroundStyle(failed ? Theme.danger : Theme.muted)
+                    Text(message ?? L("Várakozás a jóváhagyásra…")).foregroundStyle(failed ? Theme.danger : Theme.muted)
                 }
                 if failed {
-                    Button("Új kód kérése") { attempt += 1 }.buttonStyle(PrimaryButtonStyle())
+                    Button(L("Új kód kérése")) { attempt += 1 }.buttonStyle(PrimaryButtonStyle())
                 }
             } else if failed {
                 ErrorText(message: message)
-                Button("Újra") { attempt += 1 }.buttonStyle(PrimaryButtonStyle())
+                Button(L("Újra")) { attempt += 1 }.buttonStyle(PrimaryButtonStyle())
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(40)
             }
 
-            Button { model.go(.login) } label: { Label("Belépés jelszóval", systemImage: "person") }
+            Button { model.go(.login) } label: { Label(L("Belépés jelszóval"), systemImage: "person") }
                 .buttonStyle(SecondaryButtonStyle())
             OtherServerButton()
         }
@@ -67,8 +67,8 @@ struct QuickConnectView: View {
                 let st = try await model.pollQuickConnect(s)
                 switch st.status {
                 case .approved: return
-                case .denied: failed = true; Haptic.error.play(); message = "A csatlakozást elutasították."; return
-                case .expired: failed = true; Haptic.warning.play(); message = "A kód lejárt."; return
+                case .denied: failed = true; Haptic.error.play(); message = L("A csatlakozást elutasították."); return
+                case .expired: failed = true; Haptic.warning.play(); message = L("A kód lejárt."); return
                 case .pending: break
                 }
                 try await Task.sleep(for: .seconds(max(1, s.pollInterval ?? 2)))

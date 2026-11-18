@@ -201,7 +201,7 @@ struct ProgressStripe: View {
                 }
             }
             .frame(height: 4)
-            .accessibilityLabel("\(Int(p * 100)) százalék megnézve")
+            .accessibilityLabel(L("{0} százalék megnézve", Int(p * 100)))
         }
     }
 }
@@ -216,7 +216,7 @@ struct WatchedBadge: View {
                 .padding(5)
                 .background(Theme.amber, in: .circle)
                 .padding(6)
-                .accessibilityLabel("Megnézve")
+                .accessibilityLabel(L("Megnézve"))
         } else if let n = item.unplayedCount, n > 0, item.kind == .series || item.kind == .season {
             Text("\(n)")
                 .font(.caption2.bold().monospacedDigit())
@@ -224,7 +224,7 @@ struct WatchedBadge: View {
                 .padding(.horizontal, 7).padding(.vertical, 3)
                 .background(Theme.amber, in: .capsule)
                 .padding(6)
-                .accessibilityLabel("\(n) nem látott rész")
+                .accessibilityLabel(L("{0} nem látott rész", n))
         }
     }
 }
@@ -237,17 +237,17 @@ enum Format {
         guard let s = seconds, s > 0 else { return nil }
         let minutes = max(1, Int((s / 60).rounded()))
         let h = minutes / 60, m = minutes % 60
-        if h == 0 { return "\(m) perc" }
-        return m == 0 ? "\(h) óra" : "\(h) ó \(m) perc"
+        if h == 0 { return L("{0} perc", m) }
+        return m == 0 ? L("{0} óra", h) : L("{0} ó {1} perc", h, m)
     }
 
     static func subtitle(_ item: Item) -> String {
         switch item.kind {
         case .series:
-            if let n = item.episodeCount { return "\(n) rész" }
-            return "Sorozat"
+            if let n = item.episodeCount { return L("{0} rész", n) }
+            return L("Sorozat")
         case .season:
-            return item.episodeCount.map { "\($0) rész" } ?? ""
+            return item.episodeCount.map { L("{0} rész", $0) } ?? ""
         case .episode:
             return item.episodeLabel ?? ""
         default:
@@ -286,7 +286,7 @@ struct LoadingState: View {
             if let error {
                 Image(systemName: "wifi.exclamationmark").font(.largeTitle).foregroundStyle(Theme.muted)
                 Text(error).multilineTextAlignment(.center).foregroundStyle(Theme.plaster)
-                Button("Újra", action: retry).buttonStyle(.bordered)
+                Button(L("Újra"), action: retry).buttonStyle(.bordered)
             } else {
                 ProgressView().controlSize(.large)
             }
@@ -307,12 +307,12 @@ struct AccountMenu: View {
             if let p = model.me?.profile {
                 Text(p.name)
             }
-            Button("Beállítások", systemImage: "gearshape") { model.settingsVisible = true }
+            Button(L("Beállítások"), systemImage: "gearshape") { model.settingsVisible = true }
             if model.me?.profileLocked != true {
-                Button("Profilváltás", systemImage: "person.2") { model.switchProfile() }
+                Button(L("Profilváltás"), systemImage: "person.2") { model.switchProfile() }
             }
-            Button("Másik szerver", systemImage: "server.rack") { model.showServers() }
-            Button("Kijelentkezés", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+            Button(L("Másik szerver"), systemImage: "server.rack") { model.showServers() }
+            Button(L("Kijelentkezés"), systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                 confirmLogout = true
             }
         } label: {
@@ -322,10 +322,10 @@ struct AccountMenu: View {
                 Image(systemName: "person.crop.circle")
             }
         }
-        .accessibilityLabel("Fiók")
+        .accessibilityLabel(L("Fiók"))
         .accessibilityValue(model.me?.profile?.name ?? "")
-        .confirmationDialog("Biztosan kijelentkezel?", isPresented: $confirmLogout, titleVisibility: .visible) {
-            Button("Kijelentkezés", role: .destructive) { Task { await model.logout() } }
+        .confirmationDialog(L("Biztosan kijelentkezel?"), isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button(L("Kijelentkezés"), role: .destructive) { Task { await model.logout() } }
         }
     }
 }

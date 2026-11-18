@@ -9,21 +9,21 @@ struct TVMainView: View {
         @Bindable var model = model
         TabView(selection: $model.tab) {
             NavigationStack(path: $model.homePath) { TVHomeTab().tvDestinations() }
-                .tabItem { Label("Kezdőlap", systemImage: "house") }
+                .tabItem { Label(L("Kezdőlap"), systemImage: "house") }
                 .tag(AppModel.Tab.home)
             NavigationStack { TVLibrariesTab().tvDestinations() }
-                .tabItem { Label("Könyvtárak", systemImage: "square.grid.2x2") }
+                .tabItem { Label(L("Könyvtárak"), systemImage: "square.grid.2x2") }
                 .tag(AppModel.Tab.libraries)
             NavigationStack { TVSearchTab().tvDestinations() }
-                .tabItem { Label("Keresés", systemImage: "magnifyingglass") }
+                .tabItem { Label(L("Keresés"), systemImage: "magnifyingglass") }
                 .tag(AppModel.Tab.search)
             NavigationStack { TVSettingsTab() }
-                .tabItem { Label("Beállítások", systemImage: "gearshape") }
+                .tabItem { Label(L("Beállítások"), systemImage: "gearshape") }
                 .tag(AppModel.Tab.downloads)
         }
         .onAppear { model.handlePendingLink() }
         .id(model.me?.profile?.id)
-        .alert("Watch party", isPresented: Binding(get: { model.partyError != nil && !model.playerVisible },
+        .alert(L("Watch party"), isPresented: Binding(get: { model.partyError != nil && !model.playerVisible },
                                                    set: { if !$0 { model.partyError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -65,13 +65,13 @@ struct TVItemCard: View {
         .buttonStyle(TVCardStyle())
         .contextMenu {
             if item.kind == .movie || item.kind == .episode {
-                Button("Lejátszás", systemImage: "play.fill") { model.play(item) }
+                Button(L("Lejátszás"), systemImage: "play.fill") { model.play(item) }
                 if item.progress != nil {
-                    Button("Lejátszás elölről", systemImage: "arrow.counterclockwise") { model.play(item, from: 0) }
+                    Button(L("Lejátszás elölről"), systemImage: "arrow.counterclockwise") { model.play(item, from: 0) }
                 }
             }
             if playsDirectly {
-                NavigationLink(value: item) { Label("Adatlap", systemImage: "info.circle") }
+                NavigationLink(value: item) { Label(L("Adatlap"), systemImage: "info.circle") }
             }
         }
     }
@@ -161,13 +161,13 @@ struct TVHomeTab: View {
                     if let hero = data.hero { TVHero(item: hero) }
                     ForEach(data.rows) { row in
                         if !row.items.isEmpty {
-                            TVShelf(title: row.title, items: row.items, landscape: row.style == .landscape,
+                            TVShelf(title: Language.shared.server(row.title), items: row.items, landscape: row.style == .landscape,
                                     playsDirectly: row.style == .landscape)
                         }
                     }
                     if data.hero == nil && data.rows.allSatisfy({ $0.items.isEmpty }) {
-                        ContentUnavailableView("Még üres a könyvtár", systemImage: "film.stack",
-                                               description: Text("Az adminisztrátor a webes felületen adhat hozzá könyvtárat."))
+                        ContentUnavailableView(L("Még üres a könyvtár"), systemImage: "film.stack",
+                                               description: Text(L("Az adminisztrátor a webes felületen adhat hozzá könyvtárat.")))
                             .padding(.top, 120)
                     }
                 }
@@ -215,11 +215,11 @@ private struct TVHero: View {
                 HStack(spacing: 24) {
                     if item.kind == .movie || item.kind == .episode {
                         Button { model.play(item) } label: {
-                            Label(item.progress != nil ? "Folytatás" : "Lejátszás", systemImage: "play.fill")
+                            Label(item.progress != nil ? L("Folytatás") : L("Lejátszás"), systemImage: "play.fill")
                         }
                         .buttonStyle(TVPillStyle(prominent: true))
                     }
-                    NavigationLink(value: item) { Label("Részletek", systemImage: "info.circle") }
+                    NavigationLink(value: item) { Label(L("Részletek"), systemImage: "info.circle") }
                         .buttonStyle(TVPillStyle())
                 }
                 .padding(.top, 10)
@@ -265,7 +265,7 @@ struct TVDetailView: View {
                     if let message = error ?? actionError { TVErrorText(message: message).padding(.horizontal, 80) }
                     if current.kind == .series || current.kind == .season { seasonsSection }
                     if let similar = detail?.similar, !similar.isEmpty {
-                        TVShelf(title: "Hasonlók", items: similar)
+                        TVShelf(title: L("Hasonlók"), items: similar)
                     }
                 }
                 .padding(.top, 60)
@@ -297,7 +297,7 @@ struct TVDetailView: View {
                 HStack(spacing: 16) {
                     ProgressView(value: p).tint(Theme.amber).frame(width: 260)
                     if let left = Format.runtime((t.runtimeSec ?? 0) - (t.userData?.position ?? 0)) {
-                        Text("Még \(left)").font(.callout).foregroundStyle(Theme.muted)
+                        Text(L("Még {0}", left)).font(.callout).foregroundStyle(Theme.muted)
                     }
                 }
             }
@@ -309,21 +309,21 @@ struct TVDetailView: View {
                 .disabled(playTarget == nil)
                 .focused($playFocused)
                 if let t = playTarget, t.progress != nil {
-                    Button { model.play(t, from: 0) } label: { Label("Elölről", systemImage: "arrow.counterclockwise") }
+                    Button { model.play(t, from: 0) } label: { Label(L("Elölről"), systemImage: "arrow.counterclockwise") }
                         .buttonStyle(TVPillStyle())
                 }
                 if let t = playTarget, t.kind == .movie || t.kind == .episode {
-                    Button { model.startParty(t) } label: { Label("Watch party", systemImage: "person.2") }
+                    Button { model.startParty(t) } label: { Label(L("Watch party"), systemImage: "person.2") }
                         .buttonStyle(TVPillStyle())
                         .disabled(model.partyJoining)
                 }
                 Button { Task { await setPlayed(!userData.played) } } label: {
-                    Label(userData.played ? "Megnézve" : "Megnézettnek jelölés",
+                    Label(userData.played ? L("Megnézve") : L("Megnézettnek jelölés"),
                           systemImage: userData.played ? "checkmark.circle.fill" : "checkmark.circle")
                 }
                 .buttonStyle(TVPillStyle())
                 Button { Task { await setFavorite(!userData.favorite) } } label: {
-                    Label(userData.favorite ? "Kedvenc" : "Kedvencekhez", systemImage: userData.favorite ? "heart.fill" : "heart")
+                    Label(userData.favorite ? L("Kedvenc") : L("Kedvencekhez"), systemImage: userData.favorite ? "heart.fill" : "heart")
                 }
                 .buttonStyle(TVPillStyle())
             }
@@ -334,10 +334,10 @@ struct TVDetailView: View {
     }
 
     private var playLabel: String {
-        guard let t = playTarget else { return "Lejátszás" }
-        if t.progress != nil { return "Folytatás" }
-        if t.kind == .episode, current.kind != .episode, let l = t.episodeLabel { return "\(l) lejátszása" }
-        return "Lejátszás"
+        guard let t = playTarget else { return L("Lejátszás") }
+        if t.progress != nil { return L("Folytatás") }
+        if t.kind == .episode, current.kind != .episode, let l = t.episodeLabel { return L("{0} lejátszása", l) }
+        return L("Lejátszás")
     }
 
     @ViewBuilder private var seasonsSection: some View {
@@ -357,14 +357,14 @@ struct TVDetailView: View {
         }
         if let season, let list = episodes[season] {
             if list.isEmpty {
-                Text("Ebben az évadban nincs rész.").foregroundStyle(Theme.muted).padding(.horizontal, 80)
+                Text(L("Ebben az évadban nincs rész.")).foregroundStyle(Theme.muted).padding(.horizontal, 80)
             } else {
-                TVShelf(title: "Részek", items: list, landscape: true, playsDirectly: true)
+                TVShelf(title: L("Részek"), items: list, landscape: true, playsDirectly: true)
             }
         } else if let episodesError {
             HStack(spacing: 30) {
                 TVErrorText(message: episodesError)
-                Button { Task { await loadEpisodes() } } label: { Label("Újra", systemImage: "arrow.clockwise") }
+                Button { Task { await loadEpisodes() } } label: { Label(L("Újra"), systemImage: "arrow.clockwise") }
                     .buttonStyle(TVPillStyle())
             }
             .padding(.horizontal, 80)
@@ -413,7 +413,7 @@ struct TVDetailView: View {
         actionError = nil
         do { userData = try await model.api { [id = current.id] in try await $0.setFavorite(id, on) } }
         catch is CancellationError {}
-        catch { actionError = "Nem sikerült menteni: " + error.localizedDescription }
+        catch { actionError = L("Nem sikerült menteni: ") + error.localizedDescription }
     }
 
     private func setPlayed(_ on: Bool) async {
@@ -422,7 +422,7 @@ struct TVDetailView: View {
         do { u = try await model.api { [id = current.id] in try await $0.setPlayed(id, on) } }
         catch is CancellationError { return }
         catch {
-            actionError = "Nem sikerült menteni: " + error.localizedDescription
+            actionError = L("Nem sikerült menteni: ") + error.localizedDescription
             return
         }
         userData = u
@@ -440,8 +440,8 @@ struct TVLibrariesTab: View {
     var body: some View {
         ScrollView {
             if let libraries, libraries.isEmpty {
-                ContentUnavailableView("Nincs könyvtár", systemImage: "square.grid.2x2",
-                                       description: Text("Az adminisztrátor a webes felületen adhat hozzá könyvtárat."))
+                ContentUnavailableView(L("Nincs könyvtár"), systemImage: "square.grid.2x2",
+                                       description: Text(L("Az adminisztrátor a webes felületen adhat hozzá könyvtárat.")))
                     .padding(.top, 120)
             } else if let libraries {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 50), count: 3), spacing: 50) {
@@ -450,7 +450,7 @@ struct TVLibrariesTab: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Image(systemName: icon(lib.kind)).font(.system(size: 56)).foregroundStyle(Theme.amber)
                                 Text(lib.name).font(.title3.weight(.semibold))
-                                if let n = lib.count { Text("\(n) cím").font(.callout).opacity(0.75) }
+                                if let n = lib.count { Text(L("{0} cím", n)).font(.callout).opacity(0.75) }
                             }
                             .padding(.vertical, 18)
                         }
@@ -515,7 +515,7 @@ struct TVLibraryGrid: View {
                     }
                     if loadingMore { ProgressView().frame(maxWidth: .infinity) }
                     if items.isEmpty {
-                        ContentUnavailableView("Üres könyvtár", systemImage: "film.stack").padding(.top, 80)
+                        ContentUnavailableView(L("Üres könyvtár"), systemImage: "film.stack").padding(.top, 80)
                     }
                 } else {
                     LoadingState(error: error) { Task { await load() } }
@@ -569,7 +569,7 @@ struct TVSearchTab: View {
                 LoadingState(error: error) { Task { await search() } }
             } else if results.isEmpty {
                 Text(query.trimmingCharacters(in: .whitespaces).count < 2
-                     ? "Írj be legalább két betűt." : (searching ? "Keresés…" : "Nincs találat."))
+                     ? L("Írj be legalább két betűt.") : (searching ? L("Keresés…") : L("Nincs találat.")))
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 60)
@@ -581,7 +581,7 @@ struct TVSearchTab: View {
             }
         }
         .scrollClipDisabled()
-        .searchable(text: $query, prompt: "Filmek, sorozatok, részek")
+        .searchable(text: $query, prompt: L("Filmek, sorozatok, részek"))
         .task(id: query) { await search() }
     }
 
@@ -629,20 +629,20 @@ struct TVSettingsTab: View {
                         .padding(.bottom, 20)
                     }
                     Button { partyCode = ""; joining = true } label: {
-                        Label("Csatlakozás watch partyhoz", systemImage: "person.2.wave.2")
+                        Label(L("Csatlakozás watch partyhoz"), systemImage: "person.2.wave.2")
                     }
                     .buttonStyle(TVRowStyle())
                     .disabled(model.partyJoining)
                     if model.me?.profileLocked != true {
-                        Button { model.switchProfile() } label: { Label("Profilváltás", systemImage: "person.2") }
+                        Button { model.switchProfile() } label: { Label(L("Profilváltás"), systemImage: "person.2") }
                             .buttonStyle(TVRowStyle())
                     }
-                    Button { model.showServers() } label: { Label("Másik szerver", systemImage: "server.rack") }
+                    Button { model.showServers() } label: { Label(L("Másik szerver"), systemImage: "server.rack") }
                         .buttonStyle(TVRowStyle())
-                    Button { confirmLogout = true } label: { Label("Kijelentkezés", systemImage: "rectangle.portrait.and.arrow.right") }
+                    Button { confirmLogout = true } label: { Label(L("Kijelentkezés"), systemImage: "rectangle.portrait.and.arrow.right") }
                         .buttonStyle(TVRowStyle())
 
-                    TVHeading(text: "Felirat mérete").padding(.top, 30)
+                    TVHeading(text: L("Felirat mérete")).padding(.top, 30)
                     HStack(spacing: 20) {
                         ForEach(SubtitleStyle.Size.allCases, id: \.self) { s in
                             Button(sizeLabel(s)) {
@@ -655,14 +655,27 @@ struct TVSettingsTab: View {
                         }
                     }
                     .focusSection()
+
+                    TVHeading(text: L("Nyelv")).padding(.top, 30)
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 20) {
+                            languageButton(L("Automatikus"), code: "")
+                            ForEach(model.languages) { l in languageButton(l.name, code: l.code) }
+                        }
+                        .padding(.vertical, 20)
+                    }
+                    .scrollClipDisabled()
+                    .focusSection()
+                    Text(L("A nyelveket a szerver adja: ha az adminisztrátor a webes felületen új nyelvet ad hozzá, itt is megjelenik. A letöltött nyelvek ezen az eszközön maradnak, a szerver nélkül is."))
+                        .font(.caption).foregroundStyle(Theme.muted)
                 }
                 .frame(width: 820)
 
                 VStack(alignment: .leading, spacing: 26) {
-                    TVHeading(text: "Vezérlés iPhone-ról")
-                    Text("Lejátszás közben az iPhone zárolási képernyőjén és a Vezérlőközpontban megjelenik, mi megy az Apple TV-n: onnan megállíthatod, tekerheted, és 10 másodpercet ugorhatsz előre vagy vissza, a telefon feloldása nélkül.")
+                    TVHeading(text: L("Vezérlés iPhone-ról"))
+                    Text(L("Lejátszás közben az iPhone zárolási képernyőjén és a Vezérlőközpontban megjelenik, mi megy az Apple TV-n: onnan megállíthatod, tekerheted, és 10 másodpercet ugorhatsz előre vagy vissza, a telefon feloldása nélkül."))
                         .foregroundStyle(Theme.plaster)
-                    Text("A Vezérlőközpont Apple TV Remote gombjával a teljes távirányító is a telefonodon van, a szövegmezőkbe pedig a telefon billentyűzetével is írhatsz.")
+                    Text(L("A Vezérlőközpont Apple TV Remote gombjával a teljes távirányító is a telefonodon van, a szövegmezőkbe pedig a telefon billentyűzetével is írhatsz."))
                         .foregroundStyle(Theme.muted)
                     Text("Kinora \(AppModel.appVersion)")
                         .font(.callout).foregroundStyle(Theme.muted).padding(.top, 30)
@@ -672,27 +685,37 @@ struct TVSettingsTab: View {
             .padding(80)
         }
         .background(Theme.black)
-        .alert("Csatlakozás watch partyhoz", isPresented: $joining) {
-            TextField("6 karakteres kód", text: $partyCode)
+        .alert(L("Csatlakozás watch partyhoz"), isPresented: $joining) {
+            TextField(L("6 karakteres kód"), text: $partyCode)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
-            Button("Csatlakozás") { model.joinParty(partyCode) }
-            Button("Mégse", role: .cancel) {}
+            Button(L("Csatlakozás")) { model.joinParty(partyCode) }
+            Button(L("Mégse"), role: .cancel) {}
         } message: {
-            Text("A kódot a party indítója látja a lejátszóban, vagy a meghívó üzenetben.")
+            Text(L("A kódot a party indítója látja a lejátszóban, vagy a meghívó üzenetben."))
         }
-        .alert("Kijelentkezel?", isPresented: $confirmLogout) {
-            Button("Kijelentkezés", role: .destructive) { Task { await model.logout() } }
-            Button("Mégse", role: .cancel) {}
+        .alert(L("Kijelentkezel?"), isPresented: $confirmLogout) {
+            Button(L("Kijelentkezés"), role: .destructive) { Task { await model.logout() } }
+            Button(L("Mégse"), role: .cancel) {}
         }
+    }
+
+    private func languageButton(_ title: String, code: String) -> some View {
+        Button { model.languageChoice = code } label: {
+            HStack(spacing: 12) {
+                Text(title)
+                if model.languageLoading && model.languageChoice == code && Language.shared.code != code { ProgressView() }
+            }
+        }
+        .buttonStyle(TVPillStyle(prominent: model.languageChoice == code))
     }
 
     private func sizeLabel(_ s: SubtitleStyle.Size) -> String {
         switch s {
-        case .small: "Kicsi"
-        case .medium: "Közepes"
-        case .large: "Nagy"
-        case .huge: "Óriási"
+        case .small: L("Kicsi")
+        case .medium: L("Közepes")
+        case .large: L("Nagy")
+        case .huge: L("Óriási")
         }
     }
 }

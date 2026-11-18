@@ -1,5 +1,6 @@
 import CoreSpotlight
 import SwiftUI
+import KinoraKit
 
 @main
 struct KinoraApp: App {
@@ -9,6 +10,8 @@ struct KinoraApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .id(model.languageGeneration)
+                .environment(\.locale, Language.shared.locale)
                 .environment(model)
                 .preferredColorScheme(.dark)
                 .tint(Theme.amber)

@@ -16,7 +16,7 @@ struct WatchTogether: GroupActivity {
         var m = GroupActivityMetadata()
         m.type = .watchTogether
         m.title = title
-        m.subtitle = "Kinora watch party · \(code)"
+        m.subtitle = L("Kinora watch party · {0}", code)
         return m
     }
 }
@@ -126,7 +126,7 @@ struct SharePlayButton: View {
             }
             .foregroundStyle(shared ? Theme.amber : .primary)
             .disabled(shared)
-            .accessibilityLabel(shared ? "SharePlay folyamatban" : "Megosztás SharePlay-jel a FaceTime-hívásban")
+            .accessibilityLabel(shared ? L("SharePlay folyamatban") : L("Megosztás SharePlay-jel a FaceTime-hívásban"))
         }
     }
 }

@@ -10,18 +10,23 @@ import (
 	"github.com/ScotyLucas/kinora/web"
 )
 
+// webFS is the web client's files: embedded, or from --web for development.
+func (s *Server) webFS() fs.FS {
+	if s.cfg.WebDir != "" {
+		return os.DirFS(s.cfg.WebDir)
+	}
+	sub, err := fs.Sub(web.Static, "static")
+	if err != nil {
+		panic(err)
+	}
+	return sub
+}
+
 // webHandler serves the single page app (embedded, or from --web for development).
 func (s *Server) webHandler() http.Handler {
-	var root fs.FS
+	root := s.webFS()
 	if s.cfg.WebDir != "" {
-		root = os.DirFS(s.cfg.WebDir)
 		s.log.Info("serving web client from disk", "dir", s.cfg.WebDir)
-	} else {
-		sub, err := fs.Sub(web.Static, "static")
-		if err != nil {
-			panic(err)
-		}
-		root = sub
 	}
 	files := http.FileServer(http.FS(root))
 	dev := s.cfg.WebDir != ""

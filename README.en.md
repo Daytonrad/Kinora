@@ -274,6 +274,8 @@ Saved languages are stored in `<data>/i18n/<code>.json`, and the client loads th
 - A plural is an object with `one`/`few`/`many`/`other` keys (plus `=0`, `=1`…).
 - The format is described in full at the top of the built-in `web/static/i18n/*.js` files.
 
+**The iPhone/iPad and Apple TV apps** use the same languages. The apps' own texts live in the `app` table of the language files; the key is the app's Hungarian text, as with `srv`, so a new language added in the admin translates the apps too, and the editor shows these rows as well. The server serves them at `GET /api/languages` (a list with versions) and `GET /api/languages/<code>`, without sign-in, with the overrides and the English fallback applied, and only the `locale`, `app`, `srv`, `srvRe` parts. The app syncs whenever it connects to a server: it downloads new or changed languages and keeps all of them on the device, even when the server can't be reached or the language was later deleted there. The language is picked in the app under Settings → Language (on Apple TV, the Settings tab); “Automatic” follows the device language and falls back to English, then Hungarian. Widgets and Top Shelf use the same language. What stays Hungarian: the fixed Siri/Shortcuts texts and the system permission prompts.
+
 To contribute a translation to the project, turn the exported `strings` object into a new `web/static/i18n/<code>.js` file and add it to `index.html`.
 
 ### Planned for a later version

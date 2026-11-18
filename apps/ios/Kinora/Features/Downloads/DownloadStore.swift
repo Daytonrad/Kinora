@@ -91,7 +91,7 @@ final class DownloadStore {
     }
 
     func pendingTitle(_ id: Int) -> String {
-        guard let i = pending[id]?.item else { return "Letöltés" }
+        guard let i = pending[id]?.item else { return L("Letöltés") }
         return [i.seriesTitle, i.episodeLabel, i.title].compactMap { $0 }.joined(separator: " · ")
     }
 
@@ -109,11 +109,11 @@ final class DownloadStore {
     func roomError() -> String? {
         let limit = Int64(AppSettings.downloadLimitGB) * 1_000_000_000
         if limit > 0, usedBytes >= limit {
-            return "Elérted a letöltésekre beállított \(AppSettings.downloadLimitGB) GB-os keretet. Törölj valamit, vagy emeld a keretet a beállításokban."
+            return L("Elérted a letöltésekre beállított {0} GB-os keretet. Törölj valamit, vagy emeld a keretet a beállításokban.", AppSettings.downloadLimitGB)
         }
         let free = (try? dir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
             .volumeAvailableCapacityForImportantUsage ?? .max
-        if free < 1_500_000_000 { return "Kevés a szabad hely az eszközön (1,5 GB alatt)." }
+        if free < 1_500_000_000 { return L("Kevés a szabad hely az eszközön (1,5 GB alatt).") }
         return nil
     }
 
@@ -178,11 +178,11 @@ final class DownloadStore {
                 if let c = self.client, let list = try? await c.downloads() {
                     for p in waiting {
                         guard let job = list.jobs.first(where: { $0.key == p.key }) else {
-                            self.phases[p.item.id] = .failed("A szerver elvetette a letöltést.")
+                            self.phases[p.item.id] = .failed(L("A szerver elvetette a letöltést."))
                             continue
                         }
                         if job.isDone { self.transfer(p) }
-                        else if job.isFailed { self.phases[p.item.id] = .failed(job.error ?? "Sikertelen átkódolás.") }
+                        else if job.isFailed { self.phases[p.item.id] = .failed(job.error ?? L("Sikertelen átkódolás.")) }
                         else { self.phases[p.item.id] = .preparing(job.progress ?? 0) }
                     }
                 }
@@ -197,7 +197,7 @@ final class DownloadStore {
         phases[p.item.id] = .transferring(0)
         Task {
             guard let req = await client.downloadRequest(p.key) else {
-                phases[p.item.id] = .failed("A szerver nem érhető el.")
+                phases[p.item.id] = .failed(L("A szerver nem érhető el."))
                 return
             }
             // Subtitles are small: fetch them now with the session token.
@@ -317,7 +317,7 @@ private final class SessionBridge: NSObject, URLSessionDownloadDelegate, @unchec
         guard let id = downloadTask.taskDescription.flatMap(Int.init), let dir else { return }
         let code = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0
         guard code == 200 || code == 206 else {
-            Task { @MainActor [weak store] in store?.failed(id, "A szerver hibát adott (\(code)).") }
+            Task { @MainActor [weak store] in store?.failed(id, L("A szerver hibát adott ({0}).", code)) }
             return
         }
         let dest = dir.appendingPathComponent("\(id).mp4")
@@ -327,13 +327,13 @@ private final class SessionBridge: NSObject, URLSessionDownloadDelegate, @unchec
             let size = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int64) ?? 0
             Task { @MainActor [weak store] in store?.finished(id, size: size) }
         } catch {
-            Task { @MainActor [weak store] in store?.failed(id, "Nem sikerült menteni a fájlt.") }
+            Task { @MainActor [weak store] in store?.failed(id, L("Nem sikerült menteni a fájlt.")) }
         }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
         guard let error, let id = task.taskDescription.flatMap(Int.init) else { return }
         if (error as? URLError)?.code == .cancelled { return }
-        Task { @MainActor [weak store] in store?.failed(id, "Megszakadt a letöltés.") }
+        Task { @MainActor [weak store] in store?.failed(id, L("Megszakadt a letöltés.")) }
     }
 }

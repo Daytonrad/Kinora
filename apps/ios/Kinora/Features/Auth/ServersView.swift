@@ -15,14 +15,14 @@ struct ServersView: View {
     var body: some View {
         AuthPage {
             BrandMark()
-            Text("Szerver hozzáadása")
+            Text(L("Szerver hozzáadása"))
                 .font(Theme.display(40, weight: .bold))
             // Verbatim: the example address must not turn into a tappable link.
             Text(verbatim: "Add meg a Kinora-szerver címét. Elég az IP-cím, pl. 192.168.1.10 – a port alapból 8096. Otthonon kívülről a nyilvános címet (pl. https://kinora.pelda.hu).")
                 .foregroundStyle(Theme.plaster)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Szerver címe").font(.subheadline).foregroundStyle(Theme.muted)
+                Text(L("Szerver címe")).font(.subheadline).foregroundStyle(Theme.muted)
                 TextField("", text: $address, prompt: Text("192.168.1.10:8096").foregroundStyle(Theme.muted))
                     .textContentType(.URL)
                     .keyboardType(.URL)
@@ -32,7 +32,7 @@ struct ServersView: View {
                     .focused($focused)
                     .onSubmit { connect(address) }
                     .kinoraField()
-                    .accessibilityLabel("Szerver címe")
+                    .accessibilityLabel(L("Szerver címe"))
             }
 
             ErrorText(message: error ?? model.notice)
@@ -44,32 +44,32 @@ struct ServersView: View {
             }
 
             if scanning || !found.isEmpty || scannedOnce {
-                section("A helyi hálózaton") {
+                section(L("A helyi hálózaton")) {
                     ForEach(found) { s in
                         row(title: s.name, subtitle: ServerAddress.host(of: s.address) + " · " + s.version, icon: "server.rack") {
                             connect(s.address)
                         }
                     }
                     if scanning {
-                        HStack { ProgressView(); Text("Keresés a helyi hálózaton…").foregroundStyle(Theme.muted) }
+                        HStack { ProgressView(); Text(L("Keresés a helyi hálózaton…")).foregroundStyle(Theme.muted) }
                             .padding(.vertical, 8)
                     } else if found.isEmpty {
-                        Text("Nem találtam szervert. Írd be kézzel a címét.").foregroundStyle(Theme.muted)
+                        Text(L("Nem találtam szervert. Írd be kézzel a címét.")).foregroundStyle(Theme.muted)
                     }
                 }
             }
 
             if !model.servers.isEmpty {
-                section("Mentett szerverek") {
+                section(L("Mentett szerverek")) {
                     ForEach(model.servers) { s in
                         row(title: s.name, subtitle: ServerAddress.host(of: s.url) + (s.username.map { " · " + $0 } ?? ""), icon: "play.tv") {
                             open(s)
                         }
                         .contextMenu {
-                            Button("Elfelejtés", systemImage: "trash", role: .destructive) { model.forget(s) }
+                            Button(L("Elfelejtés"), systemImage: "trash", role: .destructive) { model.forget(s) }
                         }
                     }
-                    Text("Egy mentett szerver elfelejtéséhez tartsd lenyomva a sorát.")
+                    Text(L("Egy mentett szerver elfelejtéséhez tartsd lenyomva a sorát."))
                         .font(.footnote)
                         .foregroundStyle(Theme.muted)
                 }
@@ -85,7 +85,7 @@ struct ServersView: View {
 
     private var connectButton: some View {
         Button { connect(address) } label: {
-            if busy { ProgressView().tint(Theme.amberInk) } else { Text("Csatlakozás") }
+            if busy { ProgressView().tint(Theme.amberInk) } else { Text(L("Csatlakozás")) }
         }
         .buttonStyle(PrimaryButtonStyle())
         .disabled(busy || address.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -93,7 +93,7 @@ struct ServersView: View {
 
     private var scanButton: some View {
         Button { scan() } label: {
-            Label(scanning ? "Keresés…" : "Szerver keresése", systemImage: "wifi")
+            Label(scanning ? L("Keresés…") : L("Szerver keresése"), systemImage: "wifi")
                 .lineLimit(1)
         }
         .buttonStyle(SecondaryButtonStyle())

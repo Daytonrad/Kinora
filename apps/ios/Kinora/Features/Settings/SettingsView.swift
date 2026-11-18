@@ -19,54 +19,57 @@ struct SettingsView: View {
                 profileHeader
                 Section {
                     NavigationLink { PlaybackSettingsView() } label: {
-                        SettingsRow("Lejátszás", icon: "play.rectangle.fill", value: qualitySummary)
+                        SettingsRow(L("Lejátszás"), icon: "play.rectangle.fill", value: qualitySummary)
                     }
                     NavigationLink { SubtitleSettingsView() } label: {
-                        SettingsRow("Feliratok és nyelvek", icon: "captions.bubble.fill", value: subtitleSummary)
+                        SettingsRow(L("Feliratok és nyelvek"), icon: "captions.bubble.fill", value: subtitleSummary)
                     }
                     NavigationLink { DownloadSettingsView() } label: {
-                        SettingsRow("Letöltések", icon: "arrow.down.circle.fill", value: downloadSummary)
+                        SettingsRow(L("Letöltések"), icon: "arrow.down.circle.fill", value: downloadSummary)
                     }
                 } header: {
-                    Text("Nézés")
+                    Text(L("Nézés"))
                 }
                 .listRowBackground(Theme.panel)
 
                 Section {
                     if model.canEditSettings {
                         NavigationLink { ConnectDeviceView() } label: {
-                            SettingsRow("Eszköz csatlakoztatása", icon: "tv.and.mediabox.fill")
+                            SettingsRow(L("Eszköz csatlakoztatása"), icon: "tv.and.mediabox.fill")
                         }
                     }
                     NavigationLink { DevicesSettingsView(devices: $devices) } label: {
-                        SettingsRow("Bejelentkezett eszközök", icon: "laptopcomputer.and.iphone",
+                        SettingsRow(L("Bejelentkezett eszközök"), icon: "laptopcomputer.and.iphone",
                                     value: devices.map { "\($0.count)" })
                     }
                     NavigationLink { HomeScenesView() } label: {
-                        SettingsRow("Otthon-jelenetek", icon: "lightbulb.max.fill")
+                        SettingsRow(L("Otthon-jelenetek"), icon: "lightbulb.max.fill")
+                    }
+                    NavigationLink { LanguageSettingsView() } label: {
+                        SettingsRow(L("Nyelv"), icon: "globe", value: LanguageSettingsView.summary(model))
                     }
                 } header: {
-                    Text("Eszközök és otthon")
+                    Text(L("Eszközök és otthon"))
                 }
                 .listRowBackground(Theme.panel)
 
                 Section {
                     NavigationLink { ServerSettingsView() } label: {
-                        SettingsRow(model.me?.serverName ?? model.server?.name ?? "Szerver", icon: "server.rack",
+                        SettingsRow(model.me?.serverName ?? model.server?.name ?? L("Szerver"), icon: "server.rack",
                                     detail: model.server.map { host($0.url) })
                     }
                     Button { model.showServers() } label: {
-                        SettingsRow("Másik szerver", icon: "arrow.left.arrow.right")
+                        SettingsRow(L("Másik szerver"), icon: "arrow.left.arrow.right")
                     }
                     .tint(Theme.plasterBright)
                 } header: {
-                    Text("Szerver")
+                    Text(L("Szerver"))
                 }
                 .listRowBackground(Theme.panel)
 
                 Section {
                     Button(role: .destructive) { confirmLogout = true } label: {
-                        Text("Kijelentkezés")
+                        Text(L("Kijelentkezés"))
                             .font(.body.weight(.semibold))
                             .foregroundStyle(Theme.danger)
                             .frame(maxWidth: .infinity)
@@ -80,19 +83,19 @@ struct SettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.black)
-            .navigationTitle("Beállítások")
+            .navigationTitle(L("Beállítások"))
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(Theme.black, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Kész") { dismiss() }.fontWeight(.semibold)
+                    Button(L("Kész")) { dismiss() }.fontWeight(.semibold)
                 }
             }
             .task { await loadDevices() }
-            .confirmationDialog("Biztosan kijelentkezel?", isPresented: $confirmLogout, titleVisibility: .visible) {
-                Button("Kijelentkezés", role: .destructive) { Task { await model.logout() } }
+            .confirmationDialog(L("Biztosan kijelentkezel?"), isPresented: $confirmLogout, titleVisibility: .visible) {
+                Button(L("Kijelentkezés"), role: .destructive) { Task { await model.logout() } }
             } message: {
-                Text("A letöltéseid megmaradnak ezen az eszközön.")
+                Text(L("A letöltéseid megmaradnak ezen az eszközön."))
             }
         }
         .tint(Theme.amber)
@@ -110,7 +113,7 @@ struct SettingsView: View {
                         Text(p.name).font(.title3.weight(.semibold)).foregroundStyle(Theme.plasterBright)
                         Text(me.user.username).font(.subheadline).foregroundStyle(Theme.muted)
                         if p.isKids || me.profileLocked == true {
-                            Text(p.isKids ? "Gyerekprofil" : "Rögzített profil")
+                            Text(p.isKids ? L("Gyerekprofil") : L("Rögzített profil"))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Theme.amber)
                                 .padding(.horizontal, 8)
@@ -120,10 +123,10 @@ struct SettingsView: View {
                     }
                     Spacer(minLength: 8)
                     if me.profileLocked != true {
-                        Button("Váltás") { model.switchProfile() }
+                        Button(L("Váltás")) { model.switchProfile() }
                             .buttonStyle(.bordered)
                             .buttonBorderShape(.capsule)
-                            .accessibilityLabel("Profilváltás")
+                            .accessibilityLabel(L("Profilváltás"))
                     }
                 }
                 .padding(.vertical, 6)
@@ -136,7 +139,7 @@ struct SettingsView: View {
 
     private var qualitySummary: String {
         let bitrate = profile?.maxBitrate ?? 0
-        return SettingChoices.bitrates.first { $0.0 == bitrate }?.1 ?? "Eredeti"
+        return SettingChoices.bitrates.first { $0.0 == bitrate }?.1 ?? L("Eredeti")
     }
 
     private var subtitleSummary: String {

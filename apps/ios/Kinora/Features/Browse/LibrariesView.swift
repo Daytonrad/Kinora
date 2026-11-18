@@ -10,15 +10,15 @@ struct LibrariesView: View {
         Group {
             if let libraries {
                 if libraries.isEmpty {
-                    ContentUnavailableView("Nincs könyvtár", systemImage: "square.grid.2x2",
-                                           description: Text("Az adminisztrátor a webes felületen adhat hozzá könyvtárat."))
+                    ContentUnavailableView(L("Nincs könyvtár"), systemImage: "square.grid.2x2",
+                                           description: Text(L("Az adminisztrátor a webes felületen adhat hozzá könyvtárat.")))
                 } else {
                     List(libraries) { lib in
                         NavigationLink(value: lib) {
                             Label {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(lib.name).font(.headline)
-                                    if let n = lib.count { Text("\(n) cím").font(.caption).foregroundStyle(Theme.muted) }
+                                    if let n = lib.count { Text(L("{0} cím", n)).font(.caption).foregroundStyle(Theme.muted) }
                                 }
                             } icon: {
                                 Image(systemName: icon(lib.kind)).foregroundStyle(Theme.amber)
@@ -36,7 +36,7 @@ struct LibrariesView: View {
         .refreshable { await load() }
         .task { if libraries == nil { await load() } }
         .kinoraScreen()
-        .navigationTitle("Könyvtárak")
+        .navigationTitle(L("Könyvtárak"))
         .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountMenu() } }
     }
 
@@ -83,7 +83,7 @@ struct LibraryView: View {
                 .padding(.vertical, 16)
                 if loadingMore { ProgressView().padding() }
                 if items.isEmpty {
-                    ContentUnavailableView("Üres könyvtár", systemImage: "film.stack").padding(.top, 60)
+                    ContentUnavailableView(L("Üres könyvtár"), systemImage: "film.stack").padding(.top, 60)
                 }
             } else {
                 LoadingState(error: error) { Task { await reload() } }
@@ -96,11 +96,11 @@ struct LibraryView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Picker("Rendezés", selection: $sort) {
+                    Picker(L("Rendezés"), selection: $sort) {
                         ForEach(ItemSort.allCases) { Text($0.label).tag($0) }
                     }
                 } label: {
-                    Label("Rendezés", systemImage: "arrow.up.arrow.down")
+                    Label(L("Rendezés"), systemImage: "arrow.up.arrow.down")
                 }
             }
         }

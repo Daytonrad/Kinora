@@ -39,7 +39,7 @@ struct PartyJoinView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .transition(.opacity)
                     }
-                    Text("A kódot és a QR-kódot a party indítója látja: telefonon a lejátszó watch party paneljén, Apple TV-n a lejátszó jobb felső sarkában. A meghívó linkje is egyből ide hoz.")
+                    Text(L("A kódot és a QR-kódot a party indítója látja: telefonon a lejátszó watch party paneljén, Apple TV-n a lejátszó jobb felső sarkában. A meghívó linkje is egyből ide hoz."))
                         .font(.footnote)
                         .foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -52,13 +52,13 @@ struct PartyJoinView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.black)
-            .navigationTitle("Csatlakozás watch partyhoz")
+            .navigationTitle(L("Csatlakozás watch partyhoz"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Mégse") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Mégse")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     if model.partyJoining { ProgressView() } else {
-                        Button("Csatlakozás") { join(code) }.disabled(PartySync.normalizedCode(code) == nil)
+                        Button(L("Csatlakozás")) { join(code) }.disabled(PartySync.normalizedCode(code) == nil)
                     }
                 }
             }
@@ -90,7 +90,7 @@ struct PartyJoinView: View {
             switch camera {
             case .allowed:
                 QRScanner(paused: scanned != nil || typing, torch: torch, onCode: read)
-                    .accessibilityLabel("Kamera kép, QR-kód beolvasása")
+                    .accessibilityLabel(L("Kamera kép, QR-kód beolvasása"))
                 ScanFrame(done: scanned != nil)
                     .padding(36)
                     .allowsHitTesting(false)
@@ -105,7 +105,7 @@ struct PartyJoinView: View {
                                     .background(.black.opacity(0.45), in: .circle)
                             }
                             .foregroundStyle(torch ? Theme.amber : .white)
-                            .accessibilityLabel(torch ? "Zseblámpa kikapcsolása" : "Zseblámpa bekapcsolása")
+                            .accessibilityLabel(torch ? L("Zseblámpa kikapcsolása") : L("Zseblámpa bekapcsolása"))
                         }
                     }
                     Spacer()
@@ -116,7 +116,7 @@ struct PartyJoinView: View {
                     // The keyboard is up: the camera rests until the field lets go.
                     Color.black.opacity(0.55)
                         .overlay {
-                            Label("Koppints ide a beolvasáshoz", systemImage: "qrcode.viewfinder")
+                            Label(L("Koppints ide a beolvasáshoz"), systemImage: "qrcode.viewfinder")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.white)
                         }
@@ -125,16 +125,16 @@ struct PartyJoinView: View {
                 }
             case .undecided:
                 cameraCard(icon: "qrcode.viewfinder",
-                           title: "QR-kód beolvasása",
-                           text: "Irányítsd a kamerát a házigazda telefonján vagy a tévén megjelenő kódra.",
-                           button: "Kamera bekapcsolása") {
+                           title: L("QR-kód beolvasása"),
+                           text: L("Irányítsd a kamerát a házigazda telefonján vagy a tévén megjelenő kódra."),
+                           button: L("Kamera bekapcsolása")) {
                     Task { camera = await CameraAccess.request(); if camera == .denied { typing = true } }
                 }
             case .denied:
                 cameraCard(icon: "camera.badge.ellipsis",
-                           title: "Nincs hozzáférés a kamerához",
-                           text: "A QR-kód beolvasásához engedélyezd a kamerát a Beállításokban, vagy írd be lent a kódot.",
-                           button: "Beállítások megnyitása") {
+                           title: L("Nincs hozzáférés a kamerához"),
+                           text: L("A QR-kód beolvasásához engedélyezd a kamerát a Beállításokban, vagy írd be lent a kódot."),
+                           button: L("Beállítások megnyitása")) {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                 }
             }
@@ -148,11 +148,11 @@ struct PartyJoinView: View {
     private var hint: some View {
         Group {
             if let scanned {
-                Label("Csatlakozás: \(scanned)", systemImage: "checkmark.circle.fill")
+                Label(L("Csatlakozás: {0}", scanned), systemImage: "checkmark.circle.fill")
             } else if let foreign {
                 Label(foreign, systemImage: "xmark.circle.fill")
             } else {
-                Text("Irányítsd a kamerát a QR-kódra")
+                Text(L("Irányítsd a kamerát a QR-kódra"))
             }
         }
         .font(.subheadline.weight(.semibold))
@@ -190,7 +190,7 @@ struct PartyJoinView: View {
         guard scanned == nil, !model.partyJoining else { return }
         guard let c = PartySync.code(scanned: raw) else {
             guard foreign == nil else { return }
-            foreign = "Ez nem watch party QR-kód"
+            foreign = L("Ez nem watch party QR-kód")
             Haptic.warning.play()
             foreignTask?.cancel()
             foreignTask = Task {
@@ -203,7 +203,7 @@ struct PartyJoinView: View {
         torch = false
         scanned = c
         code = c
-        UIAccessibility.post(notification: .announcement, argument: "Kód beolvasva: \(c). Csatlakozás.")
+        UIAccessibility.post(notification: .announcement, argument: L("Kód beolvasva: {0}. Csatlakozás.", c))
         join(c)
     }
 
@@ -212,7 +212,7 @@ struct PartyJoinView: View {
     private var divider: some View {
         HStack(spacing: 12) {
             Rectangle().fill(Theme.rule).frame(height: 1)
-            Text("vagy írd be a kódot").font(.footnote).foregroundStyle(Theme.muted).fixedSize()
+            Text(L("vagy írd be a kódot")).font(.footnote).foregroundStyle(Theme.muted).fixedSize()
             Rectangle().fill(Theme.rule).frame(height: 1)
         }
     }
@@ -231,7 +231,7 @@ struct PartyJoinView: View {
                 .onSubmit { join(code) }
                 .foregroundStyle(.clear)
                 .tint(.clear)
-                .accessibilityLabel("Watch party kód, 6 karakter")
+                .accessibilityLabel(L("Watch party kód, 6 karakter"))
             HStack(spacing: 8) {
                 ForEach(0..<6, id: \.self) { i in
                     let active = typing && i == min(chars.count, 5)

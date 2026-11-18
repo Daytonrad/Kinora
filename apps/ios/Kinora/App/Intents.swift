@@ -21,7 +21,7 @@ enum IntentRouter {
     static func donate(_ item: Item) {
         let target: TitleEntity
         if item.kind == .episode, let series = item.seriesId {
-            target = TitleEntity(id: series, title: item.seriesTitle ?? item.title, subtitle: "Sorozat")
+            target = TitleEntity(id: series, title: item.seriesTitle ?? item.title, subtitle: L("Sorozat"))
         } else if item.kind == .movie {
             target = TitleEntity(item)
         } else { return }
@@ -45,8 +45,8 @@ enum IntentError: Error, CustomLocalizedStringResourceConvertible {
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
-        case .signedOut: "Előbb jelentkezz be a Kinora appban."
-        case .nothingToResume: "Nincs félbehagyott film vagy sorozat."
+        case .signedOut: "\(L("Előbb jelentkezz be a Kinora appban."))"
+        case .nothingToResume: "\(L("Nincs félbehagyott film vagy sorozat."))"
         }
     }
 }
@@ -76,7 +76,7 @@ struct TitleEntity: AppEntity {
             subtitle = item.title
         } else {
             title = item.title
-            subtitle = [item.kind == .series ? "Sorozat" : "Film", item.year.map(String.init)]
+            subtitle = [item.kind == .series ? L("Sorozat") : L("Film"), item.year.map(String.init)]
                 .compactMap { $0 }.joined(separator: " · ")
         }
     }
@@ -174,7 +174,7 @@ struct JoinPartyIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         guard let code = PartySync.normalizedCode(code) else {
-            throw $code.needsValueError("Ez nem jó kód. Mi a szoba kódja?")
+            throw $code.needsValueError("\(L("Ez nem jó kód. Mi a szoba kódja?"))")
         }
         IntentRouter.open(.party(code))
         return .result()

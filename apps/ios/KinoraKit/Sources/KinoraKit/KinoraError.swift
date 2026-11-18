@@ -23,22 +23,22 @@ public enum KinoraError: Error, Equatable, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .network:
-            "Nem érem el a szervert."
+            L("Nem érem el a szervert.")
         case .unreachable(let address, let isPrivate):
-            "Nem érem el a szervert (\(address)). Ellenőrizd, hogy fut-e, és hogy ugyanazon a hálózaton vagy-e."
-                + (isPrivate ? " Ez otthoni (belső) cím: csak az otthoni Wi-Fi-ről érhető el." : "")
+            L("Nem érem el a szervert ({0}). Ellenőrizd, hogy fut-e, és hogy ugyanazon a hálózaton vagy-e.", address)
+                + (isPrivate ? L(" Ez otthoni (belső) cím: csak az otthoni Wi-Fi-ről érhető el.") : "")
         case .notKinora(let address):
-            "A(z) \(address) címen nem Kinora-szerver válaszol."
+            L("A(z) {0} címen nem Kinora-szerver válaszol.", address)
         case .setupNeeded:
-            "Ezt a szervert még be kell állítani. Nyisd meg böngészőben, és hozd létre az admin fiókot."
+            L("Ezt a szervert még be kell állítani. Nyisd meg böngészőben, és hozd létre az admin fiókot.")
         case .serverTooOld:
-            "A szerver túl régi ehhez az apphoz. Frissítsd a Kinorát a szerveren."
+            L("A szerver túl régi ehhez az apphoz. Frissítsd a Kinorát a szerveren.")
         case .serverTooNew:
-            "Az app túl régi ehhez a szerverhez. Frissítsd az appot."
+            L("Az app túl régi ehhez a szerverhez. Frissítsd az appot.")
         case .unauthorized:
-            "A bejelentkezés lejárt, lépj be újra."
+            L("A bejelentkezés lejárt, lépj be újra.")
         case .http(let code, let message):
-            message.isEmpty ? "HTTP \(code)" : message
+            message.isEmpty ? "HTTP \(code)" : Language.shared.server(message)
         }
     }
 }

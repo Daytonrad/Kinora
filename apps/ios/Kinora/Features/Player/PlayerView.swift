@@ -59,7 +59,7 @@ struct PlayerView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: player.party?.panelOpen)
-        .alert("Watch party", isPresented: Binding(get: { model.partyError != nil && model.playerVisible },
+        .alert(L("Watch party"), isPresented: Binding(get: { model.partyError != nil && model.playerVisible },
                                                    set: { if !$0 { model.partyError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -92,13 +92,13 @@ struct PlayerView: View {
     /// holding ⌘ lists them.
     private var keyboardShortcuts: some View {
         Group {
-            Button("Lejátszás / szünet") { Haptic.tap.play(); player.togglePlay() }
+            Button(L("Lejátszás / szünet")) { Haptic.tap.play(); player.togglePlay() }
                 .keyboardShortcut(.space, modifiers: [])
-            Button("Vissza 10 másodpercet") { seekWithFlash(forward: false) }
+            Button(L("Vissza 10 másodpercet")) { seekWithFlash(forward: false) }
                 .keyboardShortcut(.leftArrow, modifiers: [])
-            Button("Előre 10 másodpercet") { seekWithFlash(forward: true) }
+            Button(L("Előre 10 másodpercet")) { seekWithFlash(forward: true) }
                 .keyboardShortcut(.rightArrow, modifiers: [])
-            Button("Bezárás") { player.close() }
+            Button(L("Bezárás")) { player.close() }
                 .keyboardShortcut(.cancelAction)
         }
         .opacity(0)
@@ -109,7 +109,7 @@ struct PlayerView: View {
     private var controls: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                RoundIcon("xmark", label: "Bezárás") { player.close() }
+                RoundIcon("xmark", label: L("Bezárás")) { player.close() }
                 Text(player.title)
                     .font(.headline)
                     .lineLimit(1)
@@ -132,13 +132,13 @@ struct PlayerView: View {
                             .contentShape(.circle)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(party.unread > 0 ? "Watch party, \(party.unread) új üzenet" : "Watch party")
+                    .accessibilityLabel(party.unread > 0 ? L("Watch party, {0} új üzenet", party.unread) : L("Watch party"))
                 }
                 ChaptersMenu(player: player)
                 OptionsMenu(player: player)
                 AirPlayButton().frame(width: 44, height: 44)
                 if player.pipSupported {
-                    RoundIcon("pip.enter", label: "Kép a képben") { player.startPiP() }
+                    RoundIcon("pip.enter", label: L("Kép a képben")) { player.startPiP() }
                 }
             }
             .padding(.horizontal, 12)
@@ -147,10 +147,10 @@ struct PlayerView: View {
             Spacer()
 
             HStack(spacing: 48) {
-                RoundIcon("gobackward.10", size: 30, label: "Vissza 10 másodpercet") { Haptic.tap.play(); player.seek(by: -10); scheduleHide() }
+                RoundIcon("gobackward.10", size: 30, label: L("Vissza 10 másodpercet")) { Haptic.tap.play(); player.seek(by: -10); scheduleHide() }
                 RoundIcon(player.isPlaying ? "pause.fill" : "play.fill", size: 44,
-                          label: player.isPlaying ? "Szünet" : "Lejátszás") { Haptic.tap.play(); player.togglePlay() }
-                RoundIcon("goforward.10", size: 30, label: "Előre 10 másodpercet") { Haptic.tap.play(); player.seek(by: 10); scheduleHide() }
+                          label: player.isPlaying ? L("Szünet") : L("Lejátszás")) { Haptic.tap.play(); player.togglePlay() }
+                RoundIcon("goforward.10", size: 30, label: L("Előre 10 másodpercet")) { Haptic.tap.play(); player.seek(by: 10); scheduleHide() }
             }
 
             Spacer()
@@ -174,18 +174,18 @@ struct PlayerView: View {
     private func errorPanel(_ message: String) -> some View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(Theme.amber)
-            Text("Nem sikerült lejátszani").font(Theme.display(24, weight: .bold))
+            Text(L("Nem sikerült lejátszani")).font(Theme.display(24, weight: .bold))
             Text(message).multilineTextAlignment(.center).foregroundStyle(Theme.plaster)
             if let reasons = player.info?.reasons, !reasons.isEmpty {
                 Text(reasons.joined(separator: " · ")).font(.caption).foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)
             }
             HStack {
-                Button("Újra") { player.retry() }.buttonStyle(PrimaryButtonStyle())
+                Button(L("Újra")) { player.retry() }.buttonStyle(PrimaryButtonStyle())
                 if !player.triedTranscode {
-                    Button("Átkódolással") { player.retry(transcode: true) }.buttonStyle(SecondaryButtonStyle())
+                    Button(L("Átkódolással")) { player.retry(transcode: true) }.buttonStyle(SecondaryButtonStyle())
                 }
-                Button("Bezárás") { player.close() }.buttonStyle(SecondaryButtonStyle())
+                Button(L("Bezárás")) { player.close() }.buttonStyle(SecondaryButtonStyle())
             }
             .fixedSize()
         }
@@ -196,15 +196,15 @@ struct PlayerView: View {
     // MARK: - tracks, speed, quality
 
     static func delayLabel(_ d: Double) -> String {
-        if d == 0 { return "Eredeti" }
-        let v = String(format: "%+.1f mp", d).replacingOccurrences(of: ".", with: ",")
+        if d == 0 { return L("Eredeti") }
+        let v = String(format: L("%+.1f mp"), d).replacingOccurrences(of: ".", with: Language.shared.decimalSeparator)
         return v
     }
 
     static func qualityLabel(_ cap: Int?, effective: Int?) -> String {
         if let cap { return SettingChoices.bitrates.first { $0.0 == cap }?.1 ?? "\(cap) kbps" }
-        if let effective { return "Automatikus (mobilnet: \(effective / 1000) Mbps)" }
-        return "Automatikus"
+        if let effective { return L("Automatikus (mobilnet: {0} Mbps)", effective / 1000) }
+        return L("Automatikus")
     }
 
     // MARK: - double tap
@@ -266,9 +266,9 @@ struct PlayerView: View {
 
     static func skipLabel(_ kind: Segment.Kind) -> String {
         switch kind {
-        case .recap: "Összefoglaló átugrása"
-        case .credits: "Stáblista átugrása"
-        default: "Intró átugrása"
+        case .recap: L("Összefoglaló átugrása")
+        case .credits: L("Stáblista átugrása")
+        default: L("Intró átugrása")
         }
     }
 }
@@ -335,7 +335,7 @@ private struct Scrubber: View {
             }
             .tint(Theme.amber)
             .overlay { ChapterTicks(chapters: player.chapters, duration: player.duration) }
-            .accessibilityLabel("Lejátszási pozíció")
+            .accessibilityLabel(L("Lejátszási pozíció"))
             .accessibilityValue(PlayerView.clock(pos))
             HStack {
                 Text(PlayerView.clock(pos))
@@ -345,7 +345,7 @@ private struct Scrubber: View {
                 }
                 Spacer()
                 Text("−" + PlayerView.clock(max(0, player.duration - pos)))
-                    .accessibilityLabel("Hátralévő idő: \(PlayerView.clock(max(0, player.duration - pos)))")
+                    .accessibilityLabel(L("Hátralévő idő: {0}", PlayerView.clock(max(0, player.duration - pos))))
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(.white.opacity(0.8))
@@ -368,19 +368,19 @@ private struct NextCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Következő rész").font(.caption.weight(.semibold)).foregroundStyle(Theme.amber)
+            Text(L("Következő rész")).font(.caption.weight(.semibold)).foregroundStyle(Theme.amber)
             Text(next.title).font(.headline).lineLimit(2)
             if let label = next.episodeLabel {
                 Text(label).font(.caption).foregroundStyle(Theme.plaster)
             }
             HStack(spacing: 10) {
                 Button(action: play) {
-                    Label(countdown.map { "Lejátszás (\($0))" } ?? "Lejátszás", systemImage: "play.fill")
+                    Label(countdown.map { L("Lejátszás ({0})", $0) } ?? L("Lejátszás"), systemImage: "play.fill")
                         .font(.subheadline.weight(.semibold))
                         .contentTransition(.numericText())
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                Button("Mégse", action: dismiss).buttonStyle(SecondaryButtonStyle())
+                Button(L("Mégse"), action: dismiss).buttonStyle(SecondaryButtonStyle())
             }
             .fixedSize()
         }
@@ -471,7 +471,7 @@ private struct OptionsMenu: View {
                 Picker(selection: Binding(get: { player.audioIdx ?? -1 }, set: { Haptic.select.play(); player.selectAudio($0) })) {
                     ForEach(audio, id: \.typeIndex) { Text(TrackLabel.audio($0)).tag($0.typeIndex) }
                 } label: {
-                    Label("Hang", systemImage: "speaker.wave.2")
+                    Label(L("Hang"), systemImage: "speaker.wave.2")
                     Text(audio.first { $0.typeIndex == player.audioIdx }.map { TrackLabel.audio($0) } ?? "")
                 }
                 .pickerStyle(.menu)
@@ -479,23 +479,23 @@ private struct OptionsMenu: View {
             if !subs.isEmpty {
                 Picker(selection: Binding(get: { player.subtitle?.idx ?? -1 },
                                           set: { i in Haptic.select.play(); player.selectSubtitle(subs.first { $0.idx == i }) })) {
-                    Text("Ki").tag(-1)
+                    Text(L("Ki")).tag(-1)
                     ForEach(subs) { Text(TrackLabel.subtitle($0)).tag($0.idx) }
                 } label: {
-                    Label("Felirat", systemImage: "captions.bubble")
-                    Text(player.subtitle.map { TrackLabel.subtitle($0) } ?? "Ki")
+                    Label(L("Felirat"), systemImage: "captions.bubble")
+                    Text(player.subtitle.map { TrackLabel.subtitle($0) } ?? L("Ki"))
                 }
                 .pickerStyle(.menu)
             }
             if player.subtitle != nil {
                 Menu {
-                    Button("Korábban (−0,5 mp)", systemImage: "minus") { Haptic.select.play(); player.shiftSubtitles(by: -0.5) }
-                    Button("Később (+0,5 mp)", systemImage: "plus") { Haptic.select.play(); player.shiftSubtitles(by: 0.5) }
+                    Button(L("Korábban (−0,5 mp)"), systemImage: "minus") { Haptic.select.play(); player.shiftSubtitles(by: -0.5) }
+                    Button(L("Később (+0,5 mp)"), systemImage: "plus") { Haptic.select.play(); player.shiftSubtitles(by: 0.5) }
                     if player.subtitleDelay != 0 {
-                        Button("Visszaállítás", systemImage: "arrow.counterclockwise") { Haptic.select.play(); player.shiftSubtitles(by: 0) }
+                        Button(L("Visszaállítás"), systemImage: "arrow.counterclockwise") { Haptic.select.play(); player.shiftSubtitles(by: 0) }
                     }
                 } label: {
-                    Label("Felirat időzítése", systemImage: "timer")
+                    Label(L("Felirat időzítése"), systemImage: "timer")
                     Text(PlayerView.delayLabel(player.subtitleDelay))
                 }
                 .menuActionDismissBehavior(.disabled)
@@ -505,23 +505,23 @@ private struct OptionsMenu: View {
                 Picker(selection: Binding(get: { player.speed }, set: { Haptic.select.play(); player.setSpeed($0) })) {
                     ForEach(PlaybackSpeeds.all, id: \.self) { Text(PlaybackSpeeds.label($0)).tag($0) }
                 } label: {
-                    Label("Sebesség", systemImage: "gauge.with.dots.needle.67percent")
+                    Label(L("Sebesség"), systemImage: "gauge.with.dots.needle.67percent")
                     Text(PlaybackSpeeds.label(player.speed))
                 }
                 .pickerStyle(.menu)
             }
             if !player.isOffline {
                 Picker(selection: Binding(get: { player.qualityCap ?? -1 }, set: { Haptic.select.play(); player.setQuality($0 < 0 ? nil : $0) })) {
-                    Text("Automatikus").tag(-1)
+                    Text(L("Automatikus")).tag(-1)
                     ForEach(SettingChoices.bitrates, id: \.0) { Text($0.1).tag($0.0) }
                 } label: {
-                    Label("Minőség", systemImage: "dial.medium")
+                    Label(L("Minőség"), systemImage: "dial.medium")
                     Text(PlayerView.qualityLabel(player.qualityCap, effective: player.effectiveMaxBitrate))
                 }
                 .pickerStyle(.menu)
             }
             if player.party == nil, !player.isOffline {
-                Button("Watch party indítása", systemImage: "person.2") { model.startParty(player.item) }
+                Button(L("Watch party indítása"), systemImage: "person.2") { model.startParty(player.item) }
             }
             }
             .modifier(MenuPresence(player: player))
@@ -531,7 +531,7 @@ private struct OptionsMenu: View {
                 .frame(width: 44, height: 44)
                 .contentShape(.circle)
         }
-        .accessibilityLabel("Hang, felirat, sebesség, minőség és watch party")
+        .accessibilityLabel(L("Hang, felirat, sebesség, minőség és watch party"))
     }
 
 }
@@ -549,7 +549,7 @@ private struct ChaptersMenu: View {
                         Haptic.select.play()
                         player.seek(to: c.start)
                     } label: {
-                        let name = c.title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(i + 1). fejezet"
+                        let name = c.title.flatMap { $0.isEmpty ? nil : $0 } ?? L("{0}. fejezet", i + 1)
                         Text("\(name) · \(PlayerView.clock(c.start))")
                     }
                 }
@@ -561,7 +561,7 @@ private struct ChaptersMenu: View {
                     .frame(width: 44, height: 44)
                     .contentShape(.circle)
             }
-            .accessibilityLabel("Fejezetek")
+            .accessibilityLabel(L("Fejezetek"))
             }
     }
 }
@@ -658,7 +658,7 @@ private struct SeekFlashView: View {
             if flash.forward { Spacer() }
             VStack(spacing: 6) {
                 Image(systemName: flash.forward ? "goforward" : "gobackward").font(.title)
-                Text("\(flash.forward ? "+" : "−")\(flash.seconds) mp").font(.subheadline.weight(.semibold).monospacedDigit())
+                Text(L("{0}{1} mp", flash.forward ? "+" : "−", flash.seconds)).font(.subheadline.weight(.semibold).monospacedDigit())
             }
             .padding(22)
             .background(.black.opacity(0.45), in: .circle)

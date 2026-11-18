@@ -77,6 +77,7 @@ enum Feed {
 
     /// Runs one fetch with the app's login; falls back to the last good result.
     private static func load(key: String, _ fetch: (KinoraClient) async throws -> [Card]) async -> FeedEntry {
+        Language.shared.reloadIfNeeded() // the app may have switched or updated the language
         let store = ServerStore.shared()
         guard let server = store.current, let token = store.token(for: server.id) else {
             return FeedEntry(date: .now, state: .signedOut)
@@ -190,12 +191,12 @@ enum Sample {
     static func cards(_ kind: FeedKind) -> [Card] {
         switch kind {
         case .continueWatching:
-            [Card(id: 1, title: "Csillagközi utazás", subtitle: "2014", progress: 0.4, link: KinoraLink.play(1).url),
-             Card(id: 2, title: "A sorozat", subtitle: "S2 · E5 · A visszatérés", progress: 0.7, link: KinoraLink.play(2).url),
-             Card(id: 3, title: "Dokumentumfilm", subtitle: "2021", progress: 0.15, link: KinoraLink.play(3).url),
-             Card(id: 4, title: "Vígjáték", subtitle: "2019", progress: 0.55, link: KinoraLink.play(4).url)]
+            [Card(id: 1, title: L("Csillagközi utazás"), subtitle: "2014", progress: 0.4, link: KinoraLink.play(1).url),
+             Card(id: 2, title: L("A sorozat"), subtitle: L("S2 · E5 · A visszatérés"), progress: 0.7, link: KinoraLink.play(2).url),
+             Card(id: 3, title: L("Dokumentumfilm"), subtitle: "2021", progress: 0.15, link: KinoraLink.play(3).url),
+             Card(id: 4, title: L("Vígjáték"), subtitle: "2019", progress: 0.55, link: KinoraLink.play(4).url)]
         case .recentlyAdded:
-            (1...8).map { Card(id: $0, title: "Film \($0)", link: KinoraLink.item($0).url) }
+            (1...8).map { Card(id: $0, title: L("Film {0}", $0), link: KinoraLink.item($0).url) }
         }
     }
 }

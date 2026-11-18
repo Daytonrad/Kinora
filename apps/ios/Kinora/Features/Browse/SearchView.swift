@@ -27,15 +27,15 @@ struct SearchView: View {
             } else if let error {
                 LoadingState(error: error) { Task { await search(query) } }
             } else {
-                ContentUnavailableView("Filmek és sorozatok", systemImage: "magnifyingglass",
-                                       description: Text("Keress címre."))
+                ContentUnavailableView(L("Filmek és sorozatok"), systemImage: "magnifyingglass",
+                                       description: Text(L("Keress címre.")))
                     .padding(.top, 60)
             }
         }
         .scrollDismissesKeyboard(.immediately)
         .kinoraScreen()
-        .navigationTitle("Keresés")
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Cím")
+        .navigationTitle(L("Keresés"))
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: L("Cím"))
         .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountMenu() } }
         // Typing restarts the task: a short pause before asking the server.
         .task(id: query) {

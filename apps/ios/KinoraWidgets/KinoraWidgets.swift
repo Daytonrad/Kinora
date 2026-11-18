@@ -1,5 +1,6 @@
 import SwiftUI
 import WidgetKit
+import KinoraKit
 
 @main
 struct KinoraWidgets: WidgetBundle {
@@ -33,8 +34,8 @@ struct ContinueWidget: Widget {
         StaticConfiguration(kind: "continue", provider: FeedProvider(kind: .continueWatching)) { entry in
             ContinueView(entry: entry)
         }
-        .configurationDisplayName("Folytatás")
-        .description("Ahol abbahagytad: egy koppintás, és megy tovább.")
+        .configurationDisplayName(L("Folytatás"))
+        .description(L("Ahol abbahagytad: egy koppintás, és megy tovább."))
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
                             .accessoryRectangular, .accessoryCircular, .accessoryInline])
         .contentMarginsDisabled()
@@ -52,7 +53,7 @@ struct ContinueView: View {
                 accessory
             default:
                 if entry.cards.isEmpty {
-                    EmptyState(state: entry.state, empty: "Nincs félbehagyott film vagy sorozat.")
+                    EmptyState(state: entry.state, empty: L("Nincs félbehagyott film vagy sorozat."))
                 } else {
                     system
                 }
@@ -75,7 +76,7 @@ struct ContinueView: View {
             }
         default:
             VStack(alignment: .leading, spacing: 10) {
-                Header(title: "Folytatás", stale: entry.stale)
+                Header(title: L("Folytatás"), stale: entry.stale)
                 ForEach(cards.prefix(4)) { c in
                     HStack(spacing: 10) {
                         Link(destination: c.link) { ContinueRow(card: c) }
@@ -107,8 +108,8 @@ struct ContinueView: View {
             .widgetURL(card?.link)
         default:
             VStack(alignment: .leading, spacing: 2) {
-                Label("Folytatás", systemImage: "play.fill").font(.caption2.weight(.semibold))
-                Text(card?.title ?? "Nincs félbehagyott cím").font(.headline).lineLimit(1)
+                Label(L("Folytatás"), systemImage: "play.fill").font(.caption2.weight(.semibold))
+                Text(card?.title ?? L("Nincs félbehagyott cím")).font(.headline).lineLimit(1)
                 if let sub = card?.subtitle { Text(sub).font(.caption).lineLimit(1) }
                 if let p = card?.progress { ProgressView(value: p).tint(.primary) }
             }
@@ -170,8 +171,8 @@ struct RecentWidget: Widget {
         AppIntentConfiguration(kind: "recent", intent: RecentConfig.self, provider: RecentProvider()) { entry in
             RecentView(entry: entry)
         }
-        .configurationDisplayName("Új a könyvtárban")
-        .description("A legutóbb hozzáadott filmek és sorozatok, egy vagy minden könyvtárból.")
+        .configurationDisplayName(L("Új a könyvtárban"))
+        .description(L("A legutóbb hozzáadott filmek és sorozatok, egy vagy minden könyvtárból."))
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -183,12 +184,12 @@ struct RecentView: View {
     var body: some View {
         Group {
             if entry.cards.isEmpty {
-                EmptyState(state: entry.state, empty: "Még nincs új tartalom.")
+                EmptyState(state: entry.state, empty: L("Még nincs új tartalom."))
             } else if family == .systemSmall {
                 Poster(card: entry.cards[0]).widgetURL(entry.cards[0].link)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Header(title: "Új a könyvtárban", stale: entry.stale)
+                    Header(title: L("Új a könyvtárban"), stale: entry.stale)
                     let rows = family == .systemLarge ? 2 : 1
                     Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                         ForEach(0..<rows, id: \.self) { r in
@@ -234,7 +235,7 @@ private struct Header: View {
             Spacer()
             if stale {
                 Image(systemName: "wifi.slash").font(.caption).foregroundStyle(Palette.muted)
-                    .accessibilityLabel("A szerver most nem érhető el")
+                    .accessibilityLabel(L("A szerver most nem érhető el"))
             }
         }
     }
@@ -302,8 +303,8 @@ struct EmptyState: View {
 
     private var message: String {
         switch state {
-        case .signedOut: "Jelentkezz be a Kinora appban."
-        case .offline: "A szerver most nem érhető el."
+        case .signedOut: L("Jelentkezz be a Kinora appban.")
+        case .offline: L("A szerver most nem érhető el.")
         default: empty
         }
     }

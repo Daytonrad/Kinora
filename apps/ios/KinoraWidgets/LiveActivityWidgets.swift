@@ -1,6 +1,7 @@
 import ActivityKit
 import SwiftUI
 import WidgetKit
+import KinoraKit
 
 // MARK: - downloads
 
@@ -54,11 +55,11 @@ struct DownloadsLockView: View {
 
     static func headline(_ s: DownloadsActivityAttributes.ContentState) -> String {
         if s.active == 0 {
-            if s.done == 0 { return s.failed > 0 ? "A letöltés nem sikerült" : "Letöltések" }
-            return s.done == 1 ? "Letöltve, nézhető net nélkül" : "\(s.done) cím letöltve"
+            if s.done == 0 { return s.failed > 0 ? L("A letöltés nem sikerült") : L("Letöltések") }
+            return s.done == 1 ? L("Letöltve, nézhető net nélkül") : L("{0} cím letöltve", s.done)
         }
-        if s.preparing { return s.active == 1 ? "A szerver készíti a fájlt" : "\(s.active) letöltés készül" }
-        return s.active == 1 ? "Letöltés" : "\(s.active) letöltés folyik"
+        if s.preparing { return s.active == 1 ? L("A szerver készíti a fájlt") : L("{0} letöltés készül", s.active) }
+        return s.active == 1 ? L("Letöltés") : L("{0} letöltés folyik", s.active)
     }
 
     var body: some View {
@@ -82,7 +83,7 @@ struct DownloadsLockView: View {
     }
 
     private var footnote: String {
-        [state.done > 0 ? "\(state.done) kész" : nil, state.failed > 0 ? "\(state.failed) sikertelen" : nil]
+        [state.done > 0 ? L("{0} kész", state.done) : nil, state.failed > 0 ? L("{0} sikertelen", state.failed) : nil]
             .compactMap { $0 }.joined(separator: " · ")
     }
 }
@@ -133,11 +134,11 @@ struct PartyLockView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Watch party", systemImage: "person.2.fill")
+                Label(L("Watch party"), systemImage: "person.2.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Palette.amber)
                 Spacer()
-                Text(state.members == 1 ? "csak te" : "\(state.members) néző")
+                Text(state.members == 1 ? L("csak te") : L("{0} néző", state.members))
                     .font(.caption)
                     .foregroundStyle(Palette.muted)
                 Text(code)

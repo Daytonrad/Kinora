@@ -41,7 +41,7 @@ public struct Device: Codable, Sendable, Equatable, Identifiable, Hashable {
         case "webos": "LG TV"
         case "tizen": "Samsung TV"
         case "tvos": "Apple TV"
-        case "web": "Böngésző"
+        case "web": L("Böngésző")
         default: platform
         }
     }
@@ -65,24 +65,24 @@ public struct QuickConnectRequest: Codable, Sendable, Equatable {
 
 /// Choices of the settings screen. Keys are what the server stores.
 public enum SettingChoices {
-    public static let subModes: [(String, String)] = [
-        ("auto", "Automatikus (idegen nyelvű hangnál)"), ("always", "Mindig"), ("off", "Kikapcsolva"),
-    ]
-    public static let skipModes: [(String, String)] = [
-        ("manual", "Gomb mutatása"), ("auto", "Automatikus átugrás"), ("off", "Kikapcsolva"),
-    ]
-    public static let bitrates: [(Int, String)] = [
-        (0, "Eredeti"), (20000, "20 Mbps"), (8000, "8 Mbps"), (4000, "4 Mbps"), (2000, "2 Mbps"),
-    ]
+    public static var subModes: [(String, String)] { [
+        ("auto", L("Automatikus (idegen nyelvű hangnál)")), ("always", L("Mindig")), ("off", L("Kikapcsolva")),
+    ] }
+    public static var skipModes: [(String, String)] { [
+        ("manual", L("Gomb mutatása")), ("auto", L("Automatikus átugrás")), ("off", L("Kikapcsolva")),
+    ] }
+    public static var bitrates: [(Int, String)] { [
+        (0, L("Eredeti")), (20000, "20 Mbps"), (8000, "8 Mbps"), (4000, "4 Mbps"), (2000, "2 Mbps"),
+    ] }
 
     /// "most", "5 perce", "3 órája", "2 napja" – same rounding as the web settings.
     public static func ago(_ seconds: Int64) -> String {
         let m = Int((Double(max(0, seconds)) / 60).rounded())
-        if m < 1 { return "most" }
-        if m < 60 { return "\(m) perce" }
+        if m < 1 { return L("most") }
+        if m < 60 { return L("{0} perce", m) }
         let h = Int((Double(m) / 60).rounded())
-        if h < 48 { return "\(h) órája" }
-        return "\(Int((Double(h) / 24).rounded())) napja"
+        if h < 48 { return L("{0} órája", h) }
+        return L("{0} napja", Int((Double(h) / 24).rounded()))
     }
 }
 

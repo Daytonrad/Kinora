@@ -9,12 +9,12 @@ struct DownloadsView: View {
     var body: some View {
         Group {
             if store.saved.isEmpty && store.phases.isEmpty {
-                ContentUnavailableView("Nincs letöltés", systemImage: "arrow.down.circle",
-                                       description: Text("Filmet vagy részt a címlapján a letöltés gombbal menthetsz offline nézéshez."))
+                ContentUnavailableView(L("Nincs letöltés"), systemImage: "arrow.down.circle",
+                                       description: Text(L("Filmet vagy részt a címlapján a letöltés gombbal menthetsz offline nézéshez.")))
             } else {
                 List {
                     if !store.phases.isEmpty {
-                        Section("Folyamatban") {
+                        Section(L("Folyamatban")) {
                             ForEach(store.phases.keys.sorted(), id: \.self) { id in
                                 if let phase = store.phases[id] {
                                     ActiveRow(title: store.pendingTitle(id), phase: phase) { Haptic.warning.play(); store.cancel(id) }
@@ -29,17 +29,17 @@ struct DownloadsView: View {
                                 Button { model.play(d.item) } label: { SavedRow(download: d) }
                                     .buttonStyle(.plain)
                                     .swipeActions {
-                                        Button("Törlés", systemImage: "trash", role: .destructive) { Haptic.warning.play(); store.delete(d.id) }
+                                        Button(L("Törlés"), systemImage: "trash", role: .destructive) { Haptic.warning.play(); store.delete(d.id) }
                                     }
                                     .contextMenu {
-                                        Button("Lejátszás", systemImage: "play.fill") { model.play(d.item) }
-                                        Button("Törlés az eszközről", systemImage: "trash", role: .destructive) { Haptic.warning.play(); store.delete(d.id) }
+                                        Button(L("Lejátszás"), systemImage: "play.fill") { model.play(d.item) }
+                                        Button(L("Törlés az eszközről"), systemImage: "trash", role: .destructive) { Haptic.warning.play(); store.delete(d.id) }
                                     }
                             }
                         } header: {
-                            Text("Az eszközön")
+                            Text(L("Az eszközön"))
                         } footer: {
-                            Text("\(usage). Törléshez húzd balra a sort.")
+                            Text(L("{0}. Törléshez húzd balra a sort.", usage))
                         }
                         .listRowBackground(Theme.panel)
                     }
@@ -48,14 +48,14 @@ struct DownloadsView: View {
             }
         }
         .kinoraScreen()
-        .navigationTitle("Letöltések")
+        .navigationTitle(L("Letöltések"))
         .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountMenu() } }
     }
 
     private var usage: String {
         let used = ByteCountFormatter.string(fromByteCount: store.usedBytes, countStyle: .file)
         let limit = AppSettings.downloadLimitGB
-        return limit > 0 ? "\(used) / \(limit) GB" : "Összesen \(used)"
+        return limit > 0 ? "\(used) / \(limit) GB" : L("Összesen {0}", used)
     }
 }
 
@@ -81,7 +81,7 @@ private struct SavedRow: View {
         .padding(.vertical, 4)
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Lejátszás az eszközről")
+        .accessibilityHint(L("Lejátszás az eszközről"))
     }
 }
 
@@ -102,11 +102,11 @@ private struct ActiveRow: View {
                 switch phase {
                 case .preparing(let p):
                     ProgressView(value: p).tint(Theme.muted)
-                    Text("Előkészítés a szerveren · \(Int(p * 100))%").font(.caption).foregroundStyle(Theme.muted)
+                    Text(L("Előkészítés a szerveren · {0}%", Int(p * 100))).font(.caption).foregroundStyle(Theme.muted)
                 case .transferring(let p):
                     ProgressView(value: p).tint(Theme.amber)
                     Text(p == 0 && AppSettings.downloadsWifiOnly && NetworkStatus.shared.isExpensive
-                         ? "Wi-Fi-re vár" : "Letöltés · \(Int(p * 100))%")
+                         ? L("Wi-Fi-re vár") : L("Letöltés · {0}%", Int(p * 100)))
                         .font(.caption).foregroundStyle(Theme.muted)
                 case .failed(let m):
                     Text(m).font(.caption).foregroundStyle(Theme.danger)
@@ -118,7 +118,7 @@ private struct ActiveRow: View {
             .buttonStyle(.plain)
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(.rect)
-            .accessibilityLabel(failed ? "Eltávolítás a listából" : "Letöltés megszakítása")
+            .accessibilityLabel(failed ? L("Eltávolítás a listából") : L("Letöltés megszakítása"))
         }
         .padding(.vertical, 4)
     }
@@ -152,14 +152,14 @@ struct DownloadButton: View {
         // Done in the background while this page is open: a short "ready".
         .sensoryFeedback(.success, trigger: store.download(for: item.id) != nil) { _, done in done }
         .sensoryFeedback(.error, trigger: error) { _, e in e != nil }
-        .confirmationDialog("Letöltés offline nézéshez", isPresented: $asking, titleVisibility: .visible) {
+        .confirmationDialog(L("Letöltés offline nézéshez"), isPresented: $asking, titleVisibility: .visible) {
             ForEach(Self.qualities, id: \.0) { q in
                 Button(q.1) { start(q.0) }
             }
         } message: {
-            Text("A szerver előbb átalakítja a fájlt, utána a letöltés a háttérben is folytatódik.")
+            Text(L("A szerver előbb átalakítja a fájlt, utána a letöltés a háttérben is folytatódik."))
         }
-        .alert("Nem sikerült a letöltés", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+        .alert(L("Nem sikerült a letöltés"), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(error ?? "")
@@ -182,9 +182,9 @@ struct DownloadButton: View {
     }
 
     private var label: String {
-        if store.download(for: item.id) != nil { return "Letöltve" }
-        if store.phases[item.id] != nil { return "Letöltés folyamatban" }
-        return "Letöltés"
+        if store.download(for: item.id) != nil { return L("Letöltve") }
+        if store.phases[item.id] != nil { return L("Letöltés folyamatban") }
+        return L("Letöltés")
     }
 
     private func start(_ quality: String) {

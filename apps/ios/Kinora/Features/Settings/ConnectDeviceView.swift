@@ -17,9 +17,9 @@ struct ConnectDeviceView: View {
         Form {
             if approved {
                 Section {
-                    Label("Kész! Az eszköz pár másodpercen belül belép.", systemImage: "checkmark.circle.fill")
+                    Label(L("Kész! Az eszköz pár másodpercen belül belép."), systemImage: "checkmark.circle.fill")
                         .foregroundStyle(Theme.amber)
-                    Button("Másik eszköz csatlakoztatása") { reset() }
+                    Button(L("Másik eszköz csatlakoztatása")) { reset() }
                 }
                 .listRowBackground(Theme.panel)
             } else if let request {
@@ -30,7 +30,7 @@ struct ConnectDeviceView: View {
                             .monospacedDigit()
                             .tracking(4)
                             .accessibilityLabel(request.code.map(String.init).joined(separator: " "))
-                        Text("\(request.deviceName.flatMap { $0.isEmpty ? nil : $0 } ?? "Ismeretlen eszköz") szeretne belépni a fiókodba.")
+                        Text(L("{0} szeretne belépni a fiókodba.", request.deviceName.flatMap { $0.isEmpty ? nil : $0 } ?? L("Ismeretlen eszköz")))
                             .multilineTextAlignment(.center)
                             .foregroundStyle(Theme.plaster)
                     }
@@ -38,11 +38,11 @@ struct ConnectDeviceView: View {
                     .padding(.vertical, 8)
                 }
                 .listRowBackground(Theme.panel)
-                Section("Melyik profillal lépjen be?") {
-                    Picker("Profil", selection: $profileID) {
-                        Text("Profilválasztó az eszközön").tag(0)
+                Section(L("Melyik profillal lépjen be?")) {
+                    Picker(L("Profil"), selection: $profileID) {
+                        Text(L("Profilválasztó az eszközön")).tag(0)
                         ForEach(model.me?.profiles ?? []) { p in
-                            Text(p.isKids ? "\(p.name) (Gyerek)" : p.name).tag(p.id)
+                            Text(p.isKids ? L("{0} (Gyerek)", p.name) : p.name).tag(p.id)
                         }
                     }
                     .pickerStyle(.inline)
@@ -52,12 +52,12 @@ struct ConnectDeviceView: View {
                 Section {
                     ErrorText(message: error)
                     Button { decide(approve: true) } label: {
-                        if busy { ProgressView().tint(Theme.amberInk) } else { Text("Jóváhagyás") }
+                        if busy { ProgressView().tint(Theme.amberInk) } else { Text(L("Jóváhagyás")) }
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
-                    Button("Elutasítás", role: .destructive) { decide(approve: false) }
+                    Button(L("Elutasítás"), role: .destructive) { decide(approve: false) }
                         .foregroundStyle(Theme.danger)
                         .frame(maxWidth: .infinity)
                 }
@@ -72,7 +72,7 @@ struct ConnectDeviceView: View {
                         .monospacedDigit()
                         .multilineTextAlignment(.center)
                         .focused($codeFocused)
-                        .accessibilityLabel("Hatjegyű kód")
+                        .accessibilityLabel(L("Hatjegyű kód"))
                         .onChange(of: code) { _, v in
                             let digits = String(v.filter(\.isNumber).prefix(6))
                             if digits != v { code = digits; return }
@@ -86,22 +86,22 @@ struct ConnectDeviceView: View {
                     } label: {
                         HStack {
                             if busy && request == nil { ProgressView() }
-                            Text("Tovább")
+                            Text(L("Tovább"))
                         }
                         .frame(maxWidth: .infinity)
                     }
                     .disabled(busy || code.count < 6)
                 } header: {
-                    Text("Írd be a tévén látható 6 jegyű kódot")
+                    Text(L("Írd be a tévén látható 6 jegyű kódot"))
                 } footer: {
-                    Text("A tévén vagy a másik eszközön válaszd a „Belépés kóddal” lehetőséget.")
+                    Text(L("A tévén vagy a másik eszközön válaszd a „Belépés kóddal” lehetőséget."))
                 }
                 .listRowBackground(Theme.panel)
             }
         }
         .scrollContentBackground(.hidden)
         .background(Theme.black)
-        .navigationTitle("Eszköz csatlakoztatása")
+        .navigationTitle(L("Eszköz csatlakoztatása"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { codeFocused = true }
         .onAppear { profileID = model.me?.profile?.id ?? 0 }

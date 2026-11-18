@@ -137,6 +137,10 @@ Közös nézés a szerver szobáin át, ugyanaz a protokoll és szinkronszabály
 - **v0.6** (kész): hang- és feliratválasztás, felirat stílusa és késleltetése, offline letöltés, sebesség, minőségkorlát,
   fejezetek, sorozatonkénti nyelvek, Spotlight; Apple TV app.
 - **v0.6.3** (kész): watch party iPhone-on, iPaden és Apple TV-n.
+- **v0.6.7** (kész): nyelvválasztás (Beállítások → Nyelv). A nyelveket a szerver adja (`/api/languages`, a webes
+  nyelvi fájlok `app` táblája), az app letölti és megtartja őket; az adminban felvett új nyelv itt is megjelenik.
+  A szöveg a `L("magyar szöveg {0}", x)` hívással fordul (KinoraKit `Language.swift`); új szövegnél a kulcsot az
+  `en.js` és `de.js` `app` táblájába is fel kell venni.
 
 ## Licenc
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import KinoraKit
 
 /// Settings → Otthon-jelenetek: which Home app scene runs at the start, pause and end of playback.
 struct HomeScenesView: View {
@@ -9,7 +10,7 @@ struct HomeScenesView: View {
         Form {
             if homes.denied {
                 Section {
-                    Text("A Kinora nem férhet hozzá az Otthonhoz. Engedélyezd a Beállítások → Kinora → Otthon kapcsolóval.")
+                    Text(L("A Kinora nem férhet hozzá az Otthonhoz. Engedélyezd a Beállítások → Kinora → Otthon kapcsolóval."))
                         .foregroundStyle(Theme.muted)
                 }
                 .listRowBackground(Theme.panel)
@@ -18,7 +19,7 @@ struct HomeScenesView: View {
                     .listRowBackground(Theme.panel)
             } else if homes.scenes.isEmpty {
                 Section {
-                    Text("Még nincs jeleneted. Az Otthon appban hozz létre egyet (például „Mozi”: lámpák le, TV be), aztán itt kiválaszthatod.")
+                    Text(L("Még nincs jeleneted. Az Otthon appban hozz létre egyet (például „Mozi”: lámpák le, TV be), aztán itt kiválaszthatod."))
                         .foregroundStyle(Theme.muted)
                 }
                 .listRowBackground(Theme.panel)
@@ -26,21 +27,21 @@ struct HomeScenesView: View {
                 Section {
                     ForEach(HomeScenes.Moment.allCases) { moment in
                         Picker(moment.label, selection: binding(moment)) {
-                            Text("Semmi").tag(UUID?.none)
+                            Text(L("Semmi")).tag(UUID?.none)
                             ForEach(homes.scenes) { scene in
                                 Text(multipleHomes ? "\(scene.name) · \(scene.home)" : scene.name).tag(UUID?.some(scene.id))
                             }
                         }
                     }
                 } footer: {
-                    Text("A szünet jelenete pár másodperc után fut le, hogy egy tekerés ne kapcsolja fel a lámpákat. Részek között, automatikus továbblépésnél nem fut semmi. Csak ezen a készüléken érvényes.")
+                    Text(L("A szünet jelenete pár másodperc után fut le, hogy egy tekerés ne kapcsolja fel a lámpákat. Részek között, automatikus továbblépésnél nem fut semmi. Csak ezen a készüléken érvényes."))
                 }
                 .listRowBackground(Theme.panel)
             }
         }
         .scrollContentBackground(.hidden)
         .background(Theme.black)
-        .navigationTitle("Otthon-jelenetek")
+        .navigationTitle(L("Otthon-jelenetek"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             homes.connect()

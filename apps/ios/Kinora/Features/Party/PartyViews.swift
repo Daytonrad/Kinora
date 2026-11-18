@@ -38,26 +38,26 @@ struct PartyPanel: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Watch party").font(.caption).foregroundStyle(Theme.muted)
+                Text(L("Watch party")).font(.caption).foregroundStyle(Theme.muted)
                 Text(party.code)
                     .font(.title2.monospaced().weight(.bold))
-                    .accessibilityLabel("Kód: " + party.code.map(String.init).joined(separator: " "))
+                    .accessibilityLabel(L("Kód: ") + party.code.map(String.init).joined(separator: " "))
             }
             Spacer()
-            SharePlayButton(party: party, title: party.player?.title ?? "Watch party")
+            SharePlayButton(party: party, title: party.player?.title ?? L("Watch party"))
             Button { Haptic.tap.play(); withAnimation(.easeOut(duration: 0.2)) { qr = !showQR } } label: {
                 Image(systemName: "qrcode").frame(width: 36, height: 36).contentShape(.rect)
             }
             .foregroundStyle(showQR ? Theme.amber : .primary)
-            .accessibilityLabel(showQR ? "QR-kód elrejtése" : "QR-kód megjelenítése")
-            ShareLink(item: inviteText, subject: Text("Watch party"), message: Text(inviteText)) {
+            .accessibilityLabel(showQR ? L("QR-kód elrejtése") : L("QR-kód megjelenítése"))
+            ShareLink(item: inviteText, subject: Text(L("Watch party")), message: Text(inviteText)) {
                 Image(systemName: "square.and.arrow.up").frame(width: 36, height: 36).contentShape(.rect)
             }
-            .accessibilityLabel("Meghívó küldése")
+            .accessibilityLabel(L("Meghívó küldése"))
             Button { party.panelOpen = false } label: {
                 Image(systemName: "xmark").frame(width: 36, height: 36).contentShape(.rect)
             }
-            .accessibilityLabel("Panel bezárása")
+            .accessibilityLabel(L("Panel bezárása"))
         }
         .buttonStyle(.plain)
     }
@@ -65,19 +65,19 @@ struct PartyPanel: View {
     private var qrCard: some View {
         HStack(alignment: .center, spacing: 12) {
             PartyQRCode(url: party.appLink, size: 112)
-            Text("Mutasd meg a barátodnak: a Kinora appban a kezdőlap watch party gombjával, vagy a telefon kamerájával olvassa be.")
+            Text(L("Mutasd meg a barátodnak: a Kinora appban a kezdőlap watch party gombjával, vagy a telefon kamerájával olvassa be."))
                 .font(.caption)
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Meghívó QR-kód, kód: " + party.code.map(String.init).joined(separator: " "))
+        .accessibilityLabel(L("Meghívó QR-kód, kód: ") + party.code.map(String.init).joined(separator: " "))
     }
 
     /// Code, app link and web link: friends with the app tap the first link, others open the web player.
     private var inviteText: String {
-        var lines = ["Nézzük együtt a Kinorán! Kód: \(party.code)", party.appLink.absoluteString]
+        var lines = [L("Nézzük együtt a Kinorán! Kód: {0}", party.code), party.appLink.absoluteString]
         if let web = party.webLink { lines.append(web.absoluteString) }
         return lines.joined(separator: "\n")
     }
@@ -88,18 +88,18 @@ struct PartyPanel: View {
                 HStack(spacing: 8) {
                     Circle().fill(Color(partyHex: m.color)).frame(width: 9, height: 9)
                     Text(m.name).lineLimit(1)
-                    if m.host { Text("házigazda").font(.caption).foregroundStyle(Theme.muted) }
-                    if m.buffering { Text("tölt…").font(.caption).foregroundStyle(Theme.amber) }
+                    if m.host { Text(L("házigazda")).font(.caption).foregroundStyle(Theme.muted) }
+                    if m.buffering { Text(L("tölt…")).font(.caption).foregroundStyle(Theme.amber) }
                 }
                 .font(.subheadline)
                 .accessibilityElement(children: .combine)
             }
             if party.isHost {
-                Toggle("Mindenki irányíthat", isOn: Binding(get: { party.everyone }, set: { Haptic.select.play(); party.setEveryone($0) }))
+                Toggle(L("Mindenki irányíthat"), isOn: Binding(get: { party.everyone }, set: { Haptic.select.play(); party.setEveryone($0) }))
                     .font(.caption)
                     .tint(Theme.amber)
             } else if !party.canControl {
-                Text("A házigazda irányítja a lejátszást.").font(.caption).foregroundStyle(Theme.muted)
+                Text(L("A házigazda irányítja a lejátszást.")).font(.caption).foregroundStyle(Theme.muted)
             }
         }
     }
@@ -135,7 +135,7 @@ struct PartyPanel: View {
                 Button(e) { Haptic.tap.play(); party.react(e) }
                     .font(.title3)
                     .frame(maxWidth: .infinity, minHeight: 36)
-                    .accessibilityLabel("Reakció: " + e)
+                    .accessibilityLabel(L("Reakció: ") + e)
             }
         }
         .buttonStyle(.plain)
@@ -144,15 +144,15 @@ struct PartyPanel: View {
     private var composer: some View {
         VStack(spacing: 10) {
             HStack {
-                TextField("Üzenet", text: $message)
+                TextField(L("Üzenet"), text: $message)
                     .textFieldStyle(.roundedBorder)
                     .focused($typing)
                     .submitLabel(.send)
                     .onSubmit(send)
-                Button("Küldés", action: send).disabled(message.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button(L("Küldés"), action: send).disabled(message.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             Button(role: .destructive) { Haptic.warning.play(); leave() } label: {
-                Label("Kilépés a watch partyból", systemImage: "rectangle.portrait.and.arrow.right")
+                Label(L("Kilépés a watch partyból"), systemImage: "rectangle.portrait.and.arrow.right")
                     .font(.footnote.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }

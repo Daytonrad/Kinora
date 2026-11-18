@@ -1965,7 +1965,7 @@ function langLeaves(o, locale) {
   try { cats = new Intl.PluralRules(locale).resolvedOptions().pluralCategories; } catch { /* keep default */ }
   const walk = (v, p) => {
     if (typeof v === 'string') { out.push(p); return; }
-    if (p.length === 1 && isPluralVal(v)) {
+    if ((p.length === 1 || (p.length === 2 && p[0] === 'app')) && isPluralVal(v)) {
       const forms = [...Object.keys(v).filter(k => k.startsWith('=')), ...cats.filter(c => c !== 'other'), 'other'];
       for (const f of new Set(forms)) out.push([...p, f]);
       return;
@@ -1983,8 +1983,8 @@ const langOwn = code => (I18N[code] && I18N[code].strings) || {};
 const langDone = (own, p) => {
   const v = getPath(own, p);
   if (typeof v === 'string' && v !== '') return true;
-  const parent = p.length === 2 ? own[p[0]] : null;
-  return isPluralVal(parent) && !!parent.other && p[1] !== 'other' && !String(p[1]).startsWith('=');
+  const parent = getPath(own, p.slice(0, -1)), f = String(p[p.length - 1]);
+  return p.length > 1 && isPluralVal(parent) && !!parent.other && f !== 'other' && !f.startsWith('=');
 };
 function langStats(code) {
   const own = langOwn(code), rows = langLeaves(langFull(code), own.locale || code);
@@ -2081,18 +2081,21 @@ function langEditor(body, code) {
   const count = h('span.small.muted');
   const fields = paths.map(p => {
     const v = getPath(own, p);
-    const refText = p[0] === 'srvRe' ? getPath(full, ['srvRe', p[1], 0]) : p[0] === 'srv' ? p[1] : getPath(ref, p);
+    // "srv" and "app" are keyed by their Hungarian text; for "app", show English to other languages where there is one
+    const refText = p[0] === 'srvRe' ? getPath(full, ['srvRe', p[1], 0]) : p[0] === 'srv' ? p[1]
+      : p[0] === 'app' ? (code === 'en' ? p[1] : (typeof getPath(ref, p) === 'string' ? getPath(ref, p) : p[1])) : getPath(ref, p);
     const fb = getPath(fallback, p);
     const long = String(refText || fb || '').length > 70;
     const input = h(long ? 'textarea' : 'input', { value: typeof v === 'string' ? v : '', placeholder: typeof fb === 'string' ? fb : '', rows: long ? 2 : null, spellcheck: 'true', lang: code, 'aria-label': p.join('.') });
-    const label = p[0] === 'srv' ? 'srv' : p[0] === 'srvRe' ? 'srvRe ' + p[1] : p.join('.');
+    const label = p[0] === 'srv' ? 'srv' : p[0] === 'srvRe' ? 'srvRe ' + p[1] : p[0] === 'app' ? (p.length > 2 ? 'app.' + p[2] : 'app') : p.join('.');
     const tr = h('tr', null, h('td.mono.small', null, label), h('td.small.muted', { lang: refCode }, refText == null ? '' : String(refText)), h('td', null, input));
-    return { p, input, tr, optional: p.length === 2 && isPluralVal(full[p[0]]) && p[1] !== 'other' && !String(p[1]).startsWith('='), hay: (label + ' ' + (refText || '') + ' ' + (fb || '')).toLowerCase() };
+    const form = String(p[p.length - 1]);
+    return { p, input, tr, optional: p.length > 1 && isPluralVal(getPath(full, p.slice(0, -1))) && form !== 'other' && !form.startsWith('='), hay: (label + ' ' + (p[0] === 'app' ? p[1] + ' ' : '') + (refText || '') + ' ' + (fb || '')).toLowerCase() };
   });
   const filter = () => {
     const s = q.value.trim().toLowerCase();
     let n = 0;
-    for (const f of fields) { const show = (!s || f.hay.includes(s) || f.input.value.toLowerCase().includes(s)) && (!onlyMissing.checked || !(f.input.value || (f.optional && fields.some(o => o.p[0] === f.p[0] && o.p[1] === 'other' && o.input.value)))); f.tr.classList.toggle('hidden', !show); if (show) n++; }
+    for (const f of fields) { const show = (!s || f.hay.includes(s) || f.input.value.toLowerCase().includes(s)) && (!onlyMissing.checked || !(f.input.value || (f.optional && fields.some(o => o.p.length === f.p.length && o.p.slice(0, -1).join('\x00') === f.p.slice(0, -1).join('\x00') && o.p[o.p.length - 1] === 'other' && o.input.value)))); f.tr.classList.toggle('hidden', !show); if (show) n++; }
     count.textContent = T.langRows(n);
   };
   q.addEventListener('input', filter);
@@ -2120,11 +2123,12 @@ function langEditor(body, code) {
       else if (!Array.isArray(o)) delete o[k];
     }
     // a plural form set needs "other"; borrow it from another form rather than drop the translation
-    for (const [k, v] of Object.entries(out)) {
+    for (const v of [...Object.values(out), ...(isObj(out.app) ? Object.values(out.app) : [])]) {
       if (!isObj(v) || !Object.keys(v).length || !Object.keys(v).every(x => PLURAL_KEY.test(x))) continue;
       if (!v.other) v.other = Object.values(v).find(Boolean);
     }
-    for (const k of ['srv', 'sortLabels', 'ruleFields', 'kindOpts', 'langNames', 'platforms']) if (isObj(out[k]) && !Object.keys(out[k]).length) delete out[k];
+    if (isObj(out.app)) for (const [k, v] of Object.entries(out.app)) if (isObj(v) && !Object.keys(v).length) delete out.app[k];
+    for (const k of ['srv', 'app', 'sortLabels', 'ruleFields', 'kindOpts', 'langNames', 'platforms']) if (isObj(out[k]) && !Object.keys(out[k]).length) delete out[k];
     return out;
   };
   put(body, h('div.panel', null,

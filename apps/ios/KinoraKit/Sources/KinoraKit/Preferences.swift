@@ -19,13 +19,13 @@ public struct SubtitleStyle: Codable, Sendable, Equatable {
     }
 
     public static func label(_ s: Size) -> String {
-        switch s { case .small: "Kicsi"; case .medium: "Közepes"; case .large: "Nagy"; case .huge: "Nagyon nagy" }
+        switch s { case .small: L("Kicsi"); case .medium: L("Közepes"); case .large: L("Nagy"); case .huge: L("Nagyon nagy") }
     }
     public static func label(_ b: Background) -> String {
-        switch b { case .none: "Nincs"; case .shadow: "Árnyék"; case .box: "Sötét doboz" }
+        switch b { case .none: L("Nincs"); case .shadow: L("Árnyék"); case .box: L("Sötét doboz") }
     }
     public static func label(_ c: Color) -> String {
-        switch c { case .white: "Fehér"; case .yellow: "Sárga" }
+        switch c { case .white: L("Fehér"); case .yellow: L("Sárga") }
     }
 }
 
@@ -63,7 +63,7 @@ public enum PlaybackSpeeds {
 
     public static func label(_ r: Float) -> String {
         let s = r == r.rounded() ? String(format: "%.0f", r) : String(format: "%g", r)
-        return s.replacingOccurrences(of: ".", with: ",") + "×"
+        return s.replacingOccurrences(of: ".", with: Language.shared.decimalSeparator) + "×"
     }
 }
 
