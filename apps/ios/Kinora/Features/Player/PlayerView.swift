@@ -322,20 +322,18 @@ private struct Scrubber: View {
                        // A tick at every chapter mark the thumb passes.
                        if chapterIndex(scrub ?? player.position) != chapterIndex(t) { Haptic.select.play() }
                        scrub = t
-                       // A tap on the track (or VoiceOver's adjust) moves the value without a
-                       // drag, and iOS doesn't always report it as an edit: commit it shortly.
-                       if !scrubbing {
-                           commitTask?.cancel()
-                           commitTask = Task {
-                               try? await Task.sleep(for: .milliseconds(350))
-                               if !Task.isCancelled, !scrubbing { commit() }
-                           }
+                       // iOS doesn't always report the end of an edit (a track tap, VoiceOver's
+                       // adjust, and sometimes a plain drag on iOS 26), and then nothing would
+                       // seek: once the value rests, seek anyway; sooner when no drag is going on.
+                       commitTask?.cancel()
+                       commitTask = Task {
+                           try? await Task.sleep(for: .milliseconds(scrubbing ? 900 : 350))
+                           if !Task.isCancelled { commit() }
                        }
                    }),
                    in: 0...max(player.duration, 1)) { editing in
-                scrubbing = editing
                 if editing {
-                    commitTask?.cancel()
+                    scrubbing = true
                     began()
                 } else {
                     commit()
@@ -364,6 +362,7 @@ private struct Scrubber: View {
     private func commit() {
         commitTask?.cancel()
         commitTask = nil
+        scrubbing = false
         guard let t = scrub else { return }
         Haptic.tap.play()
         player.seek(to: t)
