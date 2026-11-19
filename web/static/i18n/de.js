@@ -1413,6 +1413,7 @@
   "updLatest": "aktuell",
   "updChecked": "Zuletzt geprüft: {0}",
   "updFailed": "Update-Prüfung fehlgeschlagen",
+  "updCheckNow": "Jetzt prüfen",
   "updHowDocker": "Aktualisieren: docker compose pull, dann docker compose up -d. Deine Daten bleiben erhalten.",
   "updHowWindows": "Der Windows-Dienst aktualisiert sich nachts selbst. Sofort: update.ps1 als Administrator ausführen.",
   "updHowSystemd": "Aktualisieren: das Installationsskript (install.sh) erneut ausführen. Daten und Einstellungen bleiben erhalten.",

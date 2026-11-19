@@ -1419,6 +1419,7 @@
   "updLatest": "up to date",
   "updChecked": "Last checked: {0}",
   "updFailed": "could not check for updates",
+  "updCheckNow": "Check now",
   "updHowDocker": "To update: docker compose pull, then docker compose up -d. Your data is kept.",
   "updHowWindows": "The Windows service updates itself overnight. To update now, run update.ps1 as administrator.",
   "updHowSystemd": "To update, run the installer (install.sh) again. Your data and settings are kept.",

@@ -606,6 +606,9 @@ pre.code { background: var(--g1); border-left: var(--hair) solid var(--rule-hi);
 .a-ver { margin: var(--s4) 0 0; font-size: var(--f0); color: var(--t2); overflow-wrap: anywhere; }
 .a-ver span { color: var(--t1); font-variant-numeric: tabular-nums; }
 .a-ver .a-upd-ok { color: var(--t2); }
+.a-upd-again { padding: 0 var(--s1); border: 0; background: none; color: var(--t2); font: inherit; line-height: 1; cursor: pointer; border-radius: 4px; }
+.a-upd-again:hover, .a-upd-again:focus-visible { color: var(--t1); }
+.a-upd-again:disabled { opacity: .5; cursor: progress; }
 .a-upd { margin: var(--s4) 0 0; padding-left: var(--s3); border-left: var(--frame) solid var(--amber); }
 .a-upd .a-ver { margin: 0; }
 .a-upd-link {

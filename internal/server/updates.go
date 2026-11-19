@@ -22,6 +22,7 @@ const (
 	releaseRepo     = "ScotyLucas/Kinora"
 	releaseCheckTTL = 6 * time.Hour
 	releaseRetryTTL = 30 * time.Minute // after a failed check
+	releaseForceGap = time.Minute      // between two "check now" clicks: GitHub allows 60 anonymous requests an hour
 )
 
 // ReleaseURL is the GitHub API endpoint asked for the latest release; tests point it at a local server.
@@ -44,6 +45,7 @@ type releaseChecker struct {
 	hc      *http.Client
 	info    releaseInfo
 	next    time.Time
+	last    time.Time // when the last check started
 	running bool
 }
 
@@ -92,15 +94,37 @@ func (rc *releaseChecker) Status(ctx context.Context) releaseInfo {
 		return releaseInfo{Current: Version, Mode: info.Mode, Disabled: true}
 	}
 	if !rc.running && time.Now().After(rc.next) {
-		rc.running = true
+		rc.running, rc.last = true, time.Now()
 		go rc.check(ctx)
 	}
+	return withAvailable(info)
+}
+
+func withAvailable(info releaseInfo) releaseInfo {
 	if info.Latest != "" {
 		cur, _ := parseSemver(Version)
 		lat, _ := parseSemver(info.Latest)
 		info.Available = semverLess(cur, lat)
 	}
 	return info
+}
+
+// CheckNow asks GitHub right away and waits for the answer (the admin's "check now" button). Within releaseForceGap of
+// the previous check, or while one is running, it just returns the last known result.
+func (rc *releaseChecker) CheckNow(ctx context.Context) releaseInfo {
+	rc.mu.Lock()
+	if _, ok := parseSemver(Version); !ok || updateCheckDisabled() {
+		rc.mu.Unlock()
+		return releaseInfo{Current: Version, Mode: installMode(), Disabled: true}
+	}
+	if rc.running || time.Since(rc.last) < releaseForceGap {
+		rc.mu.Unlock()
+		return rc.Status(ctx)
+	}
+	rc.running, rc.last = true, time.Now()
+	rc.mu.Unlock()
+	rc.check(ctx)
+	return rc.Status(ctx)
 }
 
 func (rc *releaseChecker) check(ctx context.Context) {

@@ -56,3 +56,28 @@ func TestReleaseChecker(t *testing.T) {
 		t.Fatalf("dev build must not check: %+v", st)
 	}
 }
+
+func TestReleaseCheckNow(t *testing.T) {
+	calls := 0
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Write([]byte(`{"tag_name":"v1.0.10","html_url":"https://github.com/ScotyLucas/Kinora/releases/tag/v1.0.10"}`))
+	}))
+	defer gh.Close()
+	oldURL, oldVer := ReleaseURL, Version
+	ReleaseURL, Version = gh.URL, "v1.0.9"
+	defer func() { ReleaseURL, Version = oldURL, oldVer }()
+
+	rc := newReleaseChecker()
+	if st := rc.CheckNow(context.Background()); !st.Available || st.CheckedAt == 0 {
+		t.Fatalf("check now must wait for the answer: %+v", st)
+	}
+	if st := rc.CheckNow(context.Background()); !st.Available || calls != 1 {
+		t.Fatalf("a second click within the gap must not ask GitHub again: calls=%d %+v", calls, st)
+	}
+	rc.last = time.Now().Add(-2 * releaseForceGap)
+	rc.CheckNow(context.Background())
+	if calls != 2 {
+		t.Fatalf("after the gap check now must ask GitHub: calls=%d", calls)
+	}
+}

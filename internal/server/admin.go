@@ -406,3 +406,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request, c *reqC
 	s.dashboardExtras(d)
 	writeJSON(w, http.StatusOK, d)
 }
+
+// handleUpdateCheck is the dashboard's "check now" button: it asks GitHub for the latest release and returns the result.
+func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	writeJSON(w, http.StatusOK, s.updates.CheckNow(r.Context()))
+}

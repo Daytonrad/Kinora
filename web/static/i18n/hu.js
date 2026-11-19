@@ -581,6 +581,7 @@
   "updLatest": "naprakész",
   "updChecked": "Utoljára ellenőrizve: {0}",
   "updFailed": "a frissítés ellenőrzése nem sikerült",
+  "updCheckNow": "Ellenőrzés most",
   "updHowDocker": "Frissítés: docker compose pull, majd docker compose up -d. Az adatok megmaradnak.",
   "updHowWindows": "A Windows-szolgáltatás éjszaka magától frissül. Azonnal: futtasd rendszergazdaként az update.ps1-et.",
   "updHowSystemd": "Frissítés: futtasd újra a telepítőt (install.sh). Az adatok és a beállítások megmaradnak.",
