@@ -24,6 +24,9 @@ type Indexer struct {
 	URL        string
 	APIKey     string
 	Categories string // comma separated Torznab categories; empty = 2000 (movies)
+	// kind "cardigann": the uploaded definition to run and the admin's values for it (JSON)
+	DefinitionID string
+	Config       string
 }
 
 // Result is one release an indexer returned.

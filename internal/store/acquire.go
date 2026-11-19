@@ -16,9 +16,12 @@ type AcqIndexer struct {
 	Categories string `json:"categories"`
 	Enabled    bool   `json:"enabled"`
 	Priority   int    `json:"priority"`
-	LastOKAt   *int64 `json:"last_ok_at"`
-	LastError  string `json:"last_error"`
-	CreatedAt  int64  `json:"created_at"`
+	// the built-in engine (kind "cardigann"): the definition and the admin's values for its settings (JSON)
+	DefinitionID string `json:"definition_id"`
+	Config       string `json:"config"`
+	LastOKAt     *int64 `json:"last_ok_at"`
+	LastError    string `json:"last_error"`
+	CreatedAt    int64  `json:"created_at"`
 }
 
 // AcqClient is a stored download client.
@@ -90,13 +93,13 @@ func b2i(b bool) int {
 
 // ---------------------------------------------------------------- indexers
 
-const idxCols = `id,name,kind,url,api_key,categories,enabled,priority,last_ok_at,last_error,created_at`
+const idxCols = `id,name,kind,url,api_key,categories,enabled,priority,last_ok_at,last_error,created_at,definition_id,config`
 
 func scanIndexer(row interface{ Scan(...any) error }) (*AcqIndexer, error) {
 	x := &AcqIndexer{}
 	var en int
 	var ok sql.NullInt64
-	if err := row.Scan(&x.ID, &x.Name, &x.Kind, &x.URL, &x.APIKey, &x.Categories, &en, &x.Priority, &ok, &x.LastError, &x.CreatedAt); err != nil {
+	if err := row.Scan(&x.ID, &x.Name, &x.Kind, &x.URL, &x.APIKey, &x.Categories, &en, &x.Priority, &ok, &x.LastError, &x.CreatedAt, &x.DefinitionID, &x.Config); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -139,16 +142,22 @@ func (s *Store) SaveAcqIndexer(x *AcqIndexer) error {
 	}
 	if x.ID == 0 {
 		x.CreatedAt = now()
-		res, err := s.DB.Exec(`INSERT INTO acq_indexers(name,kind,url,api_key,categories,enabled,priority,last_error,created_at) VALUES(?,?,?,?,?,?,?,'',?)`,
-			x.Name, x.Kind, x.URL, x.APIKey, x.Categories, b2i(x.Enabled), x.Priority, x.CreatedAt)
+		if x.Config == "" {
+			x.Config = "{}"
+		}
+		res, err := s.DB.Exec(`INSERT INTO acq_indexers(name,kind,url,api_key,categories,enabled,priority,last_error,created_at,definition_id,config) VALUES(?,?,?,?,?,?,?,'',?,?,?)`,
+			x.Name, x.Kind, x.URL, x.APIKey, x.Categories, b2i(x.Enabled), x.Priority, x.CreatedAt, x.DefinitionID, x.Config)
 		if err != nil {
 			return err
 		}
 		x.ID, _ = res.LastInsertId()
 		return nil
 	}
-	_, err := s.DB.Exec(`UPDATE acq_indexers SET name=?,kind=?,url=?,api_key=?,categories=?,enabled=?,priority=? WHERE id=?`,
-		x.Name, x.Kind, x.URL, x.APIKey, x.Categories, b2i(x.Enabled), x.Priority, x.ID)
+	if x.Config == "" {
+		x.Config = "{}"
+	}
+	_, err := s.DB.Exec(`UPDATE acq_indexers SET name=?,kind=?,url=?,api_key=?,categories=?,enabled=?,priority=?,definition_id=?,config=? WHERE id=?`,
+		x.Name, x.Kind, x.URL, x.APIKey, x.Categories, b2i(x.Enabled), x.Priority, x.DefinitionID, x.Config, x.ID)
 	return err
 }
 

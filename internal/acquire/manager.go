@@ -48,6 +48,7 @@ type Manager struct {
 
 	seriesMu sync.Mutex
 	lastRSS  time.Time
+	eng      engines
 }
 
 type cachedClient struct {
@@ -128,7 +129,8 @@ func (m *Manager) indexers() []Indexer {
 	var out []Indexer
 	for _, x := range list {
 		if x.Enabled {
-			out = append(out, Indexer{ID: x.ID, Kind: x.Kind, Name: x.Name, URL: x.URL, APIKey: x.APIKey, Categories: x.Categories})
+			out = append(out, Indexer{ID: x.ID, Kind: x.Kind, Name: x.Name, URL: x.URL, APIKey: x.APIKey, Categories: x.Categories,
+				DefinitionID: x.DefinitionID, Config: x.Config})
 		}
 	}
 	return out
@@ -167,7 +169,7 @@ func (m *Manager) releasesWith(ctx context.Context, tmdbID int64, prof Profile) 
 			defer wg.Done()
 			cctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 			defer cancel()
-			res, err := m.tz.Search(cctx, ix, q)
+			res, err := m.searchIx(cctx, ix, q)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -344,7 +346,7 @@ func (m *Manager) Grab(ctx context.Context, in GrabInput) (*store.AcqGrab, error
 	if err != nil {
 		return nil, err
 	}
-	f, err := FetchRelease(ctx, m.hc, *rel)
+	f, err := m.fetch(ctx, *rel)
 	if err != nil {
 		return nil, err
 	}
@@ -563,7 +565,7 @@ func (m *Manager) Remove(ctx context.Context, id int64, deleteFiles bool) error 
 func (m *Manager) TestIndexer(ctx context.Context, ix Indexer) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	return m.tz.Caps(cctx, ix)
+	return m.testIx(cctx, ix)
 }
 
 // TestClient checks a download client configuration without saving it.

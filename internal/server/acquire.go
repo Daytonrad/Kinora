@@ -25,6 +25,15 @@ func maskIndexer(x *store.AcqIndexer) *store.AcqIndexer {
 	return &c
 }
 
+// maskIx hides an indexer's API key, and for an engine indexer its secret settings too.
+func (s *Server) maskIx(x *store.AcqIndexer) *store.AcqIndexer {
+	c := maskIndexer(x)
+	if c.Kind == "cardigann" {
+		c.Config = s.maskConfig(c.DefinitionID, c.Config)
+	}
+	return c
+}
+
 func maskClient(x *store.AcqClient) *store.AcqClient {
 	c := *x
 	c.Password = maskSecret(c.Password)
@@ -52,7 +61,7 @@ func (s *Server) handleAcqSettings(w http.ResponseWriter, r *http.Request, c *re
 	}
 	outI := make([]*store.AcqIndexer, len(ixs))
 	for i, x := range ixs {
-		outI[i] = maskIndexer(x)
+		outI[i] = s.maskIx(x)
 	}
 	outC := make([]*store.AcqClient, len(cls))
 	for i, x := range cls {
@@ -141,6 +150,12 @@ func validIndexer(x *store.AcqIndexer) string {
 	if x.Name == "" {
 		return "add meg az indexer nevét"
 	}
+	if x.Kind == "cardigann" { // the address comes from the definition
+		if x.Priority <= 0 {
+			x.Priority = 25
+		}
+		return ""
+	}
 	if !strings.HasPrefix(x.URL, "http://") && !strings.HasPrefix(x.URL, "https://") {
 		return "az indexer címe http:// vagy https:// kezdetű legyen"
 	}
@@ -148,7 +163,7 @@ func validIndexer(x *store.AcqIndexer) string {
 		x.Kind = "torznab"
 	}
 	if x.Kind != "torznab" && x.Kind != "newznab" {
-		return "az indexer típusa torznab vagy newznab lehet"
+		return "az indexer típusa torznab, newznab vagy beépített leíró lehet"
 	}
 	if x.Priority <= 0 {
 		x.Priority = 25
@@ -161,6 +176,7 @@ func (s *Server) handleAcqIndexerSave(w http.ResponseWriter, r *http.Request, c 
 	if !decode(w, r, &x) {
 		return
 	}
+	stored := "{}"
 	x.ID = pathID(r, "id")
 	if x.ID > 0 {
 		old, err := s.st.AcqIndexer(x.ID)
@@ -169,6 +185,16 @@ func (s *Server) handleAcqIndexerSave(w http.ResponseWriter, r *http.Request, c 
 			return
 		}
 		x.APIKey = keepSecret(x.APIKey, old.APIKey)
+		stored = old.Config
+	}
+	if x.Kind == "cardigann" {
+		if msg := s.mergeConfig(&x, stored); msg != "" {
+			if msg == "definition" {
+				msg = "válassz feltöltött leírót"
+			}
+			writeErr(w, http.StatusBadRequest, msg)
+			return
+		}
 	}
 	if msg := validIndexer(&x); msg != "" {
 		writeErr(w, http.StatusBadRequest, msg)
@@ -178,7 +204,7 @@ func (s *Server) handleAcqIndexerSave(w http.ResponseWriter, r *http.Request, c 
 		s.internalErr(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, maskIndexer(&x))
+	writeJSON(w, http.StatusOK, s.maskIx(&x))
 }
 
 func (s *Server) handleAcqIndexerDelete(w http.ResponseWriter, r *http.Request, c *reqCtx) {
@@ -195,16 +221,29 @@ func (s *Server) handleAcqIndexerTest(w http.ResponseWriter, r *http.Request, c 
 	if !decode(w, r, &x) {
 		return
 	}
+	stored := "{}"
 	if x.ID > 0 {
 		if old, err := s.st.AcqIndexer(x.ID); err == nil {
 			x.APIKey = keepSecret(x.APIKey, old.APIKey)
+			stored = old.Config
+		}
+	}
+	if x.Kind == "cardigann" {
+		if msg := s.mergeConfig(&x, stored); msg != "" {
+			if msg == "definition" {
+				msg = "válassz feltöltött leírót"
+			}
+			writeErr(w, http.StatusBadRequest, msg)
+			return
 		}
 	}
 	if msg := validIndexer(&x); msg != "" && !strings.Contains(msg, "nevét") {
 		writeErr(w, http.StatusBadRequest, msg)
 		return
 	}
-	name, err := m.TestIndexer(r.Context(), acquire.Indexer{ID: x.ID, Name: x.Name, URL: x.URL, APIKey: x.APIKey, Categories: x.Categories})
+	// a test runs on its own engine (id 0): the saved indexer's session is left alone
+	name, err := m.TestIndexer(r.Context(), acquire.Indexer{Kind: x.Kind, Name: x.Name, URL: x.URL, APIKey: x.APIKey, Categories: x.Categories,
+		DefinitionID: x.DefinitionID, Config: x.Config})
 	if x.ID > 0 {
 		e := ""
 		if err != nil {

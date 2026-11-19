@@ -439,6 +439,18 @@ ALTER TABLE acq_grabs ADD COLUMN profile_id INTEGER REFERENCES acq_profiles(id) 
 ALTER TABLE acq_grabs ADD COLUMN replaces TEXT NOT NULL DEFAULT '';
 ALTER TABLE acq_grabs ADD COLUMN upgrade_checked_at INTEGER NOT NULL DEFAULT 0;
 `,
+	// 10: the built-in indexer engine: uploaded definitions (Cardigann YAML), indexers that run one
+	`
+CREATE TABLE acq_definitions(
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT '',
+  yaml TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+ALTER TABLE acq_indexers ADD COLUMN definition_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE acq_indexers ADD COLUMN config TEXT NOT NULL DEFAULT '{}';
+`,
 }
 
 func (s *Store) migrate() error {

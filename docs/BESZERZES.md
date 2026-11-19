@@ -43,7 +43,9 @@
 | Sonarr | Sorozatfigyelés, RSS, hiányzó részek, évadcsomagok | M3 |
 | Jellyseerr | Felfedezés, „Kérem” gomb, jóváhagyás, kvóta, „Kéréseim”, értesítések | M2 |
 
-> **Fontos korlát az M5-ig:** a legtöbb tracker nem beszél Torznab-ot. Az M1–M4 alatt ezekhez egy indexer-proxy (Jackett vagy Prowlarr) **egyetlen Torznab-forrásként** használható, vagy olyan tracker, amelynek van Torznab-kompatibilis API-ja. A teljes „semmit nem kell telepíteni” állapot az M5-tel érkezik.
+> **Az M5 óta nincs szükség proxyra:** a beépített indexer-motor (lásd 10. fejezet) maga futtatja az oldal-leírókat. Torznab/Newznab forrás továbbra is felvehető.
+>
+> *Korábbi megjegyzés:* a legtöbb tracker nem beszél Torznab-ot. Az M1–M4 alatt ezekhez egy indexer-proxy (Jackett vagy Prowlarr) **egyetlen Torznab-forrásként** használható, vagy olyan tracker, amelynek van Torznab-kompatibilis API-ja. A teljes „semmit nem kell telepíteni” állapot az M5-tel érkezik.
 
 ---
 
@@ -132,7 +134,7 @@ A titkos mezők (API-kulcs, jelszó) a meglévő mintát követik: maszkolva men
 | **M2 – kérések** | Felfedezés oldal, „Kérem” mindenkinek (gyerek kivételével), automatikus jóváhagyás vagy admin jóváhagyás, kvóta, automatikus keresés és letöltés, hibánál feketelista + következő kiadás, RSS-figyelés a még meg nem jelent filmekre, értesítések | egy családtag kér egy filmet, és az emberi beavatkozás nélkül megérkezik |
 | **M3 – sorozatok** | Figyelt sorozatok (TMDB-adások), RSS-szinkron, hiányzó részek keresése, évadcsomagok, sorozat-elnevezés (`Sorozat/Season 01/…S01E03`), évadonkénti kérés | új rész megjelenése után magától letöltődik |
 | **M4 – kényelem** | Csere jobb minőségre (cutoff), több minőségprofil, Transmission/Deluge, Newznab + SABnzbd/NZBGet, statisztika, iOS/tvOS kérés-felület, értesítés push/Live Activity | |
-| **M5 – beépített indexer-motor** | Cardigann-formátumú oldal-leírók futtatása (bejelentkezés, keresés, eredmény-kinyerés), így Jackett/Prowlarr sem kell; a leírókat az admin tölti fel, a Kinora nem szállít trackerlistát | egyetlen Kinora-telepítéssel működik a teljes lánc |
+| **M5 – beépített indexer-motor** | Cardigann-formátumú oldal-leírók futtatása (bejelentkezés, keresés, eredmény-kinyerés), így Jackett/Prowlarr sem kell; a leírókat az admin tölti fel, a Kinora nem szállít trackerlistát | egyetlen Kinora-telepítéssel működik a teljes lánc ✔ |
 
 ---
 
@@ -151,3 +153,19 @@ A titkos mezők (API-kulcs, jelszó) a meglévő mintát követik: maszkolva men
 - Go egységtesztek: kiadásnév-értelmező (valós névminták), pontozás, Torznab XML-fixture, bencode/infohash, magnet, qBittorrent-kliens hamis szerverrel, import (hardlink, másolás, fő fájl kiválasztása, sample kihagyása, felirat), teljes manager-folyamat hamis indexerrel és klienssel.
 - Valódi qBittorrent konténer: belépés, kategória, **szüneteltetett** hozzáadás egy szabad licencű torrenttel (pl. Big Buck Bunny), állapot, törlés.
 - Webes e2e: admin oldalak megjelennek, keresés → kiadáslista → letöltés a hamis szolgáltatásokkal.
+
+---
+
+## 10. M5 – beépített indexer-motor
+
+A Kinora Cardigann-formátumú YAML leírókat futtat (ugyanaz a formátum, amit a Jackett és a Prowlarr használ), így a Torznab-ot nem beszélő torrentoldalakon is közvetlenül keres, Jackett vagy Prowlarr nélkül.
+
+**A Kinora nem szállít leírókat.** Az admin tölti fel azokat, amelyeket használni szeretne (*Admin → Beszerzés beállításai → Indexer-leírók → Leíró feltöltése*), majd felvesz egy indexert *Beépített leíró* típussal. A párbeszédablak a leíró `settings` szakaszából épül fel (szöveg, jelszó, jelölőnégyzet, legördülő lista, tájékoztató szöveg). A jelszó, süti, passkey és token mezők maszkolva mennek ki a böngészőbe, a maszkolt érték mentéskor megmarad. Azonos `id`-jú leíró feltöltése felülírja a régit; indexer által használt leíró nem törölhető.
+
+**Támogatott:** fejléc (`id`, `name`, `type`, `links`), `caps` (`categorymappings` és a régi `categories`; filmhez a `Movies*`, sorozathoz a `TV*` kategóriák mennek a sablonba), `login` (`post`, `form` rejtett mezőkkel és `selectorinputs`-szal, `cookie`, `get`; `error` szelektorok az oldal hibaüzenetével; `test` oldal), `search` (`paths` több kéréssel és kategóriaszűréssel, `inputs` + `$raw`, `keywordsfilters`, `headers`, HTML és JSON válasz, `rows` + `remove`, mezők `selector`/`attribute`/`text`/`remove`/`case`/`optional`/`default`/`filters`, a mezők sorrendben látják egymást `.Result.x`-ként), `download.selectors` (adatlapról a .torrent vagy magnet link). Sablonok: Go `text/template` a `.Config`, `.Keywords`, `.Query.*` (IMDBID, IMDBIDShort, TVDBID, Season, Ep, Year), `.Categories`, `.Today.Year`, `.True/.False` mezőkkel és a `re_replace`, `join` függvényekkel. Szűrők: querystring, prepend, append, replace, re_replace, regexp, split, trim, tolower, toupper, urlencode, urldecode, htmldecode, htmlencode, diacritics, dateparse/timeparse (.NET dátumformátum), timeago/reltime, fuzzytime, validfilename, jsonjoinarray, validate.
+
+**Működés:** indexerenként saját munkamenet (sütitároló), az első kereséskor jelentkezik be; ha a keresés a belépőoldalra irányít, egyszer újra belép. A letöltés ugyanazzal a munkamenettel megy (privát oldalaknál a .torrent csak belépve érhető el). A leíró vagy a beállítások módosítása új munkamenetet indít. A Teszt gomb külön munkamenetben belép és üres keresést futtat.
+
+**Nem támogatott:** captcha, a `rows.after` sorösszevonás, és a .NET-specifikus reguláris kifejezések (lookbehind/lookahead, visszahivatkozás) – ezekre a motor érthető hibát ad a leíró mintájának megnevezésével.
+
+**Tesztek:** `internal/acquire/cardigann` (privát HTML oldal űrlapos belépéssel, rejtett tokennel, hibás jelszóval, lejárt munkamenettel, adatlapos letöltéssel; nyilvános JSON oldal magnettel; szűrők, méretek, dátumok, sablonok), `internal/acquire/engines_test.go` (Releases → pontozás → Grab a munkamenettel letöltött .torrent-tel), `internal/server/definitions_test.go` (feltöltés, maszkolás, törlés-tiltás). Csak tesztre írt leírók szerepelnek, valódi oldalé nem.

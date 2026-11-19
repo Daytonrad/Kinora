@@ -328,7 +328,7 @@ func (m *Manager) searchTV(ctx context.Context, x *store.AcqSeries, season, epis
 	var all []Result
 	for _, ix := range m.indexers() {
 		cctx, cancel := context.WithTimeout(ctx, 40*time.Second)
-		res, err := m.tz.Search(cctx, ix, q)
+		res, err := m.searchIx(cctx, ix, q)
 		cancel()
 		if err != nil {
 			m.st.MarkAcqIndexer(ix.ID, err.Error())
@@ -454,7 +454,7 @@ func (m *Manager) grabSeries(ctx context.Context, x *store.AcqSeries, season int
 	if err != nil {
 		return err
 	}
-	f, err := FetchRelease(ctx, m.hc, *rel)
+	f, err := m.fetch(ctx, *rel)
 	if err != nil {
 		return err
 	}
@@ -502,7 +502,7 @@ func (m *Manager) rss(ctx context.Context, list []*store.AcqSeries) {
 	var latest []Result
 	for _, ix := range m.indexers() {
 		cctx, cancel := context.WithTimeout(ctx, 40*time.Second)
-		res, err := m.tz.Latest(cctx, ix, true)
+		res, err := m.latestIx(cctx, ix, true)
 		cancel()
 		if err != nil {
 			continue

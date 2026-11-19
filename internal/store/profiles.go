@@ -193,3 +193,56 @@ func (s *Store) AcqStatistics() (*AcqStats, error) {
 	s.DB.QueryRow(`SELECT COUNT(*) FROM acq_series`).Scan(&st.Series)
 	return st, nil
 }
+
+// AcqDefinition is an uploaded indexer definition (Cardigann YAML).
+type AcqDefinition struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	YAML      string `json:"-"`
+	CreatedAt int64  `json:"created_at"`
+	InUse     int    `json:"in_use"`
+}
+
+// AcqDefinitions lists the uploaded definitions with how many indexers use each.
+func (s *Store) AcqDefinitions() ([]*AcqDefinition, error) {
+	rows, err := s.DB.Query(`SELECT d.id,d.name,d.type,d.yaml,d.created_at,(SELECT COUNT(*) FROM acq_indexers i WHERE i.definition_id=d.id)
+ FROM acq_definitions d ORDER BY d.name COLLATE NOCASE`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*AcqDefinition{}
+	for rows.Next() {
+		d := &AcqDefinition{}
+		if err := rows.Scan(&d.ID, &d.Name, &d.Type, &d.YAML, &d.CreatedAt, &d.InUse); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// AcqDefinition loads one definition.
+func (s *Store) AcqDefinition(id string) (*AcqDefinition, error) {
+	d := &AcqDefinition{}
+	err := s.DB.QueryRow(`SELECT id,name,type,yaml,created_at FROM acq_definitions WHERE id=?`, id).Scan(&d.ID, &d.Name, &d.Type, &d.YAML, &d.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return d, err
+}
+
+// SaveAcqDefinition stores (or replaces) a definition by its id.
+func (s *Store) SaveAcqDefinition(d *AcqDefinition) error {
+	d.CreatedAt = now()
+	_, err := s.DB.Exec(`INSERT INTO acq_definitions(id,name,type,yaml,created_at) VALUES(?,?,?,?,?)
+ ON CONFLICT(id) DO UPDATE SET name=excluded.name, type=excluded.type, yaml=excluded.yaml, created_at=excluded.created_at`, d.ID, d.Name, d.Type, d.YAML, d.CreatedAt)
+	return err
+}
+
+// DeleteAcqDefinition removes a definition (refused by the caller while indexers use it).
+func (s *Store) DeleteAcqDefinition(id string) error {
+	_, err := s.DB.Exec(`DELETE FROM acq_definitions WHERE id=?`, id)
+	return err
+}

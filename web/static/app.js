@@ -2703,7 +2703,7 @@ async function adminAcqQueue(body) {
 }
 
 async function adminAcqSettings(body) {
-  const s = await GET('/api/admin/acquire/settings');
+  const [s, defs] = await Promise.all([GET('/api/admin/acquire/settings'), GET('/api/admin/acquire/definitions').catch(() => [])]);
   const rerender = () => adminAcqSettings(body);
   const enabled = h('input.switch', { type: 'checkbox', role: 'switch', checked: s.enabled, onchange: async e => {
     await api('PUT', '/api/admin/acquire/settings', { enabled: e.target.checked }); toast(T.saved);
@@ -2712,29 +2712,87 @@ async function adminAcqSettings(body) {
   // indexers (Torznab: a tracker's own API, or Jackett / Prowlarr standing in for several)
   const indexerDialog = x => {
     const isNew = !x;
-    x = x || { name: '', kind: 'torznab', url: '', api_key: '', categories: '', enabled: true, priority: 25 };
+    x = x || { name: '', kind: defs.length ? 'cardigann' : 'torznab', url: '', api_key: '', categories: '', enabled: true, priority: 25, definition_id: defs.length ? defs[0].id : '', config: '{}' };
     const name = h('input', { type: 'text', value: x.name });
-    const kind = h('select', null, [['torznab', T.acqKindTorznab], ['newznab', T.acqKindNewznab]].map(([v, l]) => h('option', { value: v, selected: (x.kind || 'torznab') === v }, l)));
+    const kind = h('select', null, [['torznab', T.acqKindTorznab], ['newznab', T.acqKindNewznab], ['cardigann', T.acqKindDef]].map(([v, l]) => h('option', { value: v, selected: (x.kind || 'torznab') === v }, l)));
+    // the built-in engine: a definition and a form made from its settings
+    let cfg = {};
+    try { cfg = JSON.parse(x.config || '{}') || {}; } catch (_) { cfg = {}; }
+    const defSel = h('select', null, defs.map(d => h('option', { value: d.id, selected: d.id === x.definition_id }, d.name)));
+    const defBox = h('div.a-form');
+    let inputs = {};
+    const drawDef = () => {
+      const d = defs.find(d => d.id === defSel.value);
+      inputs = {};
+      if (!d) { put(defBox, h('p.small.muted', null, T.acqDefNone)); return; }
+      put(defBox, h('p.small.muted', null, [d.type, d.language, (d.links || [])[0]].filter(Boolean).join(' · ')),
+        ...(d.settings || []).map(st => {
+          const v = st.name in cfg && d.id === x.definition_id ? cfg[st.name] : st.default;
+          if (st.type === 'info') return h('p.small.muted.acq-def-info', null, (st.label || '').replace(/<[^>]+>/g, ' '));
+          if (st.type === 'checkbox') {
+            const el = inputs[st.name] = h('input.switch', { type: 'checkbox', role: 'switch', checked: v === true || v === 'true' });
+            return h('div.form-row', null, h('label.switch-row', null, h('span', null, st.label || st.name), el));
+          }
+          if (st.type === 'select') {
+            const el = inputs[st.name] = h('select', null, Object.entries(st.options || {}).map(([k, l]) => h('option', { value: k, selected: String(v) === k }, l)));
+            return field(st.label || st.name, el);
+          }
+          const secret = st.type === 'password' || /^(cookie|apikey|passkey)$|token/i.test(st.name);
+          const el = inputs[st.name] = h('input', { type: secret ? 'password' : 'text', value: v == null ? '' : String(v), autocomplete: 'off' });
+          return field(st.label || st.name, el);
+        }));
+    };
+    defSel.onchange = drawDef;
+    drawDef();
+    const config = () => { const o = {}; for (const [k, el] of Object.entries(inputs)) o[k] = el.type === 'checkbox' ? el.checked : el.value; return JSON.stringify(o); };
     const url = h('input', { type: 'url', value: x.url, placeholder: 'http://192.168.1.10:9117/api/v2.0/indexers/all/results/torznab' });
     const key = h('input', { type: 'password', value: x.api_key, autocomplete: 'off' });
     const cats = h('input', { type: 'text', value: x.categories, placeholder: '2000' });
     const prio = h('input', { type: 'number', min: 1, max: 99, value: x.priority });
     const en = h('input.switch', { type: 'checkbox', role: 'switch', checked: x.enabled });
     const out = h('p.small', { role: 'status' });
-    const data = () => ({ id: x.id || 0, kind: kind.value, name: name.value, url: url.value, api_key: key.value, categories: cats.value, priority: +prio.value || 25, enabled: en.checked });
-    modal(isNew ? T.acqAddIndexer : x.name, h('div.a-form', null, h('div.grid2', null, field(T.acqName, name), field(T.acqKind, kind)), field(T.acqUrl, url, T.acqUrlHint), field(T.acqApiKey, key),
-      h('div.grid2', null, field(T.acqCats, cats, T.acqCatsHint), field(T.acqPriority, prio, T.acqPriorityHint)),
+    const data = () => kind.value === 'cardigann'
+      ? { id: x.id || 0, kind: 'cardigann', name: name.value, definition_id: defSel.value, config: config(), priority: +prio.value || 25, enabled: en.checked }
+      : { id: x.id || 0, kind: kind.value, name: name.value, url: url.value, api_key: key.value, categories: cats.value, priority: +prio.value || 25, enabled: en.checked };
+    const apiPart = h('div.a-form', null, field(T.acqUrl, url, T.acqUrlHint), field(T.acqApiKey, key), field(T.acqCats, cats, T.acqCatsHint));
+    const defPart = h('div.a-form', null, defs.length ? field(T.acqDef, defSel, T.acqDefHint) : null, defBox);
+    const sync = () => { const c = kind.value === 'cardigann'; apiPart.hidden = c; defPart.hidden = !c; };
+    kind.addEventListener('change', sync); sync();
+    modal(isNew ? T.acqAddIndexer : x.name, h('div.a-form', null, h('div.grid2', null, field(T.acqName, name), field(T.acqKind, kind)),
+      apiPart, defPart, field(T.acqPriority, prio, T.acqPriorityHint),
       h('div.form-row', null, h('label.switch-row', null, h('span', null, T.acqEnabledRow), en)), out),
       close => [acqTestButton('/api/admin/acquire/indexers/test', data, out),
         h('button.btn', { onclick: close }, T.cancel),
         h('button.btn.primary', { onclick: async () => { await api(isNew ? 'POST' : 'PATCH', '/api/admin/acquire/indexers' + (isNew ? '' : '/' + x.id), data()); close(); toast(T.saved); rerender(); } }, T.save)]);
   };
   const ixRows = s.indexers.map(x => h('tr', null,
-    tdl('', T.acqName, h('b', null, x.name), h('div.muted.small.mono.acq-url', null, x.url)),
+    tdl('', T.acqName, h('b', null, x.name), h('div.muted.small.mono.acq-url', null, x.kind === 'cardigann' ? T.acqDefRow((defs.find(d => d.id === x.definition_id) || {}).name || x.definition_id) : x.url)),
     tdl('', T.acqStatus, !x.enabled ? h('span.muted.small', null, T.acqIdxOff) : x.last_error ? h('span.bad.small', { title: x.last_error }, T.acqIdxError) : x.last_ok_at ? h('span.ok.small', null, T.acqIdxOk) : h('span.muted.small', null, '–')),
     tdl('', T.acqPriority, x.priority),
     tdl('.a-tbl-acts', '', h('div.row-gap', null, h('button.btn', { onclick: () => indexerDialog(x) }, T.acqEdit),
       h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(x.name))) { await api('DELETE', '/api/admin/acquire/indexers/' + x.id); rerender(); } } }, T.delete)))));
+
+  // uploaded indexer definitions (Cardigann YAML, the format Jackett and Prowlarr use)
+  const upload = h('input', { type: 'file', accept: '.yml,.yaml', multiple: true, hidden: true, onchange: async e => {
+    const files = [...e.target.files]; e.target.value = '';
+    let n = 0;
+    for (const f of files) {
+      try { await POST('/api/admin/acquire/definitions', { yaml: await f.text() }, { quiet: true }); n++; }
+      catch (err) { toast(f.name + ': ' + err.message, true); }
+    }
+    if (n) { toast(T.acqDefUploaded(n)); rerender(); }
+  } });
+  upload.style.display = 'none';
+  const defRows = defs.map(d => h('tr', null,
+    tdl('', T.acqName, h('b', null, d.name), h('div.muted.small.mono', null, d.id + ((d.links || [])[0] ? ' · ' + d.links[0] : ''))),
+    tdl('', T.acqKind, h('span.small', null, d.type || '–')),
+    tdl('', T.acqDefUsed, d.in_use),
+    tdl('.a-tbl-acts', '', h('button.btn.danger', { disabled: d.in_use > 0, title: d.in_use > 0 ? T.acqDefInUse : '', onclick: async () => {
+      if (await confirmBox(T.confirmDelete(d.name))) { await api('DELETE', '/api/admin/acquire/definitions/' + encodeURIComponent(d.id)); rerender(); }
+    } }, T.delete))));
+  const defList = h('div', null,
+    defs.length ? aTable([T.acqName, T.acqKind, T.acqDefUsed, ''], defRows, '.a-stack') : emptyNote(T.acqDefEmpty, null),
+    h('div.a-form-foot', null, upload, h('button.btn', { onclick: () => upload.click() }, icon('plus'), T.acqDefUpload)));
 
   // download clients: torrents (qBittorrent, Transmission, Deluge) and Usenet (SABnzbd, NZBGet); Kinora picks by the release
   const KINDS = [['qbittorrent', 'qBittorrent', 'http://192.168.1.10:8080'], ['transmission', 'Transmission', 'http://192.168.1.10:9091'],
@@ -2831,6 +2889,7 @@ async function adminAcqSettings(body) {
     aSplit(T.acqIndexers, T.acqIndexersHint,
       s.indexers.length ? aTable([T.acqName, T.acqStatus, T.acqPriority, ''], ixRows, '.a-stack') : emptyNote(T.acqNoIndexers, null),
       h('div.a-form-foot', null, h('button.btn', { onclick: () => indexerDialog(null) }, icon('plus'), T.acqAddIndexer))),
+    aSplit(T.acqDefs, T.acqDefsHint, defList),
     aSplit(T.acqClients, T.acqClientsHint, clientList),
     reqSettings,
     aSplit(T.acqProfile, T.acqProfileHint, h('div.a-form', null, builtin.el,
