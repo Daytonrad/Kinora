@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import KinoraKit
 
 /// A title saved on the device for offline viewing.
@@ -26,6 +27,8 @@ final class DownloadStore {
         case preparing(Double)
         /// The file is coming to the device (0...1).
         case transferring(Double)
+        /// The connection broke at this fraction; continues from there once the network is back.
+        case interrupted(Double)
         case failed(String)
     }
 
@@ -70,6 +73,14 @@ final class DownloadStore {
         session.getAllTasks { tasks in
             let running = Set(tasks.compactMap { $0.taskDescription.flatMap(Int.init) })
             Task { @MainActor in self.resume(running: running) }
+        }
+        // Network back, or the app in front again: interrupted downloads continue.
+        let center = NotificationCenter.default
+        center.addObserver(forName: NetworkStatus.cameOnline, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { DownloadStore.shared.retryInterrupted() }
+        }
+        center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { DownloadStore.shared.retryInterrupted() }
         }
     }
 
@@ -156,6 +167,7 @@ final class DownloadStore {
         }
         pending[id] = nil
         phases[id] = nil
+        dropResumeData(id)
         persist()
     }
 
@@ -203,6 +215,11 @@ final class DownloadStore {
             // Subtitles are small: fetch them now with the session token.
             var subs: [SubtitleTrack] = []
             for t in p.subtitles {
+                // Already saved on an earlier attempt (the track then points at the local file).
+                if FileManager.default.fileExists(atPath: dir.appendingPathComponent(t.url).path) {
+                    subs.append(t)
+                    continue
+                }
                 guard let data = try? await client.data(t.url) else { continue }
                 let name = "\(p.item.id).\(t.idx).vtt"
                 try? data.write(to: dir.appendingPathComponent(name))
@@ -222,8 +239,53 @@ final class DownloadStore {
 
     private func resume(running: Set<Int>) {
         for (id, _) in pending where phases[id] == nil {
-            // A transfer the system still runs, or a job to check again on the server.
-            phases[id] = running.contains(id) ? .transferring(0) : .preparing(0)
+            // A transfer the system still runs, one broken off earlier, or a job to check again on the server.
+            if running.contains(id) { phases[id] = .transferring(0) }
+            else if hasResumeData(id) { phases[id] = .interrupted(0) }
+            else { phases[id] = .preparing(0) }
+        }
+        retryInterrupted()
+    }
+
+    // MARK: - continuing a broken transfer
+
+    private var retries: [Int: Int] = [:]
+    private var retryTimer: Task<Void, Never>?
+
+    private func resumeURL(_ id: Int) -> URL { dir.appendingPathComponent("\(id).resume") }
+    private func hasResumeData(_ id: Int) -> Bool { FileManager.default.fileExists(atPath: resumeURL(id).path) }
+    private func dropResumeData(_ id: Int) { try? FileManager.default.removeItem(at: resumeURL(id)) }
+
+    /// Starts the interrupted transfers again: from where they stopped when the system left resume
+    /// data (the server answers the rest with a range request), from the start otherwise.
+    func retryInterrupted() {
+        for (id, phase) in phases {
+            guard case .interrupted(let f) = phase, let p = pending[id] else { continue }
+            // Resume data carries no cellular setting: wait for Wi-Fi when the user asked for that.
+            if AppSettings.downloadsWifiOnly && NetworkStatus.shared.isExpensive { continue }
+            if let data = try? Data(contentsOf: resumeURL(id)) {
+                dropResumeData(id) // used up; a failed attempt leaves fresh resume data or none
+                phases[id] = .transferring(f)
+                let task = session.downloadTask(withResumeData: data)
+                task.taskDescription = String(id)
+                task.resume()
+            } else if client != nil {
+                transfer(p)
+            }
+        }
+        scheduleRetry()
+    }
+
+    /// While the app runs, tries again after a growing pause (the network may be back without a
+    /// path change, or the server was restarting).
+    private func scheduleRetry() {
+        guard retryTimer == nil, phases.values.contains(where: { if case .interrupted = $0 { true } else { false } }) else { return }
+        let attempt = phases.compactMap { id, ph -> Int? in if case .interrupted = ph { retries[id] ?? 0 } else { nil } }.min() ?? 0
+        retryTimer = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(min(120, 5 * pow(2, Double(attempt)))))
+            guard let self, !Task.isCancelled else { return }
+            self.retryTimer = nil
+            self.retryInterrupted()
         }
     }
 
@@ -235,6 +297,8 @@ final class DownloadStore {
 
     fileprivate func finished(_ id: Int, size: Int64) {
         guard let p = pending[id] else { return }
+        retries[id] = nil
+        dropResumeData(id)
         saved.removeAll { $0.id == id }
         saved.insert(SavedDownload(item: p.item, quality: p.quality, size: size, savedAt: .now,
                                    subtitles: p.subtitles, segments: p.segments, chapters: p.chapters), at: 0)
@@ -245,7 +309,26 @@ final class DownloadStore {
 
     fileprivate func failed(_ id: Int, _ message: String) {
         guard pending[id] != nil else { return }
+        retries[id] = nil
+        dropResumeData(id) // a server error: a range request against it would not help
         phases[id] = .failed(message)
+    }
+
+    /// The connection broke (or the system stopped the transfer). Kept with its resume data and
+    /// tried again: at once (the system may have woken the app in the background just for this),
+    /// then whenever the network comes back or the app returns to the front.
+    fileprivate func interrupted(_ id: Int, resumeData: Data?) {
+        guard pending[id] != nil else { return }
+        var fraction = 0.0
+        switch phases[id] {
+        case .transferring(let f)?, .interrupted(let f)?: fraction = f
+        default: break
+        }
+        if let resumeData { try? resumeData.write(to: resumeURL(id), options: .atomic) }
+        let attempt = (retries[id] ?? 0) + 1
+        retries[id] = attempt
+        phases[id] = .interrupted(fraction)
+        if attempt == 1 { retryInterrupted() } else { scheduleRetry() }
     }
 
     // MARK: - Live Activity
@@ -265,7 +348,7 @@ final class DownloadStore {
             switch e.value {
             // Preparing on the server counts as the first half, the transfer as the second.
             case .preparing(let f): sum + f * 0.5
-            case .transferring(let f): sum + 0.5 + f * 0.5
+            case .transferring(let f), .interrupted(let f): sum + 0.5 + f * 0.5
             case .failed: sum
             }
         }
@@ -333,7 +416,9 @@ private final class SessionBridge: NSObject, URLSessionDownloadDelegate, @unchec
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
         guard let error, let id = task.taskDescription.flatMap(Int.init) else { return }
-        if (error as? URLError)?.code == .cancelled { return }
-        Task { @MainActor [weak store] in store?.failed(id, L("Megszakadt a letöltés.")) }
+        let data = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+        // Cancelled by the user (no resume data); the system cancelling it, e.g. after a force quit, leaves some.
+        if (error as? URLError)?.code == .cancelled && data == nil { return }
+        Task { @MainActor [weak store] in store?.interrupted(id, resumeData: data) }
     }
 }

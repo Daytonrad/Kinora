@@ -108,6 +108,10 @@ private struct ActiveRow: View {
                     Text(p == 0 && AppSettings.downloadsWifiOnly && NetworkStatus.shared.isExpensive
                          ? L("Wi-Fi-re vár") : L("Letöltés · {0}%", Int(p * 100)))
                         .font(.caption).foregroundStyle(Theme.muted)
+                case .interrupted(let p):
+                    ProgressView(value: p).tint(Theme.muted)
+                    Text(L("Megszakadt · {0}% · folytatódik, ha lesz hálózat", Int(p * 100)))
+                        .font(.caption).foregroundStyle(Theme.muted)
                 case .failed(let m):
                     Text(m).font(.caption).foregroundStyle(Theme.danger)
                 }
@@ -171,7 +175,7 @@ struct DownloadButton: View {
             Image(systemName: "arrow.down.circle.fill").foregroundStyle(Theme.amber)
         } else if let phase = store.phases[item.id] {
             switch phase {
-            case .preparing(let p), .transferring(let p):
+            case .preparing(let p), .transferring(let p), .interrupted(let p):
                 ProgressView(value: max(p, 0.02)).progressViewStyle(.circular).tint(Theme.amber)
             case .failed:
                 Image(systemName: "exclamationmark.circle").foregroundStyle(Theme.danger)

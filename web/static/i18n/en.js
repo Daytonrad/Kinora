@@ -804,6 +804,7 @@
    "Megnézve": "Watched",
    "Megnézve – visszavonás": "Watched – undo",
    "Megosztás SharePlay-jel a FaceTime-hívásban": "Share with SharePlay in the FaceTime call",
+   "Megszakadt · {0}% · folytatódik, ha lesz hálózat": "Interrupted · {0}% · continues when there is a network",
    "Megszakadt a letöltés.": "The download was interrupted.",
    "Melyik profillal lépjen be?": "Which profile should it use?",
    "Mentett szerverek": "Saved servers",

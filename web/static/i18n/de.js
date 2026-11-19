@@ -798,6 +798,7 @@
    "Megnézve": "Gesehen",
    "Megnézve – visszavonás": "Gesehen – rückgängig",
    "Megosztás SharePlay-jel a FaceTime-hívásban": "Per SharePlay im FaceTime-Anruf teilen",
+   "Megszakadt · {0}% · folytatódik, ha lesz hálózat": "Unterbrochen · {0}% · geht weiter, sobald ein Netz da ist",
    "Megszakadt a letöltés.": "Der Download wurde unterbrochen.",
    "Melyik profillal lépjen be?": "Mit welchem Profil anmelden?",
    "Mentett szerverek": "Gespeicherte Server",

@@ -80,6 +80,18 @@ enum LiveActivities {
         return remaining < 24 * 3600 ? now.addingTimeInterval(remaining) : nil
     }
 
+    #if DEBUG
+    /// Plays a download through the activity, for checking the lock screen in the simulator.
+    static func demoDownload() async {
+        downloadsChanged(active: 1, title: "Demo", fraction: 0.1, preparing: true)
+        try? await Task.sleep(for: .seconds(3))
+        for i in 0...20 {
+            downloadsChanged(active: 1, title: "Demo", fraction: 0.5 + Double(i) * 0.01, preparing: false)
+            try? await Task.sleep(for: .seconds(1))
+        }
+    }
+    #endif
+
     private static func endDownloads() {
         guard let current = downloads else { return }
         downloads = nil

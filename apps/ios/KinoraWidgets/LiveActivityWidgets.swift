@@ -126,11 +126,13 @@ struct DownloadsStatus: View {
         if DownloadsLockView.finishing(state, stale: stale) || !DownloadsLockView.showsPercent(state) {
             EmptyView()
         } else if let eta = state.timeline?.upperBound, eta > .now {
+            // A timer text takes all the width it is offered: give it a fixed one, or the view can't be laid out.
             HStack(spacing: 4) {
                 Text(L("kb."))
-                Text(timerInterval: Date.now...eta, countsDown: true).frame(minWidth: 44, alignment: .trailing)
+                Text(timerInterval: Date.now...eta, countsDown: true)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 52, alignment: .trailing)
             }
-            .fixedSize()
         } else {
             Text(DownloadsLockView.percent(state))
         }

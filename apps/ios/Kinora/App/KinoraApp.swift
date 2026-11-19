@@ -22,6 +22,9 @@ struct KinoraApp: App {
                     SharePlay.shared.listen()
                     HomeScenes.shared.warmUp()
                     LiveActivities.cleanUp()
+                    #if DEBUG
+                    if CommandLine.arguments.contains("-demoDownloadActivity") { await LiveActivities.demoDownload() }
+                    #endif
                     await model.start()
                     KinoraShortcuts.updateAppShortcutParameters()
                 }
