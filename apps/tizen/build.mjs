@@ -5,7 +5,7 @@
 // Tizen Studio's Certificate Manager. Name the security profile with KINORA_TIZEN_PROFILE
 // (default "kinora"). Without the Tizen CLI an unsigned kinora-unsigned.wgt is written,
 // which `tizen package -t wgt -s <profile> -- kinora-unsigned.wgt` can sign later.
-import { run, has, buildShared, fresh, copy, sharedDist, version, log, zipDir, existsSync, join, readFileSync, writeFileSync, mkdirSync } from '../scripts/lib.mjs';
+import { run, has, buildShared, buildLauncher, copy, sharedDist, version, log, zipDir, existsSync, join, readFileSync, writeFileSync, mkdirSync } from '../scripts/lib.mjs';
 import { copyFileSync, readdirSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname } from 'node:path';
@@ -16,21 +16,25 @@ const www = join(here, 'www');
 const dist = join(here, 'dist');
 const ver = version();
 
+// The app is the launcher: it finds the server and opens the server's web client (app mode).
+// Samsung's webapis (model name, own IP for the network search) are injected by the TV at $WEBAPIS.
+buildLauncher(www, { platform: 'tizen', headScripts: ['$WEBAPIS/webapis/webapis.js'], legacy: true });
+
+// 2018 TVs (Tizen 4.0, Chromium 56) cannot run the web client: the launcher hands them the older
+// bundled app in legacy/ (apps/shared), which talks to the API with a token.
 buildShared({ KINORA_PLATFORM: 'tizen' });
-fresh(www);
-copy(sharedDist, www);
-// Samsung's webapis (product info, screensaver, AVInfo/HDR) are injected by the TV at $WEBAPIS.
-const idx = join(www, 'index.html');
-const html = readFileSync(idx, 'utf8')
+const legacy = join(www, 'legacy');
+copy(sharedDist, legacy);
+const idx = join(legacy, 'index.html');
+writeFileSync(idx, readFileSync(idx, 'utf8')
   .replace('<script defer src="./app.js">', '<script src="$WEBAPIS/webapis/webapis.js"></script>\n  <script defer src="./app.js">')
-  .replace('</head>', '  <link rel="stylesheet" href="./app.css">\n</head>');
-writeFileSync(idx, html);
-// Deliver the TV's presentation as a regular stylesheet, independent of the JS bundle.
+  .replace('</head>', '  <link rel="stylesheet" href="./app.css">\n</head>'));
 const cssDir = join(here, '..', 'shared', 'src', 'styles');
-writeFileSync(join(www, 'app.css'), [
+writeFileSync(join(legacy, 'app.css'), [
   readFileSync(join(cssDir, 'tokens.gen.css'), 'utf8'),
   readFileSync(join(cssDir, 'app.css'), 'utf8'),
 ].join('\n'));
+
 writeFileSync(join(www, 'config.xml'), readFileSync(join(here, 'config.xml'), 'utf8').replace(/version="[^"]*"(\s+viewmodes)/, `version="${ver}"$1`));
 copyFileSync(join(here, 'icon.png'), join(www, 'icon.png'));
 mkdirSync(dist, { recursive: true });

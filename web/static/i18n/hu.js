@@ -7,6 +7,8 @@
  "code": "hu",
  "name": "Magyar",
  "strings": {
+  "switchServer": "Szerverváltás",
+  "leavingApp": "Vissza a szerverlistához…",
   "osHint": "Feliratletöltés a lejátszóból és a film oldaláról. A kulcs ingyenes: opensubtitles.com → Fiók → API consumers. Belépés nélkül napi 5, belépve (ingyenes fiókkal) napi 20 letöltés jár.",
   "osKey": "OpenSubtitles API-kulcs",
   "osKeyHint": "A kulcs nélkül a feliratkeresés ki van kapcsolva.",

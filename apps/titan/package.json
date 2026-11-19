@@ -1,0 +1,9 @@
+{
+  "name": "titan",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kinora for Titan OS TVs (Philips, JVC…): a hosted launcher page that opens the server's web client",
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}

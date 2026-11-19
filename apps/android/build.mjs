@@ -5,7 +5,7 @@
 //   node build.mjs --install    debug build, then `adb install -r` on the connected device
 // Gradle runs locally when JAVA_HOME and ANDROID_HOME are set, otherwise inside the
 // kinora-android-build Docker image (apps/android/docker/Dockerfile): nothing to install on the host.
-import { run, has, buildShared, fresh, copy, sharedDist, appsDir, version, isWin, log, existsSync, join, mkdirSync } from '../scripts/lib.mjs';
+import { run, has, buildLauncher, appsDir, version, isWin, log, existsSync, join, mkdirSync } from '../scripts/lib.mjs';
 import { copyFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,9 +14,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const release = process.argv.includes('--release');
 const install = process.argv.includes('--install');
 
-buildShared({ KINORA_PLATFORM: 'android' });
-fresh(join(here, 'www'));
-copy(sharedDist, join(here, 'www'));
+// The app is the launcher: it finds the server and opens the server's web client in the WebView
+// (app mode). Phone or Android TV is decided at run time (KinoraAndroid.isTv()).
+buildLauncher(join(here, 'www'), { platform: 'android' });
 
 if (!existsSync(join(here, 'android'))) throw new Error('apps/android/android is missing (it is committed; run `npx cap add android` only for a fresh checkout of the template)');
 run('npx', ['cap', 'sync', 'android'], { cwd: here });

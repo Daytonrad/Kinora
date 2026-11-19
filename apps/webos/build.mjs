@@ -3,7 +3,7 @@
 //   node build.mjs --install   package, then ares-install + ares-launch on the device "tv"
 //                              (register it once: npx ares-setup-device, see docs/TESZTELES_MA.md)
 // webOS needs no signing for Developer Mode installs.
-import { run, buildShared, fresh, copy, sharedDist, version, log, join, readFileSync, writeFileSync, mkdirSync, existsSync, appsDir } from '../scripts/lib.mjs';
+import { run, buildShared, buildLauncher, copy, sharedDist, version, log, join, readFileSync, writeFileSync, mkdirSync, existsSync, appsDir } from '../scripts/lib.mjs';
 import { copyFileSync, readdirSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,9 +14,11 @@ const dist = join(here, 'dist');
 const ver = version();
 const device = process.env.KINORA_WEBOS_DEVICE || 'tv';
 
+// The app is the launcher: it finds the server and opens the server's web client (app mode).
+buildLauncher(www, { platform: 'webos', legacy: true });
+// webOS 4.x (Chromium 53) cannot run the web client: the launcher hands it the older bundled app in legacy/.
 buildShared({ KINORA_PLATFORM: 'webos' });
-fresh(www);
-copy(sharedDist, www);
+copy(sharedDist, join(www, 'legacy'));
 const info = JSON.parse(readFileSync(join(here, 'appinfo.json'), 'utf8'));
 info.version = ver;
 writeFileSync(join(www, 'appinfo.json'), JSON.stringify(info, null, 2));

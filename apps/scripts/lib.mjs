@@ -32,7 +32,28 @@ export function fresh(dir) { rmSync(dir, { recursive: true, force: true }); mkdi
 export function copy(from, to) { cpSync(from, to, { recursive: true }); }
 
 export function version() {
-  return JSON.parse(readFileSync(join(appsDir, 'shared', 'package.json'), 'utf8')).version;
+  return JSON.parse(readFileSync(join(appsDir, 'launcher', 'package.json'), 'utf8')).version;
+}
+
+export const launcherDir = join(appsDir, 'launcher');
+const webFonts = join(appsDir, '..', 'web', 'static', 'fonts');
+
+/**
+ * Writes the launcher (apps/launcher) for one platform into dest: it finds the server, then opens the
+ * server's web client in app mode. headScripts go into <head> before the launcher (e.g. Samsung's webapis.js).
+ * legacy: the platform also ships the older bundled app in legacy/ for engines the web client cannot run on.
+ */
+export function buildLauncher(dest, { platform, headScripts = [], legacy = false }) {
+  fresh(dest);
+  for (const f of ['launcher.js', 'launcher.css']) cpSync(join(launcherDir, f), join(dest, f));
+  const html = readFileSync(join(launcherDir, 'index.html'), 'utf8')
+    .replace('<!--PLATFORM-SCRIPTS-->', headScripts.map(src => `<script src="${src}"></script>`).join('\n'));
+  writeFileSync(join(dest, 'index.html'), html);
+  writeFileSync(join(dest, 'config.js'), `window.KINORA_LAUNCHER = ${JSON.stringify({ platform, version: version(), legacy })};\n`);
+  mkdirSync(join(dest, 'fonts'), { recursive: true });
+  for (const f of ['big-shoulders-display-latin-wght-normal.woff2', 'atkinson-hyperlegible-latin-400-normal.woff2',
+    'atkinson-hyperlegible-latin-700-normal.woff2', 'atkinson-hyperlegible-latin-ext-400-normal.woff2',
+    'big-shoulders-display.LICENSE', 'atkinson-hyperlegible.LICENSE']) cpSync(join(webFonts, f), join(dest, 'fonts', f));
 }
 
 function walk(dir) {

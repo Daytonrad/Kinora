@@ -2,10 +2,9 @@ package io.github.scotylucas.kinora;
 
 import android.app.Activity;
 import android.app.PictureInPictureParams;
-import android.app.UiModeManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
+import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.util.Rational;
@@ -36,12 +35,31 @@ import java.util.Set;
 @CapacitorPlugin(name = "KinoraNative")
 public class KinoraNativePlugin extends Plugin {
 
+    /** Runs before the first page loads, so the launcher already sees window.KinoraAndroid. */
+    @Override
+    public void load() {
+        getBridge().getWebView().addJavascriptInterface(new KinoraAndroid(getActivity()), "KinoraAndroid");
+    }
+
+    /**
+     * The launcher opens the chosen server's web client inside the app. From the launcher any
+     * http(s) address may load in the WebView (it is the server the user picked); on a server's
+     * pages only that server's own; other links (IMDb, GitHub…) open in the browser as before.
+     */
+    @Override
+    public Boolean shouldOverrideLoad(Uri url) {
+        String scheme = url.getScheme();
+        String target = url.getHost();
+        if (target == null || !("http".equals(scheme) || "https".equals(scheme)) || "localhost".equals(target)) return null;
+        String cur = getBridge().getWebView().getUrl();
+        String curHost = cur == null ? null : Uri.parse(cur).getHost();
+        if (curHost == null || "localhost".equals(curHost) || target.equalsIgnoreCase(curHost)) return false;
+        return null;
+    }
+
     @PluginMethod
     public void info(PluginCall call) {
-        Context ctx = getContext();
-        UiModeManager ui = (UiModeManager) ctx.getSystemService(Context.UI_MODE_SERVICE);
-        boolean tv = (ui != null && ui.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION)
-                || ctx.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+        boolean tv = KinoraAndroid.isTv(getContext());
         JSObject r = new JSObject();
         r.put("tv", tv);
         r.put("model", Build.MANUFACTURER + " " + Build.MODEL);

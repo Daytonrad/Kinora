@@ -1,0 +1,55 @@
+/* Kinora launcher – the web client's foyer tokens (web/static/style.css), flexbox only: it also runs on 2018 TV engines. */
+@font-face { font-family: "Big Shoulders Display"; font-weight: 100 900; src: url("fonts/big-shoulders-display-latin-wght-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 400; src: url("fonts/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 700; src: url("fonts/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible"; font-weight: 400; src: url("fonts/atkinson-hyperlegible-latin-ext-400-normal.woff2") format("woff2"); unicode-range: U+0100-024F; }
+
+:root {
+  --g0: #141210; --g1: #1a1613; --g2: #221d19; --g3: #2b2520;
+  --rule: #352e28; --rule-hi: #4a4139;
+  --t0: #efe7da; --t1: #cfc5b6; --t2: #9d9387;
+  --amber: #f0b44c; --amber-ink: #2b1c00; --danger: #e8705f;
+  --hit: 48px; --base: 16px;
+}
+html.tv { --hit: 64px; --base: 26px; }
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--g0); color: var(--t1); }
+body { font-family: "Atkinson Hyperlegible", "Segoe UI", Roboto, sans-serif; font-size: var(--base); line-height: 1.45; -webkit-text-size-adjust: 100%; }
+#app { display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 8vh 16px 16px; }
+.box { width: 100%; max-width: 34em; }
+.logo { font-family: "Big Shoulders Display", "Arial Narrow", sans-serif; font-weight: 800; font-size: 2.4em; letter-spacing: .04em; color: var(--amber); line-height: 1; margin-bottom: .6em; }
+h1 { font-family: "Big Shoulders Display", "Arial Narrow", sans-serif; font-weight: 700; font-size: 1.9em; color: var(--t0); margin: 0 0 .6em; line-height: 1.1; }
+.lede { color: var(--t1); margin: .4em 0 1em; }
+.hint { color: var(--t2); font-size: .85em; margin: .5em 0 1.2em; }
+.msg { color: var(--danger); margin: 0 0 1em; }
+.list { margin: 0 0 1.2em; }
+.row { display: flex; align-items: stretch; margin-bottom: .5em; }
+.row .server { flex: 1 1 auto; min-width: 0; margin-right: .5em; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; min-height: var(--hit); padding: 0 1.2em; margin: 0 .5em .5em 0;
+  font: inherit; font-weight: 700; color: var(--t0); background: var(--g2); border: 1px solid var(--rule); border-radius: 6px; cursor: pointer;
+}
+.btn.primary { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); }
+.btn.ghost { background: transparent; color: var(--t1); }
+.btn[disabled] { opacity: .5; cursor: default; }
+.btn.server { flex-direction: column; align-items: flex-start; justify-content: center; text-align: left; padding: .5em 1em; margin: 0; }
+.btn.server b { color: var(--t0); }
+.btn.server span { font-weight: 400; color: var(--t2); font-size: .85em; }
+.row .ghost { margin: 0; }
+.btn:hover { background: var(--g3); border-color: var(--rule-hi); }
+.btn.primary:hover { background: var(--t0); border-color: var(--t0); }
+:focus { outline: 3px solid var(--amber); outline-offset: 3px; }
+.btn:focus { background: var(--g3); border-color: var(--rule-hi); }
+.btn.primary:focus { background: var(--t0); border-color: var(--t0); }
+.field { display: block; margin-bottom: .2em; }
+.field span { display: block; color: var(--t2); font-size: .85em; margin-bottom: .3em; }
+input {
+  width: 100%; min-height: var(--hit); padding: 0 .7em; font: inherit; color: var(--t0); background: var(--g1);
+  border: 1px solid var(--rule-hi); border-radius: 6px;
+}
+input:focus { border-color: var(--amber); outline-offset: 0; }
+.found { margin-top: 1em; }
+.acts { margin-top: .4em; }
+.spin { width: 2.2em; height: 2.2em; border: 3px solid var(--rule-hi); border-top-color: var(--amber); border-radius: 50%; animation: spin 1s linear infinite; margin: .4em 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }

@@ -1,19 +1,49 @@
 # Kinora kliensappok
 
-Egy közös felület (`shared`) három platformra csomagolva: **Android** (telefon + Android TV, egy APK), **Samsung Tizen** (`.wgt`)
-és **LG webOS** (`.ipk`). Az **iOS** (iPhone/iPad) app natív SwiftUI, külön projekt: [`ios/README.md`](ios/README.md). A mai kipróbálás lépései: [`docs/TESZTELES_MA.md`](../docs/TESZTELES_MA.md).
+Az appok a **szerver saját webkliensét** futtatják. Egy kis indító (`launcher`) kiválasztja vagy megkeresi a szervert, aztán megnyitja
+a szerver webkliensét app-módban (`http://szerver:8096/?app=<platform>`). Ami a webkliensbe bekerül, az az appokban is megjelenik,
+külön portolás nélkül. Platformok: **Android** (telefon + Android TV, egy APK), **Samsung Tizen** (`.wgt`), **LG webOS** (`.ipk`)
+és **Titan OS** (Philips, JVC… TV-k; hosztolt oldal). Az **iOS** (iPhone/iPad) app natív SwiftUI, külön projekt: [`ios/README.md`](ios/README.md).
 
 ```
 apps/
-  shared/         közös TypeScript app (Vite): API-kliens, állapot, lejátszó, felület – "mobile" és "tv" mód
+  launcher/       az indító: szerverlista, cím megadása, keresés a hálózaton → a szerver webkliense app-módban (ES5, nincs build-lépés)
   android/        Capacitor-projekt (android/), build.mjs → dist/kinora.apk
-  ios/            natív SwiftUI app (XcodeGen: project.yml) + KinoraKit Swift csomag – nem npm-munkaterület
   tizen/          config.xml + build.mjs → dist/kinora.wgt
   webos/          appinfo.json + build.mjs → dist/kinora_<ver>_all.ipk
-  native-plugin/  a régi Capacitor-iOS KinoraNative pluginja (Swift, SPM) – már nem használja semmi; az Android változat az android/ projektben van
+  titan/          build.mjs → dist/site/ (statikus oldal a Titan OS-nek) + dist/kinora-titan.zip
+  shared/         a régebbi, beépített TS app: már csak a 2018-as TV-k kapják (Tizen 4, webOS 4), lásd lent
+  ios/            natív SwiftUI app (XcodeGen: project.yml) + KinoraKit Swift csomag – nem npm-munkaterület
+  native-plugin/  a régi Capacitor-iOS KinoraNative pluginja (Swift, SPM) – már nem használja semmi
   branding/       logo.svg + banner.svg + brand.mjs: minden ikon, banner és splash egy forrásból
-  scripts/        közös build-segédek (parancsfuttatás, zip)
+  scripts/        közös build-segédek (parancsfuttatás, zip, buildLauncher)
 ```
+
+## Hogyan működik
+
+1. **Indító** (`launcher/`): az első indításkor a szerver címét kéri, vagy megkeresi a hálózaton. Később rögtön az utoljára használt
+   szervert nyitja meg: előbb az otthoni, aztán a külső címét. A Vissza gomb vagy a webkliens **Szerverváltás** menüpontja visszahoz
+   a szerverlistához.
+2. **App-mód a webkliensben** (`web/static/appshell.js`): a `?app=` paramétert elmenti, és ettől kezdve:
+   - **TV-n** (Tizen, webOS, Titan OS, Android TV) a nyilakkal lehet mozogni (térbeli navigáció). A Vissza becsukja a nyitott
+     menüt vagy dialógust, vagy kilép a lejátszóból, a főoldalon pedig az appból. A lejátszóban rejtett vezérlőknél a jobbra/balra
+     teker, az OK megállít, a fel/le előhozza a vezérlőket. A médiagombok (lejátszás, szünet, előre, hátra, következő) működnek.
+     A belépés kóddal (Quick Connect) az alapértelmezett, a hangerő, a teljes képernyő és a kép a képben gomb rejtve van.
+   - **Mindenhol:** a TV saját formátumai bekerülnek a direct play képességekbe (MKV, AC-3/E-AC-3, HEVC), lejátszás közben ébren
+     marad a képernyő, és az eszköz a saját nevével jelenik meg az eszközlistában (pl. „Samsung QE55Q80“, platform: tizen).
+   - Böngészőben kipróbálható: `http://szerver:8096/?tv=1` (kikapcsolás: `?app=off`).
+3. **Régebbi TV-motorok:** a webkliens Chromium 80-at igényel (`?.`, `??`). Ennél régebbi motoron (2019–2020-as TV-k, Chromium 63–79)
+   az `index.html` az `app.legacy.js`-t tölti be. Ezt a szerver állítja elő az `app.js`-ből (esbuild, `internal/server/legacyjs.go`),
+   és a `web/static/legacy-polyfills.js`-t teszi elé. Build-lépés nincs, a webkliens egyetlen forrás marad.
+   Chromium 63 alatt (2018: Tizen 4.0, webOS 4.x) a webkliens nem fut: ott az indító a csomagban lévő régebbi appot (`legacy/`,
+   `apps/shared`) indítja.
+
+| Platform | Minimum | Megjegyzés |
+|---|---|---|
+| Samsung (Tizen) | Tizen 5.0 (2019) webklienssel, Tizen 4.0 (2018) a régi appal | `$WEBAPIS/webapis.js`: modellnév, saját IP a kereséshez |
+| LG (webOS) | webOS 5 (2020) webklienssel, webOS 4.x a régi appal | `disableBackHistoryAPI`: a Vissza 461-es gombként érkezik |
+| Titan OS | minden (friss Chromium) | hosztolt oldal, lásd lent |
+| Android telefon / TV | Android 7+ friss WebView-val | a Vissza (gomb, gesztus, távirányító) a natív oldalról jut el a laphoz (`window.kinoraBack`) |
 
 ## Építés
 
@@ -23,14 +53,21 @@ Egyszer: `cd apps && npm install`. Utána minden platformnak egy parancsa van (W
 |---|---|---|---|
 | Android | `npm run build:android` | `android/dist/kinora.apk` (debug) | Docker **vagy** JDK 21 + Android SDK 36 (`JAVA_HOME`, `ANDROID_HOME`) |
 | Android release | `npm run build:release -w android` | `android/dist/kinora-release.apk` | ugyanaz + aláírókulcs env-ben (lásd lent) |
-| LG webOS | `npm run build:webos` | `webos/dist/kinora_1.0.0_all.ipk` | semmi (a webOS CLI devDependency) |
+| LG webOS | `npm run build:webos` | `webos/dist/kinora_<ver>_all.ipk` | semmi (a webOS CLI devDependency) |
 | Samsung Tizen | `npm run build:tizen` | `tizen/dist/kinora.wgt`, CLI nélkül `kinora-unsigned.wgt` | Tizen Studio CLI + Samsung-tanúsítvány az aláíráshoz |
+| Titan OS | `npm run build:titan` | `titan/dist/site/` + `titan/dist/kinora-titan.zip` | semmi |
 | iOS | `cd ios && xcodegen`, majd Xcode (lásd [`ios/README.md`](ios/README.md)) | `ios/Kinora.xcodeproj` | macOS + Xcode 16+ + XcodeGen |
-| közös UI | `npm run build:shared`, `npm test`, `npm run e2e -w shared` | `shared/dist/` | E2E-hez Edge vagy Chrome + futó szerver |
+| régi TS app | `npm run build:shared`, `npm test` | `shared/dist/` | – |
 
-A `shared` build egyetlen klasszikus (nem modul) `app.js`-t ad ES2015 szintaxissal és a szükséges polyfillekkel, relatív útvonalakkal,
-így `file://`-ról is fut a 2018-as TV-ken (Tizen 4.0 = Chromium 56, webOS 4.x = Chromium 53). A CSS ezért csak flexboxot használ
-(nincs grid, flex `gap`, `clamp()`, `aspect-ratio`). A design tokeneket a build a webkliens `style.css`-éből másolja (`scripts/sync-tokens.mjs`).
+Az appok verziója a `launcher/package.json`-ból jön.
+
+### Titan OS
+
+A Titan OS-es appok weboldalak: a TV egy fix **https** címről nyitja meg őket, ezt a Titan OS fejlesztői portálján kell regisztrálni.
+A `titan/dist/site/` mappát kell kitenni egy ilyen címre (pl. GitHub Pages), vagy a zipet feltölteni. Egy https oldal nem olvashat
+http-s szervert (mixed content). Ezért otthoni (http) címnél az indító ellenőrzés nélkül nyitja meg a szervert, ami viszont a saját
+originjén fut, így ott már nincs korlát. https-es szervernél a `/api/status` bármely originről olvasható, így előbb ellenőrzi.
+A hálózati keresés itt nem elérhető, a címet be kell írni.
 
 ### Android aláírás (release)
 
@@ -49,6 +86,7 @@ A CI-ban ugyanezek GitHub Secrets-ként szerepelnek (`ANDROID_KEYSTORE_BASE64`, 
 - **Android TV:** `adb connect <tv-ip>:5555`, majd `adb install -r …`. Az app a leanback launcherben bannerrel jelenik meg, és TV-módban indul.
 - **LG webOS:** Developer Mode app a TV-n → `npx ares-setup-device` → `npm run install-tv -w webos`. A Dev Mode session 50 óránként lejár, ilyenkor meg kell hosszabbítani (Extend).
 - **Samsung Tizen:** a TV-n fejlesztői mód (Apps → 12345), Samsung-tanúsítvány a Certificate Managerrel, majd `KINORA_TV_IP=… npm run install-tv -w tizen`.
+- **Titan OS:** a `titan/dist/site/` kitéve egy https címre, a Titan OS fejlesztői portálján ezzel a címmel regisztrálva (lásd fent).
 - **iPhone:**
   - Ma, Mac nélkül: a webkliens PWA-ként is telepíthető (Safari → Megosztás → „Főképernyőhöz adás”).
   - Natív app: Mac + Xcode + XcodeGen kell. A Team ID a git-ignorált `ios/Config/Local.xcconfig`-ba kerül, utána `cd ios && xcodegen`, Xcode-ban megnyitni a `Kinora.xcodeproj`-ot → csatlakoztasd az iPhone-t → Run. Részletek: [`ios/README.md`](ios/README.md).
@@ -58,14 +96,13 @@ A CI-ban ugyanezek GitHub Secrets-ként szerepelnek (`ANDROID_KEYSTORE_BASE64`, 
 ## Belépés
 
 - **Jelszóval:** a szerver címe után felhasználónév + jelszó. Telefonon ez az alapértelmezett.
-- **Kóddal (Quick Connect):** TV-n ez az alapértelmezett. A TV mutat egy 6 jegyű kódot és egy QR-kódot. Egy már bejelentkezett eszközön
-  (webkliens: profil menü → Eszköz csatlakoztatása, vagy a telefonos app: Beállítások → Eszköz csatlakoztatása) beírod a kódot,
-  kiválasztod a profilt, és jóváhagyod. Gyerekprofilt választva a TV ahhoz a profilhoz kötött marad; PIN-es profilnál a PIN-t a TV-n kell megadni.
+- **Kóddal (Quick Connect):** TV-n ez az alapértelmezett. A TV mutat egy 6 jegyű kódot. Egy már bejelentkezett eszközön
+  (webkliens vagy telefonos app: profil menü → Eszköz csatlakoztatása) beírod a kódot, és jóváhagyod.
 
 A szerver címe lehet `192.168.1.10`, `192.168.1.10:8096`, `nas.local`, `http://…` vagy `https://…`. Ha nincs séma, előbb `http`, ha nincs port, előbb `8096`.
-Több szerver menthető, a Beállítások → Szerverváltás menüben lehet köztük váltani.
+Több szerver menthető. A webkliens profil menüjében (és a belépő oldalon) a **Szerverváltás** visszavisz az indító szerverlistájához.
 
-**Szerver keresése:** Android/Android TV-n UDP-broadcast a 7359-es portra (`who is KinoraServer?`). iOS-en és TV-n HTTP-s pásztázás a saját /24-es alhálózaton
+**Szerver keresése:** Android/Android TV-n UDP-broadcast a 7359-es portra (`who is KinoraServer?`). iOS-en, Tizenen és webOS-en HTTP-s pásztázás a saját /24-es alhálózaton
 (a TV-k böngészőmotorja nem tud UDP-t küldeni; iOS-en az UDP-broadcast fogadásához külön Apple-jogosultság kellene, ezért a natív app is pásztáz).
 **Dockerben** a broadcast nem jut át a bridge hálózaton: a felderítéshez `network_mode: host` kell (vagy írd be kézzel a címet). Kikapcsolás: Admin → Beállítások, vagy `KINORA_DISCOVERY=0`.
 
@@ -81,20 +118,21 @@ a platformok alapból viszont csak HTTPS-t engednek:
   Távoli szerverhez HTTPS kell.
 - **Tizen:** `<access origin="*">` és `internet` jogosultság a `config.xml`-ben. **webOS:** a csomagolt webapp alapból bármilyen originre hívhat.
 
-Biztonság: az appok **Bearer tokennel** hívják az API-t (nem sütivel). A szerver csak ezekre az app-originekre engedélyez CORS-t, `Allow-Credentials` nélkül,
-és az app-originről érkező kérésből eldobja a sütit. A `<video>` és `<img>` fejlécet nem tud küldeni, ezért ezek egy rövid életű (6 órás), aláírt,
-elemre, felhasználóra és eszközre kötött **stream-tokent** kapnak (`?st=`), ami az eszköz kiléptetésével azonnal érvényét veszti.
+Biztonság: a webkliens app-módban is a szerver saját originjén fut, így ugyanaz a sütis munkamenet védi, mint a böngészőben. Az indító a többi
+originről csak a nyilvános `/api/status`-t olvashatja. Androidon a WebView az indítóból bármelyik http(s) címre továbbléphet (ez a választott
+szerver), a szerver oldalairól viszont csak ugyanarra a hostra; minden más link a böngészőben nyílik meg. A szerver oldalai a Capacitor-hidat
+nem kapják meg, csak a szűk `window.KinoraAndroid` interfészt (TV-e, modellnév, képernyő ébren tartása, kilépés).
+A régi app (`legacy/`, iOS) **Bearer tokennel** hívja az API-t: a szerver ezekre az app-originekre engedélyez CORS-t, `Allow-Credentials` nélkül,
+és eldobja a sütit. A `<video>` és `<img>` egy rövid életű, aláírt **stream-tokent** kap (`?st=`).
 
 ## Platformismeret a lejátszóban
 
-A lejátszó a `MediaSource.isTypeSupported`/`canPlayType` eredményét egy platformonkénti táblázattal egészíti ki (`shared/src/player/caps.ts`).
+A lejátszó a `MediaSource.isTypeSupported`/`canPlayType` eredményét egy platformonkénti táblázattal egészíti ki (`web/static/appshell.js`, a régi appban `shared/src/player/caps.ts`).
 A TV-k natív lejátszója sokszor üres választ ad olyan formátumra, amit közvetlenül le tud játszani (MKV, HEVC, AC-3/E-AC-3), és így a direct play minél
 gyakrabban működik. HDR10-et csak akkor jelez, ha a platform igazolja (Tizen: `webapis.avinfo.isHdrTvSupport()`, máshol `(dynamic-range: high)`).
-HLS: Tizen és webOS natívan a `<video>`-ban, Androidon hls.js, iOS-en AVPlayer. A feliratokat az app maga rajzolja ki a szerver WebVTT-jéből, mert a `<track>` a régi TV-ken megbízhatatlan.
+HLS: a webkliens hls.js-t használ, ahol van MediaSource (TV-k, Android), iOS-en AVPlayer.
 
 ## Tudatosan későbbre hagyva (v2)
 
-- **Offline letöltés a telefonra:** a szerver már készít átkódolt letöltéseket (`/api/downloads`). A tárolás natív fájlba (Capacitor Filesystem) és az offline
-  lejátszás a következő kör; a lejátszó URL-alapú, így egy helyi fájl-URL-re cserélhető.
-- Watch party az appokból (a WebSocket jelenleg sütis hitelesítésű).
+- **Offline letöltés az Android appban:** a szerver már készít átkódolt letöltéseket (`/api/downloads`), a natív tárolás a következő kör.
 - Chromecast vezérlés. (AirPlay és kép a képben az iOS appban van.)

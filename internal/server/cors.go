@@ -69,6 +69,15 @@ func (s *Server) cors(next http.Handler) http.Handler {
 		}
 		preflight := r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != ""
 		if !s.isAppOrigin(origin) {
+			// The app launchers check an address before opening the server's web client there.
+			// The launcher of a hosted TV platform (Titan OS) runs on its own https origin;
+			// /api/status is public, and no cookie is ever read here.
+			if r.URL.Path == "/api/status" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				r.Header.Del("Cookie")
+				next.ServeHTTP(w, r)
+				return
+			}
 			if preflight {
 				w.WriteHeader(http.StatusForbidden)
 				return

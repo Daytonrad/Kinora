@@ -7,6 +7,8 @@
  "code": "de",
  "name": "Deutsch",
  "strings": {
+  "switchServer": "Server wechseln",
+  "leavingApp": "Zurück zur Serverliste…",
   "osHint": "Untertitel-Downloads im Player und auf der Filmseite. Der Schlüssel ist kostenlos: opensubtitles.com → Konto → API consumers. Ohne Anmeldung gibt es 5 Downloads am Tag, mit (kostenlosem) Konto 20.",
   "osKey": "OpenSubtitles-API-Schlüssel",
   "osKeyHint": "Ohne Schlüssel ist die Untertitelsuche aus.",

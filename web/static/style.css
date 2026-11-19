@@ -958,3 +958,26 @@ label.switch-row > span { color: var(--t0); }
 .sub-credit { margin-top: var(--s2); }
 .p-pop .sub-results { max-height: none; overflow: visible; }
 .p-pop .sub-row { gap: var(--s2); padding: var(--s2) 0; }
+
+/* ============================================================ app mode (appshell.js): the packaged apps
+   .app on <html> in every app, .tv on Samsung, LG, Titan OS and Android TV (try it in a browser with /?tv=1).
+   A remote has no hover: what is lit is what has the focus, so focus gets the hover looks. :focus as well as
+   :focus-visible, because 2019–2020 TV engines (before Chromium 86) know only :focus. */
+html.tv { --tv-scale: 1.18; }
+html.tv :focus { outline: var(--focus-w) solid var(--amber); outline-offset: var(--focus-off); }
+html.tv .card:focus, html.tv .who-item:focus, html.tv .modal-back:focus, html.tv .modal:focus, html.tv video:focus { outline: none; }
+html.tv .card:focus { transform: scale(var(--lift)); z-index: 2; }
+html.tv .card:focus .art { border-color: var(--amber); box-shadow: 0 0 0 var(--focus-w) var(--g0), 0 0 0 calc(var(--focus-w) * 2) var(--amber); }
+html.tv .card .more { display: none; } /* one stop per card for the remote; the same actions are on the title's page */
+html.tv .who-item:focus { color: var(--t0); transform: scale(var(--lift)); }
+html.tv .who-item:focus .face { box-shadow: 0 0 0 var(--focus-w) var(--g0), 0 0 0 calc(var(--focus-w) * 2) var(--amber); }
+html.tv .ep:focus .art { border-color: var(--amber); }
+html.tv .ep:focus h3 { color: var(--amber); }
+html.tv .btn:focus { background: var(--g3); border-color: var(--rule-hi); }
+html.tv .btn.primary:focus { background: var(--t0); border-color: var(--t0); }
+html.tv .nav a:focus, html.tv .menu-pop button:focus, html.tv .menu-pop a:focus { color: var(--t0); background: var(--g3); }
+html.tv .opt:focus, html.tv .p-btn:focus { background: rgb(var(--t0-rgb) / .14); color: var(--t0); }
+html.tv .p-btn.p-main:focus { background: var(--amber); color: var(--amber-ink); }
+html.tv .search-field kbd { display: none; }
+.app-switch { margin-top: var(--s4); }
+.app-leaving { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: var(--g0); color: var(--t1); font-size: var(--f3); }

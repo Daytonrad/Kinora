@@ -106,6 +106,9 @@ const lbl = (map, key, fallback) => (map && map[key]) || fallback;
 const num = (v, digits) => Number(v).toLocaleString(T.locale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 // ===================================================================== helpers
+// The packaged apps (Samsung, LG, Titan OS, Android) open this page in app mode: see appshell.js. null in a browser.
+const APP = window.KinoraApp || null;
+const TV = !!(APP && APP.tv);
 const $ = (s, r = document) => r.querySelector(s);
 const app = () => document.getElementById('app');
 
@@ -262,6 +265,7 @@ async function loadMe() {
 }
 
 async function route() {
+  if (APP && APP.leaving) return; // walking back to the app's launcher (appshell.js)
   const gen = ++state.gen;
   for (const f of state.cleanup.splice(0)) { try { f(); } catch { /* ignore */ } }
   document.querySelectorAll('.modal-back').forEach(m => m.remove());
@@ -277,7 +281,8 @@ async function route() {
   if (!state.me) await loadMe();
   if (!state.me) {
     if (p0 !== 'login') { if (p0 === 'quickconnect') rememberAfter(location.hash); return go('#/login'); }
-    return p1 === 'code' && state.status.quickconnect_enabled ? viewLoginCode() : viewLogin();
+    const code = state.status.quickconnect_enabled && (p1 === 'code' || (TV && p1 !== 'password'));
+    return code ? viewLoginCode() : viewLogin();
   }
   if (p0 === 'login') return go('#/profiles');
   if (p0 === 'quickconnect' && state.me.profile) return viewQuickConnect(q.get('code') || '');
@@ -313,9 +318,12 @@ function spatialNav(e) {
   const dir = { ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'u', ArrowDown: 'd' }[e.key];
   if (!dir || e.altKey || e.ctrlKey || e.metaKey) return;
   const a = document.activeElement;
-  if (a && a.matches('input, textarea, select, [contenteditable], .timeline, video')) return;
-  if (document.querySelector('.player') && !document.querySelector('.modal-back')) return; // the player owns its keys
-  const scope = document.querySelector('.modal-back .modal') || document.querySelector('.menu-pop.floating') || document;
+  if (a && a.matches('input, textarea, select, [contenteditable], .timeline, video') && !(TV && tvLeavesField(a, dir))) return;
+  const player = document.querySelector('.player');
+  // the player owns its keys; on a TV the arrows move between its controls while they are on screen
+  if (player && !document.querySelector('.modal-back') && !(TV && !player.classList.contains('idle') && a && a !== document.body && a !== player.querySelector('video') && player.contains(a))) return;
+  const scope = document.querySelector('.modal-back .modal') || document.querySelector('.menu-pop.floating') ||
+    (TV && (document.querySelector('.menu-pop:not(.hidden)') || (player && (player.querySelector('.p-pop:not(.hidden)') || player)))) || document;
   const focusables = [...scope.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')]
     .filter(el => el !== a && !el.disabled && el.offsetParent !== null && !el.closest('.hidden'));
   if (!a || a === document.body || !scope.contains(a)) {
@@ -339,6 +347,16 @@ function spatialNav(e) {
     if (score < bs) { bs = score; best = el; }
   }
   if (best) { e.preventDefault(); best.focus(); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+}
+// TV: a remote has no Tab key, so the arrows also leave a field: up/down always, left/right at the ends of the text.
+function tvLeavesField(a, dir) {
+  if (a.matches('.timeline, input[type=range]')) return dir === 'u' || dir === 'd';
+  if (a.matches('select, video, input[type=checkbox], input[type=radio]')) return true;
+  if (dir === 'u' || dir === 'd') return true;
+  let at = null, len = 0;
+  try { at = a.selectionStart; len = (a.value || '').length; } catch { /* no caret on this input type */ }
+  if (at == null) return true;
+  return dir === 'l' ? at === 0 : at === len;
 }
 document.addEventListener('keydown', spatialNav);
 window.addEventListener('hashchange', route);
@@ -370,6 +388,7 @@ function shell(active, ...content) {
     h('hr'),
     langSwitch(),
     h('hr'),
+    APP && APP.canSwitchServer && h('button', { role: 'menuitem', onclick: () => APP.switchServer(T.leavingApp) }, T.switchServer),
     h('button', { role: 'menuitem', onclick: () => POST('/api/logout').then(() => { state.me = null; go('#/login'); }) }, T.logout));
   const avatarBtn = h('button.avatar', { style: { background: p.color }, 'aria-label': p.name, 'aria-haspopup': 'menu', onclick: e => { e.stopPropagation(); menuPop.classList.toggle('hidden'); } }, p.name.slice(0, 1).toUpperCase());
   const closeMenu = () => menuPop.classList.add('hidden');
@@ -447,7 +466,8 @@ function applyBranding() {
 }
 
 function authPage(title, lede, form) {
-  put(app(), h('div.center', null, h('div.auth', null, brandMark('span'), h('h1', null, title), h('p.lede', null, lede), form, langSwitch())));
+  put(app(), h('div.center', null, h('div.auth', null, brandMark('span'), h('h1', null, title), h('p.lede', null, lede), form, langSwitch(),
+    APP && APP.canSwitchServer && h('button.btn.ghost.wide.app-switch', { type: 'button', onclick: () => APP.switchServer(T.leavingApp) }, T.switchServer))));
   setTimeout(() => form.querySelector('input')?.focus(), 30);
 }
 function field(label, input, hint) { return h('label.field', null, h('span', null, label), input, hint && h('div.hint', { class: 'mt1' }, hint)); }
@@ -476,7 +496,7 @@ function viewLogin() {
   const pw = h('input', { type: 'password', autocomplete: 'current-password' });
   const form = h('form', { onsubmit: async e => {
     e.preventDefault();
-    await POST('/api/login', { username: user.value, password: pw.value }, { noRedirect: true });
+    await POST('/api/login', Object.assign({ username: user.value, password: pw.value }, APP && APP.device()), { noRedirect: true });
     await loadMe(); go('#/profiles');
   } }, field(T.username, user), field(T.password, pw), h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.login),
   state.status.quickconnect_enabled && h('div.auth-or', null, h('span', null, T.or)),
@@ -501,7 +521,7 @@ function viewLoginCode() {
   async function start() {
     stop(); again.hidden = true; code.classList.remove('off'); code.textContent = '––– –––'; put(msg); put(left);
     let ini;
-    try { ini = await POST('/api/quickconnect/initiate', { platform: 'web' }, { noRedirect: true, quiet: true }); }
+    try { ini = await POST('/api/quickconnect/initiate', APP ? APP.device() : { platform: 'web' }, { noRedirect: true, quiet: true }); }
     catch (e) { if (alive) end(e.message || T.netErr, true); return; }
     if (!alive) return;
     code.textContent = ini.code.slice(0, 3) + ' ' + ini.code.slice(3);
@@ -527,7 +547,7 @@ function viewLoginCode() {
   }
   const box = h('div.qc-box', null, code, left, msg, again,
     h('ol.qc-steps', null, h('li', null, T.qcStep1), h('li', null, T.qcStep2(T.connectDevice)), h('li', null, T.qcStep3)),
-    h('a.btn.ghost.wide', { href: '#/login' }, T.qcUsePassword));
+    h('a.btn.ghost.wide', { href: '#/login/password' }, T.qcUsePassword));
   authPage(T.qcLoginTitle, T.qcLoginLede, box);
   start();
 }
@@ -1365,7 +1385,7 @@ function detectCaps() {
   if (v.canPlayType('video/quicktime')) caps.containers.push('mov');
   if (v.canPlayType('video/x-matroska') === 'probably') caps.containers.push('mkv');
   caps.hdr = !!(window.matchMedia && matchMedia('(dynamic-range: high)').matches && caps.video.includes('hevc'));
-  return caps;
+  return APP ? APP.extraCaps(caps) : caps;
 }
 const langName = l => T.langNames[l] || l || T.unknownLang;
 
@@ -1390,9 +1410,9 @@ async function viewPlayer(id, q) {
   const whyBtn = h('button.p-btn', { 'aria-label': T.why, title: T.why }, icon('info'));
   const favBtn = h('button.p-btn', { 'aria-label': T.favorite, title: T.favorite }, icon('heart'));
   const moreBtn = h('button.p-btn', { 'aria-label': T.moreActions, title: T.moreActions }, icon('more', true));
-  const fsBtn = h('button.p-btn', { 'aria-label': T.fullscreen, title: T.fullscreen + ' (F)' }, icon('fs'));
+  const fsBtn = h('button.p-btn' + (TV ? '.hidden' : ''), { 'aria-label': T.fullscreen, title: T.fullscreen + ' (F)' }, icon('fs'));
   const chapBtn = h('button.p-btn.hidden', { 'aria-label': T.chapters, title: T.chapters }, icon('list'));
-  const pipBtn = document.pictureInPictureEnabled ? h('button.p-btn', { 'aria-label': T.pip, title: T.pip + ' (P)' }, icon('pip')) : null;
+  const pipBtn = document.pictureInPictureEnabled && !TV ? h('button.p-btn', { 'aria-label': T.pip, title: T.pip + ' (P)' }, icon('pip')) : null;
   const pop = h('div.p-pop.hidden');
   const upnext = h('div.upnext.hidden');
   const skipBtn = h('button.btn.primary.big.skip-seg.hidden', { onclick: () => doSkip() });
@@ -1404,7 +1424,7 @@ async function viewPlayer(id, q) {
       h('div.p-head', null, titleEl, subEl),
       h('div.p-line', null, timeEl, timeline, remEl),
       h('div.p-bar', null,
-        h('div.p-l', null, h('div.p-vol', null, volBtn, vol)),
+        h('div.p-l', null, !TV && h('div.p-vol', null, volBtn, vol)), // a TV's volume is the remote's
         h('div.p-c', null,
           h('button.p-btn', { 'aria-label': T.rewind, title: T.rewind, onclick: () => seekBy(-10) }, icon('rw')),
           playBtn,
@@ -1706,8 +1726,8 @@ async function viewPlayer(id, q) {
   };
   fsBtn.onclick = toggleFS;
   function toggleFS() { if (document.fullscreenElement) document.exitFullscreen(); else player.requestFullscreen?.().catch(() => {}); }
-  video.addEventListener('play', () => { player.classList.remove('paused'); put(playBtn, icon('pause')); playBtn.setAttribute('aria-label', T.pause); if (ms) ms.playbackState = 'playing'; });
-  video.addEventListener('pause', () => { player.classList.add('paused'); wake(); /* paused: show the controls again */ put(playBtn, icon('play')); playBtn.setAttribute('aria-label', T.play); if (ms) ms.playbackState = 'paused'; report(); });
+  video.addEventListener('play', () => { APP?.keepAwake(true); player.classList.remove('paused'); put(playBtn, icon('pause')); playBtn.setAttribute('aria-label', T.pause); if (ms) ms.playbackState = 'playing'; });
+  video.addEventListener('pause', () => { APP?.keepAwake(false); player.classList.add('paused'); wake(); /* paused: show the controls again */ put(playBtn, icon('play')); playBtn.setAttribute('aria-label', T.play); if (ms) ms.playbackState = 'paused'; report(); });
   const ms = navigator.mediaSession;
   const msAction = (a, f) => { try { ms.setActionHandler(a, f); } catch { /* action not supported here */ } };
   let lastPosState = 0;
@@ -1759,7 +1779,9 @@ async function viewPlayer(id, q) {
   const keys = e => {
     if (e.target.matches('input, textarea, select')) return;
     if (document.querySelector('.modal-back')) return;
+    const wasIdle = player.classList.contains('idle');
     wake();
+    if (TV && tvKeys(e, wasIdle)) return;
     switch (e.key) {
       case ' ': case 'k': e.preventDefault(); togglePlay(); break;
       case 'ArrowLeft': if (e.target !== timeline) { e.preventDefault(); seekBy(-10); } break;
@@ -1779,6 +1801,26 @@ async function viewPlayer(id, q) {
     }
   };
   document.addEventListener('keydown', keys);
+  // TV remote: with the controls hidden left/right seek, OK plays/pauses and up/down bring the controls up;
+  // once they are on screen the arrows move between them (spatialNav) and OK presses the lit one.
+  function tvKeys(e, wasIdle) {
+    if (e.defaultPrevented) return true; // spatialNav already moved the focus
+    const a = document.activeElement;
+    const onCtl = !wasIdle && a && a !== video && a !== timeline && a !== document.body && player.contains(a) && a.offsetParent !== null;
+    switch (e.key) {
+      case 'ArrowUp': case 'ArrowDown':
+        e.preventDefault();
+        if (!onCtl && !(a === timeline && !wasIdle)) (pop.classList.contains('hidden') ? playBtn : pop.querySelector('button') || playBtn).focus();
+        return true;
+      case 'ArrowLeft': case 'ArrowRight':
+        return onCtl;
+      case 'Enter':
+        if (onCtl) return true;
+        e.preventDefault(); togglePlay();
+        return true;
+    }
+    return false;
+  }
 
   // ---------------------------------------------------------------- progress & next episode
   async function report(ended) {
@@ -1860,6 +1902,7 @@ async function viewPlayer(id, q) {
 
   onCleanup(() => {
     dead = true;
+    APP?.keepAwake(false);
     document.removeEventListener('keydown', keys);
     clearUpNext(); clearTimeout(idleT);
     if (!exiting) report();

@@ -1,12 +1,13 @@
 {
   "name": "kinora-apps",
   "private": true,
-  "description": "Kinora client apps: shared UI + Android, Samsung Tizen, LG webOS packaging (iOS is native SwiftUI in ios/)",
+  "description": "Kinora client apps: a launcher that opens the server's web client in app mode on Android (phone + TV), Samsung Tizen, LG webOS and Titan OS; iOS is native SwiftUI in ios/",
   "workspaces": [
     "shared",
     "android",
     "tizen",
     "webos",
+    "titan",
     "branding"
   ],
   "scripts": {
@@ -14,6 +15,7 @@
     "build:android": "npm run build -w android",
     "build:tizen": "npm run build -w tizen",
     "build:webos": "npm run build -w webos",
+    "build:titan": "npm run build -w titan",
     "brand": "npm run brand -w branding --",
     "test": "npm run test -w shared"
   }

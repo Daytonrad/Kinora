@@ -7,6 +7,8 @@
  "code": "en",
  "name": "English",
  "strings": {
+  "switchServer": "Switch server",
+  "leavingApp": "Back to the server list…",
   "osHint": "Subtitle downloads from the player and the film page. The key is free: opensubtitles.com → Account → API consumers. Without signing in you get 5 downloads a day, with a (free) account 20.",
   "osKey": "OpenSubtitles API key",
   "osKeyHint": "Without a key subtitle search is off.",

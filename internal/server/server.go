@@ -60,6 +60,7 @@ type Server struct {
 	streamKeyOnce sync.Once
 	streamKey     []byte
 	extraOrigins  map[string]bool
+	legacy        legacyJS
 
 	Deps
 	bgCtx context.Context
@@ -67,7 +68,7 @@ type Server struct {
 
 // Deps are the subsystems the server drives (wired in main).
 type Deps struct {
-	Ctx     context.Context // cancelled on shutdown; background work started by requests uses it
+	Ctx       context.Context // cancelled on shutdown; background work started by requests uses it
 	Scanner   *scanner.Scanner
 	ImgDir    string
 	Media     *media.Manager
@@ -76,7 +77,7 @@ type Deps struct {
 	Downloads *media.Downloader
 	Party     *party.Hub
 	Meta      *meta.Fetcher
-	Intro     *intro.Analyzer // skip intro / credits detection (nil = off)
+	Intro     *intro.Analyzer     // skip intro / credits detection (nil = off)
 	OpenSubs  *meta.OpenSubtitles // subtitle search and download (created by New when nil)
 }
 
@@ -331,7 +332,10 @@ type statusRecorder struct {
 	status int
 }
 
-func (sr *statusRecorder) WriteHeader(code int) { sr.status = code; sr.ResponseWriter.WriteHeader(code) }
+func (sr *statusRecorder) WriteHeader(code int) {
+	sr.status = code
+	sr.ResponseWriter.WriteHeader(code)
+}
 func (sr *statusRecorder) Flush() {
 	if f, ok := sr.ResponseWriter.(http.Flusher); ok {
 		f.Flush()

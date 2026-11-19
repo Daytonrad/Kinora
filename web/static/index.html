@@ -26,6 +26,8 @@
 <script src="i18n/en.js" defer></script>
 <script src="i18n/de.js" defer></script>
 <script src="i18n/custom.js" defer></script>
-<script src="app.js" defer></script>
+<script src="appshell.js" defer></script>
+<!-- engines before Chromium 80 (2019–2020 TVs) cannot parse ?. and ??: the server lowers app.js for them -->
+<script>(function () { var legacy = false; try { new Function('a?.b ?? 0'); } catch (e) { legacy = true; } document.write('<script src="app' + (legacy ? '.legacy' : '') + '.js" defer><\/script>'); })();</script>
 </body>
 </html>
