@@ -24,9 +24,10 @@ enum LiveActivities {
     /// The running downloads changed: `active` is how many run, `fraction` their overall progress.
     static func downloadsChanged(active: Int, title: String, fraction: Double, preparing: Bool) {
         guard active > 0 else { return endDownloads() }
-        let state = DownloadsActivityAttributes.ContentState(
+        var state = DownloadsActivityAttributes.ContentState(
             active: active, done: done, failed: failed, title: title,
             fraction: fraction, preparing: preparing)
+        state.eta = estimate(active: active, fraction: fraction, preparing: preparing)
         guard let current = downloads else {
             guard enabled else { return }
             done = 0
@@ -44,17 +45,46 @@ enum LiveActivities {
         let structural = lastDownloads.map {
             $0.active != state.active || $0.done != state.done || $0.failed != state.failed || $0.title != state.title
         } ?? true
-        guard structural || Date.now.timeIntervalSince(lastDownloadsUpdate) > 2,
-              state != lastDownloads else { return }
+        // The bar runs on its own towards `eta`, so progress alone needs an update only now and then.
+        let gotEstimate = lastDownloads?.eta == nil && state.eta != nil
+        guard structural || gotEstimate || Date.now.timeIntervalSince(lastDownloadsUpdate) > 5 else { return }
         lastDownloads = state
         lastDownloadsUpdate = .now
-        // Suspended in the background the app sends nothing until the next download ends.
-        update(current.id, DownloadsActivityAttributes.self, .init(state: state, staleDate: .now.addingTimeInterval(15 * 60)))
+        // Suspended in the background the app sends nothing until it is woken again. Past the
+        // estimate (plus slack) the activity turns stale and shows "finishing" instead of a full bar.
+        let stale = state.eta.map { $0.addingTimeInterval(30) } ?? .now.addingTimeInterval(15 * 60)
+        update(current.id, DownloadsActivityAttributes.self, .init(state: state, staleDate: stale))
+    }
+
+    // Transfer speed, as a smoothed rate of `fraction` per second.
+    private static var sample: (at: Date, fraction: Double, active: Int)?
+    private static var rate: Double?
+
+    /// The finish date at the measured speed, a little pessimistic so the bar does not fill early.
+    private static func estimate(active: Int, fraction: Double, preparing: Bool) -> Date? {
+        let now = Date.now
+        guard !preparing, fraction < 1 else { sample = nil; rate = nil; return nil }
+        guard let last = sample, last.active == active, fraction >= last.fraction else {
+            // A download started or ended: the overall fraction jumps, so measure afresh.
+            sample = (now, fraction, active)
+            rate = nil
+            return nil
+        }
+        let dt = now.timeIntervalSince(last.at)
+        guard dt >= 3 else { return rate.map { now.addingTimeInterval((1 - fraction) / $0 * 1.15) } }
+        let measured = (fraction - last.fraction) / dt
+        sample = (now, fraction, active)
+        if measured > 0 { rate = rate.map { $0 * 0.6 + measured * 0.4 } ?? measured }
+        guard let rate, rate > 0 else { return nil }
+        let remaining = (1 - fraction) / rate * 1.15
+        return remaining < 24 * 3600 ? now.addingTimeInterval(remaining) : nil
     }
 
     private static func endDownloads() {
         guard let current = downloads else { return }
         downloads = nil
+        sample = nil
+        rate = nil
         let final = DownloadsActivityAttributes.ContentState(
             active: 0, done: done, failed: failed, title: lastDownloads?.title ?? "",
             fraction: 1, preparing: false)

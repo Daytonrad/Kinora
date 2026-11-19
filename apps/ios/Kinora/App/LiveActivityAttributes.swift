@@ -19,6 +19,20 @@ struct DownloadsActivityAttributes: ActivityAttributes {
         var fraction: Double
         /// Every running download is still being prepared by the server.
         var preparing: Bool
+        /// When `fraction` was measured.
+        var measuredAt: Date = .now
+        /// Estimated finish of every running transfer, from the measured speed; nil while unknown.
+        /// The app is suspended in the background and sends nothing, so the widget runs the bar
+        /// and the remaining time on its own towards this date.
+        var eta: Date? = nil
+
+        /// The span the progress bar runs over on its own, placed so it shows `fraction` at `measuredAt`.
+        var timeline: ClosedRange<Date>? {
+            guard let eta, active > 0, !preparing, eta > measuredAt, fraction < 1 else { return nil }
+            let f = min(max(fraction, 0), 0.99)
+            let start = measuredAt.addingTimeInterval(-eta.timeIntervalSince(measuredAt) * f / (1 - f))
+            return start...eta
+        }
     }
 }
 
