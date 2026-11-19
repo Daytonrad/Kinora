@@ -2785,9 +2785,9 @@ async function adminAcqSettings(body) {
   upload.style.display = 'none';
   const defRows = defs.map(d => h('tr', null,
     tdl('', T.acqName, h('b', null, d.name), h('div.muted.small.mono', null, d.id + ((d.links || [])[0] ? ' · ' + d.links[0] : ''))),
-    tdl('', T.acqKind, h('span.small', null, d.type || '–')),
+    tdl('', T.acqKind, h('span.small', null, (d.builtin ? T.acqDefBuiltin + ' · ' : '') + (d.type || '–'))),
     tdl('', T.acqDefUsed, d.in_use),
-    tdl('.a-tbl-acts', '', h('button.btn.danger', { disabled: d.in_use > 0, title: d.in_use > 0 ? T.acqDefInUse : '', onclick: async () => {
+    tdl('.a-tbl-acts', '', d.builtin ? null : h('button.btn.danger', { disabled: d.in_use > 0, title: d.in_use > 0 ? T.acqDefInUse : '', onclick: async () => {
       if (await confirmBox(T.confirmDelete(d.name))) { await api('DELETE', '/api/admin/acquire/definitions/' + encodeURIComponent(d.id)); rerender(); }
     } }, T.delete))));
   const defList = h('div', null,

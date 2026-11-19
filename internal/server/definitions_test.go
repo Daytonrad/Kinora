@@ -32,9 +32,22 @@ func TestAcqDefinitionsAPI(t *testing.T) {
 		t.Fatalf("upload: %d %v", code, info)
 	}
 	var list []map[string]any
-	if c.do("GET", "/api/admin/acquire/definitions", nil, &list); len(list) != 1 || list[0]["name"] != "Demo Site" {
+	// the built-in ones (nCore) come first and cannot be deleted or replaced
+	if c.do("GET", "/api/admin/acquire/definitions", nil, &list); len(list) != 2 || list[0]["id"] != "ncore" || list[0]["builtin"] != true || list[1]["name"] != "Demo Site" {
 		t.Fatalf("list: %v", list)
 	}
+	if code := c.do("DELETE", "/api/admin/acquire/definitions/ncore", nil, nil); code != 409 {
+		t.Errorf("delete built-in: %d", code)
+	}
+	if code := c.do("POST", "/api/admin/acquire/definitions", map[string]any{"yaml": strings.Replace(testDefinition, "id: demo", "id: ncore", 1)}, nil); code != 409 {
+		t.Errorf("replace built-in: %d", code)
+	}
+	var nc map[string]any
+	if code := c.do("POST", "/api/admin/acquire/indexers", map[string]any{"kind": "cardigann", "definition_id": "ncore", "enabled": true,
+		"config": `{"username":"anna","password":"pw","cookie":""}`}, &nc); code != 200 || nc["name"] != "nCore" || !strings.Contains(nc["config"].(string), `"password":"••••••••"`) {
+		t.Errorf("nCore indexer: %d %v", code, nc)
+	}
+	c.do("DELETE", fmt.Sprintf("/api/admin/acquire/indexers/%d", int64(nc["id"].(float64))), nil, nil)
 	if code := c.do("POST", "/api/admin/acquire/indexers", map[string]any{"kind": "cardigann", "definition_id": "nope", "enabled": true}, nil); code != 400 {
 		t.Errorf("unknown definition: %d", code)
 	}

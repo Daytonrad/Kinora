@@ -35,6 +35,7 @@ type Row struct {
 	Categories  []string // Torznab category names ("Movies/HD")
 	Freeleech   bool
 	Description string
+	Language    string // "hun" when the site marks the release Hungarian (category, flag)
 }
 
 // Indexer is a definition with its settings and its own signed-in session.

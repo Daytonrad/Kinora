@@ -299,7 +299,9 @@ func withClock(day time.Time, s string) time.Time {
 
 var reSize = regexp.MustCompile(`(?i)([\d.,]+)\s*([kmgtp]?i?b|bytes?)?`)
 
-// parseSize reads "1.4 GiB", "700 MB", "1,234.5 KB", "123456789".
+// ParseSize reads "1.4 GiB", "700 MB", "1,234.5 KB", "123456789".
+func ParseSize(v string) int64 { return parseSize(v) }
+
 func parseSize(v string) int64 {
 	m := reSize.FindStringSubmatch(strings.TrimSpace(v))
 	if m == nil {

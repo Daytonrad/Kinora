@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ScotyLucas/kinora/internal/acquire/cardigann"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -153,5 +154,19 @@ func TestEngineIndexerFlow(t *testing.T) {
 	}
 	if g.InfoHash != hash || mem.adds != 1 {
 		t.Errorf("grab: %+v adds %d", g, mem.adds)
+	}
+}
+
+func TestRowLanguageCountsAsHungarian(t *testing.T) {
+	res := rowsToResults(Indexer{ID: 1, Name: "nCore"}, []cardigann.Row{{Title: "The.Matrix.1999.1080p.BluRay.x264-KN", Download: "http://x/dl", Language: "hun"}})
+	if len(res) != 1 || !containsStr(res[0].Release.Languages, "hun") {
+		t.Fatalf("languages: %+v", res)
+	}
+	p := DefaultProfile()
+	withHun, _ := p.Score(res[0].Release, 8<<30, 10)
+	res[0].Release.Languages = nil
+	without, _ := p.Score(res[0].Release, 8<<30, 10)
+	if withHun <= without {
+		t.Errorf("the Hungarian category should rank higher: %d vs %d", withHun, without)
 	}
 }

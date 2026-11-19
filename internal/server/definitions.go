@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/ScotyLucas/kinora/internal/acquire/cardigann"
+	"github.com/ScotyLucas/kinora/internal/acquire/sites"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -25,6 +27,7 @@ type definitionInfo struct {
 	Settings    []cardigann.Setting `json:"settings"`
 	InUse       int                 `json:"in_use"`
 	CreatedAt   int64               `json:"created_at"`
+	Builtin     bool                `json:"builtin"` // written in Go, part of Kinora
 }
 
 func definitionSummary(d *store.AcqDefinition) (*definitionInfo, error) {
@@ -43,6 +46,18 @@ func (s *Server) handleAcqDefinitions(w http.ResponseWriter, r *http.Request, c 
 		return
 	}
 	out := []*definitionInfo{}
+	ixs, _ := s.st.AcqIndexers()
+	for _, id := range sortedBuiltins() {
+		def := sites.Builtin[id].Def
+		info := &definitionInfo{ID: def.ID, Name: def.Name, Type: def.Type, Description: def.Description, Language: def.Language,
+			Links: def.Links, Settings: def.Settings, Builtin: true}
+		for _, x := range ixs {
+			if x.Kind == "cardigann" && x.DefinitionID == id {
+				info.InUse++
+			}
+		}
+		out = append(out, info)
+	}
 	for _, d := range list {
 		if info, err := definitionSummary(d); err == nil {
 			out = append(out, info)
@@ -69,6 +84,10 @@ func (s *Server) handleAcqDefinitionUpload(w http.ResponseWriter, r *http.Reques
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, ok := sites.Builtin[def.ID]; ok {
+		writeErr(w, http.StatusConflict, "ilyen azonosítójú beépített indexer már van a Kinorában")
+		return
+	}
 	d := &store.AcqDefinition{ID: def.ID, Name: def.Name, Type: def.Type, YAML: string(b)}
 	if err := s.st.SaveAcqDefinition(d); err != nil {
 		s.internalErr(w, r, err)
@@ -80,6 +99,10 @@ func (s *Server) handleAcqDefinitionUpload(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleAcqDefinitionDelete(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	id := r.PathValue("id")
+	if _, ok := sites.Builtin[id]; ok {
+		writeErr(w, http.StatusConflict, "a beépített indexer nem törölhető")
+		return
+	}
 	list, _ := s.st.AcqDefinitions()
 	for _, d := range list {
 		if d.ID == id && d.InUse > 0 {
@@ -93,6 +116,9 @@ func (s *Server) handleAcqDefinitionDelete(w http.ResponseWriter, r *http.Reques
 
 // definitionOf parses the definition an indexer runs.
 func (s *Server) definitionOf(id string) (*cardigann.Definition, error) {
+	if b, ok := sites.Builtin[id]; ok {
+		return b.Def, nil
+	}
 	d, err := s.st.AcqDefinition(id)
 	if err != nil {
 		return nil, errors.New("válassz feltöltött leírót")
@@ -110,7 +136,7 @@ func (s *Server) maskConfig(defID, cfg string) string {
 	json.Unmarshal([]byte(cfg), &values)
 	for _, st := range def.Settings {
 		if v, ok := values[st.Name].(string); ok && st.Secret() {
-			values[st.Name] = maskSecret(v)
+			values[st.Name] = maskPassword(v)
 		}
 	}
 	b, _ := json.Marshal(values)
@@ -149,5 +175,25 @@ func (s *Server) mergeConfig(x *store.AcqIndexer, stored string) string {
 		x.Name = def.Name
 	}
 	x.URL = def.SiteLink()
+	if u, ok := out["url"].(string); ok && strings.TrimSpace(u) != "" {
+		x.URL = strings.TrimSpace(u)
+	}
 	return ""
+}
+
+func sortedBuiltins() []string {
+	ids := make([]string, 0, len(sites.Builtin))
+	for id := range sites.Builtin {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// maskPassword hides a password or cookie entirely (maskSecret keeps the last characters of API keys).
+func maskPassword(v string) string {
+	if v == "" {
+		return ""
+	}
+	return strings.Repeat(maskChar, 8)
 }

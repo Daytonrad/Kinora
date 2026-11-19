@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/ScotyLucas/kinora/internal/acquire/cardigann"
+	"github.com/ScotyLucas/kinora/internal/acquire/sites"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 // The built-in indexer engine (M5): an indexer of kind "cardigann" runs an uploaded definition instead of
@@ -17,7 +19,7 @@ import (
 
 type engineEntry struct {
 	key string // definition + settings: a change makes a new engine (and a new session)
-	ix  *cardigann.Indexer
+	ix  sites.Engine
 }
 
 type engines struct {
@@ -25,13 +27,19 @@ type engines struct {
 	m  map[int64]engineEntry
 }
 
-// engine returns the running engine of an indexer, signed-in session included.
-func (m *Manager) engine(ix Indexer) (*cardigann.Indexer, error) {
-	d, err := m.st.AcqDefinition(ix.DefinitionID)
-	if err != nil {
-		return nil, fmt.Errorf("a(z) %q leíró nincs feltöltve", ix.DefinitionID)
+// engine returns the running engine of an indexer, signed-in session included: a built-in site (Go code)
+// or an uploaded definition.
+func (m *Manager) engine(ix Indexer) (sites.Engine, error) {
+	site, builtin := sites.Builtin[ix.DefinitionID]
+	var d *store.AcqDefinition
+	key := "builtin|" + ix.Config
+	if !builtin {
+		var err error
+		if d, err = m.st.AcqDefinition(ix.DefinitionID); err != nil {
+			return nil, fmt.Errorf("a(z) %q leíró nincs feltöltve", ix.DefinitionID)
+		}
+		key = strconv.Itoa(len(d.YAML)) + "|" + strconv.FormatInt(d.CreatedAt, 10) + "|" + ix.Config
 	}
-	key := strconv.Itoa(len(d.YAML)) + "|" + strconv.FormatInt(d.CreatedAt, 10) + "|" + ix.Config
 	m.eng.mu.Lock()
 	defer m.eng.mu.Unlock()
 	if m.eng.m == nil {
@@ -40,17 +48,22 @@ func (m *Manager) engine(ix Indexer) (*cardigann.Indexer, error) {
 	if e, ok := m.eng.m[ix.ID]; ok && e.key == key && ix.ID != 0 {
 		return e.ix, nil
 	}
-	def, err := cardigann.Parse([]byte(d.YAML))
-	if err != nil {
-		return nil, err
-	}
 	values := map[string]any{}
 	if ix.Config != "" {
 		if err := json.Unmarshal([]byte(ix.Config), &values); err != nil {
 			return nil, errors.New("az indexer beállításai érvénytelenek")
 		}
 	}
-	e := cardigann.New(def, values, m.hc)
+	var e sites.Engine
+	if builtin {
+		e = site.New(values, m.hc)
+	} else {
+		def, err := cardigann.Parse([]byte(d.YAML))
+		if err != nil {
+			return nil, err
+		}
+		e = cardigann.New(def, values, m.hc)
+	}
 	if ix.ID != 0 {
 		m.eng.m[ix.ID] = engineEntry{key: key, ix: e}
 	}
@@ -124,10 +137,22 @@ func rowsToResults(ix Indexer, rows []cardigann.Row) []Result {
 			res.InfoHash, _ = MagnetHash(res.Magnet)
 		}
 		res.Release = ParseRelease(res.Title)
+		if r.Language != "" && !containsStr(res.Release.Languages, r.Language) {
+			res.Release.Languages = append(res.Release.Languages, r.Language)
+		}
 		res.Quality = res.Release.QualityLabel()
 		out = append(out, res)
 	}
 	return out
+}
+
+func containsStr(l []string, s string) bool {
+	for _, x := range l {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 func firstNonEmpty(v ...string) string {
@@ -185,5 +210,11 @@ func (m *Manager) testIx(ctx context.Context, ix Indexer) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s · %d", e.Def.Name, n), nil
+	name := ix.Name
+	if s, ok := sites.Builtin[ix.DefinitionID]; ok {
+		name = s.Def.Name
+	} else if c, ok := e.(*cardigann.Indexer); ok {
+		name = c.Def.Name
+	}
+	return fmt.Sprintf("%s · %d", name, n), nil
 }

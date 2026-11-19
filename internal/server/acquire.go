@@ -36,7 +36,7 @@ func (s *Server) maskIx(x *store.AcqIndexer) *store.AcqIndexer {
 
 func maskClient(x *store.AcqClient) *store.AcqClient {
 	c := *x
-	c.Password = maskSecret(c.Password)
+	c.Password = maskPassword(c.Password)
 	return &c
 }
 
