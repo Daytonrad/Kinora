@@ -2647,7 +2647,7 @@ async function adminAcqFind(body) {
   input.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
 
   function openReleases(m) {
-    const lib = h('select', { 'aria-label': T.acqTargetLib }, s.libraries.map(l => h('option', { value: l.id, selected: s.library_id === l.id }, l.name)));
+    const lib = h('select', { 'aria-label': T.acqTargetLib }, s.libraries.map(l => h('option', { value: l.id }, l.name)));
     const prof = profileSelect(s);
     const auto = h('button.btn.primary', { disabled: !s.libraries.length, onclick: async e => {
       const b = e.currentTarget;
@@ -2873,14 +2873,11 @@ async function adminAcqSettings(body) {
   // requests (Felfedezés): who is approved automatically, weekly quota, where requested films go
   const auto = h('select', null, [['admins', T.reqAutoAdmins], ['all', T.reqAutoAll]].map(([v, l]) => h('option', { value: v, selected: s.auto_approve === v }, l)));
   const quota = h('input', { type: 'number', min: 0, max: 1000, value: s.quota_week });
-  const reqLib = h('select', null, h('option', { value: 0 }, T.reqLibAuto), s.libraries.map(l => h('option', { value: l.id, selected: s.library_id === l.id }, l.name)));
   const retryH = h('input', { type: 'number', min: 1, max: 168, value: s.retry_hours });
-  const reqLibTV = h('select', null, h('option', { value: 0 }, T.reqLibTVAuto), s.tv_libraries.map(l => h('option', { value: l.id, selected: s.library_tv === l.id }, l.name)));
   const reqSettings = aSplit(T.reqSettings, T.reqSettingsHint, h('div.a-form', null,
     field(T.reqAuto, auto), h('div.grid2', null, field(T.reqQuota, quota, T.reqQuotaHint), field(T.reqRetry, retryH, T.reqRetryHint)),
-    h('div.grid2', null, field(T.reqLib, reqLib), field(T.reqLibTV, reqLibTV)),
     h('div.a-form-foot', null, h('button.btn.primary', { onclick: async () => {
-      await api('PUT', '/api/admin/acquire/settings', { auto_approve: auto.value, quota_week: +quota.value || 0, library_id: +reqLib.value || 0, library_tv: +reqLibTV.value || 0, retry_hours: +retryH.value || 6 });
+      await api('PUT', '/api/admin/acquire/settings', { auto_approve: auto.value, quota_week: +quota.value || 0, retry_hours: +retryH.value || 6 });
       toast(T.saved); rerender();
     } }, T.save))));
 
@@ -2959,9 +2956,17 @@ function discoverTile(it, onChange) {
       : it.followed ? h('span.badge', null, T.seriesFollowedShort) : null);
 }
 
+// where a request goes: the requester picks among the films libraries (film) or the series libraries (series)
+function libChoice(list, noneText) {
+  if (!list.length) return { el: h('p.bad', null, noneText), value: () => 0, ok: false };
+  const sel = h('select', null, list.map(l => h('option', { value: l.id }, l.name)));
+  return { el: list.length > 1 ? field(T.discLibrary, sel) : null, value: () => +sel.value, ok: true };
+}
+
 async function discoverDialog(id, onChange) {
   const d = await GET('/api/discover/movies/' + id);
   const r = d.request;
+  const lc = !r && !d.item_id ? libChoice((await GET('/api/discover/libraries')).movies, T.discNoMovieLib) : null;
   const mine = r && r.user_id === state.me.user.id;
   const facts = [d.year, d.runtime > 0 && fmtRuntime(d.runtime * 60), (d.genres || []).slice(0, 3).join(', ')].filter(Boolean).join(' · ');
   const state_ = d.item_id ? h('p.ok', null, T.discHaveLong)
@@ -2972,16 +2977,16 @@ async function discoverDialog(id, onChange) {
   modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.disc-detail', null,
     d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
     h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
-      facts && h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), state_)),
+      facts && h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), state_, lc && lc.el)),
   close => [
     h('button.btn', { onclick: close }, T.close),
     d.item_id ? h('a.btn.primary', { href: '#/item/' + d.item_id, onclick: close }, icon('play'), T.discWatch)
       : r && mine && ['pending', 'approved', 'waiting'].includes(r.status) ? h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/requests/' + r.id); close(); toast(T.reqCanceledToast); onChange && onChange(); } }, T.reqCancel)
-      : !r ? h('button.btn.primary', { onclick: async e => {
+      : !r ? h('button.btn.primary', { disabled: !lc.ok, onclick: async e => {
         const b = e.currentTarget; // null once the handler awaits
         b.disabled = true;
         try {
-          const q = await POST('/api/requests', { tmdb_id: d.id });
+          const q = await POST('/api/requests', { tmdb_id: d.id, library_id: lc.value() });
           close(); toast(q.status === 'pending' ? T.reqSentPending(d.title) : T.reqSentApproved(d.title)); onChange && onChange();
         } finally { b.disabled = false; }
       } }, icon('plus'), T.discAsk) : null]);
@@ -3061,7 +3066,6 @@ async function announceArrivals() {
 async function adminAcqRequests(body) {
   const all = parseHash().q.get('all') === '1';
   const set = await GET('/api/admin/acquire/settings');
-  const movieLib = set.library_id || (set.libraries[0] && set.libraries[0].id) || 0;
   const list = await GET('/api/admin/acquire/requests' + (all ? '' : '?status=open'));
   const decide = async (r, approve) => {
     if (approve) { await POST(`/api/admin/acquire/requests/${r.id}/approve`, {}); toast(T.reqApprovedToast(r.title)); return adminAcqRequests(body); }
@@ -3072,6 +3076,7 @@ async function adminAcqRequests(body) {
   const row = r => h('tr', null,
     tdl('.acq-rel', T.title, h('div.row-gap', null, r.poster && h('img.match-thumb', { src: r.poster, alt: '' }), h('div', null, h('b', null, r.title, r.year ? ' (' + r.year + ')' : ''),
       r.kind === 'series' && h('div.small', null, T.discSeriesOne + ': ' + seasonsLabel(r.seasons)),
+      r.library_name && h('div.muted.small', null, T.reqLibrary + ': ' + r.library_name),
       r.note && h('div.muted.small', null, srv(r.note))))),
     tdl('', T.reqUser, r.user_name || '–'),
     tdl('', T.acqStatus, h('span.badge' + (r.status === 'denied' || r.status === 'failed' ? '.warn' : ''), null, reqLabel(r.status)),
@@ -3081,8 +3086,8 @@ async function adminAcqRequests(body) {
       r.status === 'pending' && h('button.btn.primary', { onclick: () => decide(r, true) }, T.reqApprove),
       r.status === 'pending' && h('button.btn.danger', { onclick: () => decide(r, false) }, T.reqDeny),
       ['waiting', 'failed', 'denied'].includes(r.status) && h('button.btn', { onclick: () => decide(r, true) }, T.retry),
-      r.kind === 'movie' && ['pending', 'approved', 'waiting', 'failed'].includes(r.status) && movieLib > 0 &&
-        h('button.btn', { title: T.isInteractive, onclick: () => movieInteractive(r.tmdb_id, r.title + (r.year ? ' (' + r.year + ')' : ''), movieLib, r.id) }, icon('search'), T.isInteractiveShort))));
+      r.kind === 'movie' && ['pending', 'approved', 'waiting', 'failed'].includes(r.status) && set.libraries.length > 0 &&
+        h('button.btn', { title: T.isInteractive, onclick: () => movieInteractive(r.tmdb_id, r.title + (r.year ? ' (' + r.year + ')' : ''), r.library_id || 0, r.id) }, icon('search'), T.isInteractiveShort))));
   put(body, aHead(T.aAcqRequests, T.aLedeAcqRequests, h('a.btn', { href: all ? '#/admin/acqrequests' : '#/admin/acqrequests?all=1' }, all ? T.reqShowOpen : T.reqShowAll)),
     list.length ? aTable([T.title, T.reqUser, T.acqStatus, T.acqAdded, ''], list.map(row), '.a-stack.acq-tbl') : emptyNote(all ? T.reqNoneAll : T.reqNoneOpen, null));
 }
@@ -3106,6 +3111,7 @@ function seasonPicker(seasons, initialMode = 'all', initialSet = []) {
 async function seriesDialog(id, onChange) {
   const d = await GET('/api/discover/series/' + id);
   const r = d.request;
+  const lc = !r ? libChoice((await GET('/api/discover/libraries')).shows, T.discNoShowLib) : null;
   const mine = r && r.user_id === state.me.user.id;
   const facts = [d.year, T.seasonsCount(d.seasons.length), (d.genres || []).slice(0, 3).join(', '), d.ended ? T.seriesEnded : null].filter(Boolean).join(' · ');
   const picker = seasonPicker(d.seasons);
@@ -3116,18 +3122,18 @@ async function seriesDialog(id, onChange) {
     d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
     h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
       h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), status,
-      !r && d.seasons.length > 0 && picker.el)),
+      !r && d.seasons.length > 0 && picker.el, lc && lc.el)),
   close => [
     h('button.btn', { onclick: close }, T.close),
     d.item_id ? h('a.btn', { href: '#/item/' + d.item_id, onclick: close }, icon('play'), T.discWatch) : null,
     r && mine && ['pending', 'approved', 'waiting'].includes(r.status) ? h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/requests/' + r.id); close(); toast(T.reqCanceledToast); onChange && onChange(); } }, T.reqCancel) : null,
-    !r && h('button.btn.primary', { onclick: async e => {
+    !r && h('button.btn.primary', { disabled: !lc.ok, onclick: async e => {
       const b = e.currentTarget;
       const m = picker.mode(), chosen = picker.chosen();
       if (m === 'seasons' && !chosen.length) return toast(T.pickSeason, true);
       b.disabled = true;
       try {
-        const q = await POST('/api/requests', { kind: 'series', tmdb_id: d.id, seasons: m === 'seasons' ? chosen.join(',') : m });
+        const q = await POST('/api/requests', { kind: 'series', tmdb_id: d.id, seasons: m === 'seasons' ? chosen.join(',') : m, library_id: lc.value() });
         close(); toast(q.status === 'pending' ? T.reqSentPending(d.title) : T.reqSentApproved(d.title)); onChange && onChange();
       } finally { b.disabled = false; }
     } }, icon('plus'), T.discAsk)]);
@@ -3137,7 +3143,7 @@ async function seriesDialog(id, onChange) {
 async function seriesFollowDialog(id, s, onDone) {
   const d = await GET('/api/discover/series/' + id);
   const picker = seasonPicker(d.seasons);
-  const lib = h('select', null, s.tv_libraries.map(l => h('option', { value: l.id, selected: s.library_tv === l.id }, l.name)));
+  const lib = h('select', null, s.tv_libraries.map(l => h('option', { value: l.id }, l.name)));
   const prof = profileSelect(s);
   modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.a-form', null,
     d.followed && h('p.ok', null, T.seriesFollowed), d.overview && h('p.acq-overview', null, d.overview),

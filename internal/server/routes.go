@@ -148,6 +148,7 @@ func (s *Server) routes() {
 	// Felfedezés and requests: every signed-in profile except kids ones
 	m.HandleFunc("GET /api/discover", s.withProfile(s.handleDiscover))
 	m.HandleFunc("GET /api/discover/search", s.withProfile(s.handleDiscoverSearch))
+	m.HandleFunc("GET /api/discover/libraries", s.withProfile(s.handleDiscoverLibraries))
 	m.HandleFunc("GET /api/discover/movies/{id}", s.withProfile(s.handleDiscoverMovie))
 	m.HandleFunc("GET /api/discover/series/{id}", s.withProfile(s.handleDiscoverSeries))
 	m.HandleFunc("POST /api/requests", s.withProfile(s.handleRequestCreate))

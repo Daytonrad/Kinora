@@ -411,12 +411,15 @@ type AcqRequest struct {
 	Status    string `json:"status"`
 	Note      string `json:"note"`
 	Seasons   string `json:"seasons"` // series: "all", "future" or "1,2"
-	Attempts  int    `json:"attempts"`
-	NextTryAt int64  `json:"next_try_at"`
-	DecidedBy *int64 `json:"decided_by"`
-	Seen      bool   `json:"seen"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	// the library the requester chose (a films library for a film, a series library for a series)
+	LibraryID   *int64 `json:"library_id"`
+	LibraryName string `json:"library_name"`
+	Attempts    int    `json:"attempts"`
+	NextTryAt   int64  `json:"next_try_at"`
+	DecidedBy   *int64 `json:"decided_by"`
+	Seen        bool   `json:"seen"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
 	// the running download of this request, if any (0..1)
 	Progress float64 `json:"progress"`
 }
@@ -437,17 +440,17 @@ const (
 var OpenRequestStates = []string{ReqPending, ReqApproved, ReqWaiting, ReqDownloading}
 
 const reqCols = `r.id,r.kind,r.tmdb_id,r.imdb_id,r.title,r.year,r.poster,r.user_id,COALESCE(u.username,''),r.profile_id,r.status,r.note,r.attempts,
- r.next_try_at,r.decided_by,r.seen,r.created_at,r.updated_at,r.seasons,
+ r.next_try_at,r.decided_by,r.seen,r.created_at,r.updated_at,r.seasons,r.library_id,COALESCE((SELECT l.name FROM libraries l WHERE l.id=r.library_id),''),
  COALESCE((SELECT g.progress FROM acq_grabs g WHERE g.request_id=r.id AND g.status IN ('downloading','importing') ORDER BY g.id DESC LIMIT 1),0)`
 
 const reqFrom = ` FROM acq_requests r LEFT JOIN users u ON u.id=r.user_id`
 
 func scanRequest(row interface{ Scan(...any) error }) (*AcqRequest, error) {
 	q := &AcqRequest{}
-	var user, prof, dec sql.NullInt64
+	var user, prof, dec, lib sql.NullInt64
 	var seen int
 	if err := row.Scan(&q.ID, &q.Kind, &q.TmdbID, &q.ImdbID, &q.Title, &q.Year, &q.Poster, &user, &q.UserName, &prof, &q.Status, &q.Note, &q.Attempts,
-		&q.NextTryAt, &dec, &seen, &q.CreatedAt, &q.UpdatedAt, &q.Seasons, &q.Progress); err != nil {
+		&q.NextTryAt, &dec, &seen, &q.CreatedAt, &q.UpdatedAt, &q.Seasons, &lib, &q.LibraryName, &q.Progress); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -460,7 +463,7 @@ func scanRequest(row interface{ Scan(...any) error }) (*AcqRequest, error) {
 		v := n.Int64
 		return &v
 	}
-	q.UserID, q.ProfileID, q.DecidedBy, q.Seen = ptr(user), ptr(prof), ptr(dec), seen == 1
+	q.UserID, q.ProfileID, q.DecidedBy, q.LibraryID, q.Seen = ptr(user), ptr(prof), ptr(dec), ptr(lib), seen == 1
 	return q, nil
 }
 
@@ -532,8 +535,8 @@ func (s *Store) CountUserRequests(userID, since int64) int {
 // AddAcqRequest stores a new request.
 func (s *Store) AddAcqRequest(q *AcqRequest) error {
 	q.CreatedAt, q.UpdatedAt = now(), now()
-	res, err := s.DB.Exec(`INSERT INTO acq_requests(kind,tmdb_id,imdb_id,title,year,poster,user_id,profile_id,status,note,attempts,next_try_at,decided_by,seen,created_at,updated_at,seasons)
- VALUES(?,?,?,?,?,?,?,?,?,'',0,0,?,0,?,?,?)`, q.Kind, q.TmdbID, q.ImdbID, q.Title, q.Year, q.Poster, q.UserID, q.ProfileID, q.Status, q.DecidedBy, q.CreatedAt, q.UpdatedAt, q.Seasons)
+	res, err := s.DB.Exec(`INSERT INTO acq_requests(kind,tmdb_id,imdb_id,title,year,poster,user_id,profile_id,status,note,attempts,next_try_at,decided_by,seen,created_at,updated_at,seasons,library_id)
+ VALUES(?,?,?,?,?,?,?,?,?,'',0,0,?,0,?,?,?,?)`, q.Kind, q.TmdbID, q.ImdbID, q.Title, q.Year, q.Poster, q.UserID, q.ProfileID, q.Status, q.DecidedBy, q.CreatedAt, q.UpdatedAt, q.Seasons, q.LibraryID)
 	if err != nil {
 		return err
 	}

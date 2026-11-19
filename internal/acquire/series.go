@@ -44,30 +44,7 @@ type SeriesInput struct {
 func today() string { return time.Now().Format("2006-01-02") }
 
 func (m *Manager) targetTVLibrary(id int64) (*store.Library, error) {
-	if id == 0 {
-		id = int64(m.st.SettingInt("acq_library_tv", 0))
-	}
-	if id > 0 {
-		l, err := m.st.Library(id)
-		if err == nil && l.Kind != "movies" {
-			return l, nil
-		}
-		if err == nil {
-			return nil, errors.New("sorozat csak sorozatkönyvtárba kerülhet")
-		}
-	}
-	libs, err := m.st.Libraries()
-	if err != nil {
-		return nil, err
-	}
-	for _, kind := range []string{"shows", "mixed"} {
-		for _, l := range libs {
-			if l.Kind == kind {
-				return l, nil
-			}
-		}
-	}
-	return nil, errors.New("nincs sorozatkönyvtár, ahová a részek kerülhetnének")
+	return m.LibraryFor("series", id)
 }
 
 // AddSeries starts following a series, or changes the library and what is followed of one already followed.
@@ -655,7 +632,12 @@ func (m *Manager) followForRequest(ctx context.Context, q *store.AcqRequest) err
 			}
 		}
 	}
-	_, err := m.AddSeries(ctx, SeriesInput{TmdbID: q.TmdbID, Monitor: mode, Seasons: seasons, UserID: uid})
+	// a series already followed stays in its library; otherwise the one the requester chose
+	lib := idOf(q.LibraryID)
+	if x, err := m.st.AcqSeriesByTmdb(q.TmdbID); err == nil && x.LibraryID != nil {
+		lib = *x.LibraryID
+	}
+	_, err := m.AddSeries(ctx, SeriesInput{TmdbID: q.TmdbID, LibraryID: lib, Monitor: mode, Seasons: seasons, UserID: uid})
 	return err
 }
 

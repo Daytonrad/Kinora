@@ -110,9 +110,10 @@ func (s *Server) handleRequestCreate(w http.ResponseWriter, r *http.Request, c *
 		return
 	}
 	var in struct {
-		Kind    string `json:"kind"` // movie (default) | series
-		TmdbID  int64  `json:"tmdb_id"`
-		Seasons string `json:"seasons"` // series: "all", "future" or "1,2"
+		Kind      string `json:"kind"` // movie (default) | series
+		TmdbID    int64  `json:"tmdb_id"`
+		Seasons   string `json:"seasons"`    // series: "all", "future" or "1,2"
+		LibraryID int64  `json:"library_id"` // films library for a film, series library for a series
 	}
 	if !decode(w, r, &in) {
 		return
@@ -124,15 +125,35 @@ func (s *Server) handleRequestCreate(w http.ResponseWriter, r *http.Request, c *
 	var q *store.AcqRequest
 	var err error
 	if in.Kind == "series" {
-		q, err = m.RequestSeries(r.Context(), requester(c), in.TmdbID, in.Seasons)
+		q, err = m.RequestSeries(r.Context(), requester(c), in.TmdbID, in.Seasons, in.LibraryID)
 	} else {
-		q, err = m.Request(r.Context(), requester(c), in.TmdbID)
+		q, err = m.Request(r.Context(), requester(c), in.TmdbID, in.LibraryID)
 	}
 	if err != nil {
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, q)
+}
+
+// handleDiscoverLibraries lists where a request can go: films libraries for a film, series
+// libraries for a series (mixed libraries are not offered).
+func (s *Server) handleDiscoverLibraries(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	if s.acqUser(w, c) == nil {
+		return
+	}
+	type lib struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+	out := map[string][]lib{"movies": {}, "shows": {}}
+	libs, _ := s.st.Libraries()
+	for _, l := range libs {
+		if l.Kind == "movies" || l.Kind == "shows" {
+			out[l.Kind] = append(out[l.Kind], lib{l.ID, l.Name})
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleDiscoverSeries(w http.ResponseWriter, r *http.Request, c *reqCtx) {
@@ -222,17 +243,7 @@ func (s *Server) handleAdminRequestDecide(approve bool) handler {
 }
 
 // acqRequestSettings are the request settings of PUT /api/admin/acquire/settings.
-func (s *Server) saveRequestSettings(w http.ResponseWriter, auto *string, quota, lib, retry, libTV *int) bool {
-	if libTV != nil {
-		if *libTV != 0 {
-			l, err := s.st.Library(int64(*libTV))
-			if err != nil || l.Kind == "movies" {
-				writeErr(w, http.StatusBadRequest, "a sorozatok csak sorozatkönyvtárba kerülhetnek")
-				return false
-			}
-		}
-		s.st.SetSetting("acq_library_tv", strconv.Itoa(*libTV))
-	}
+func (s *Server) saveRequestSettings(w http.ResponseWriter, auto *string, quota, retry *int) bool {
 	if auto != nil {
 		if *auto != "all" && *auto != "admins" {
 			writeErr(w, http.StatusBadRequest, "az automatikus jóváhagyás értéke all vagy admins lehet")
@@ -246,16 +257,6 @@ func (s *Server) saveRequestSettings(w http.ResponseWriter, auto *string, quota,
 			return false
 		}
 		s.st.SetSetting("acq_quota_week", strconv.Itoa(*quota))
-	}
-	if lib != nil {
-		if *lib != 0 {
-			l, err := s.st.Library(int64(*lib))
-			if err != nil || l.Kind == "shows" {
-				writeErr(w, http.StatusBadRequest, "a kért filmek csak filmkönyvtárba kerülhetnek")
-				return false
-			}
-		}
-		s.st.SetSetting("acq_library", strconv.Itoa(*lib))
 	}
 	if retry != nil {
 		if *retry < 1 || *retry > 168 {

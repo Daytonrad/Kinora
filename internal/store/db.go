@@ -451,6 +451,10 @@ CREATE TABLE acq_definitions(
 ALTER TABLE acq_indexers ADD COLUMN definition_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE acq_indexers ADD COLUMN config TEXT NOT NULL DEFAULT '{}';
 `,
+	// 11: a request remembers the library its requester chose
+	`
+ALTER TABLE acq_requests ADD COLUMN library_id INTEGER REFERENCES libraries(id) ON DELETE SET NULL;
+`,
 }
 
 func (s *Store) migrate() error {

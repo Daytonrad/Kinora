@@ -308,12 +308,9 @@ func (m *Manager) Grab(ctx context.Context, in GrabInput) (*store.AcqGrab, error
 	if !m.Enabled() {
 		return nil, ErrDisabled
 	}
-	lib, err := m.st.Library(in.LibraryID)
+	lib, err := m.LibraryFor("movie", in.LibraryID)
 	if err != nil {
-		return nil, errors.New("válassz célkönyvtárat")
-	}
-	if lib.Kind == "shows" {
-		return nil, errors.New("filmet filmkönyvtárba lehet letölteni")
+		return nil, err
 	}
 	mv, err := m.movies.Movie(ctx, in.TmdbID)
 	if err != nil {

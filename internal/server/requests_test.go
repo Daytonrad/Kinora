@@ -72,8 +72,25 @@ func TestRequestsAPI(t *testing.T) {
 	if code := anna.do("GET", "/api/discover?list=nope", nil, nil); code != 400 {
 		t.Errorf("unknown list: %d", code)
 	}
+	// where a request may go: films libraries for a film, series libraries for a series
+	var libs struct {
+		Movies []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		} `json:"movies"`
+		Shows []struct {
+			ID int64 `json:"id"`
+		} `json:"shows"`
+	}
+	if code := anna.do("GET", "/api/discover/libraries", nil, &libs); code != 200 || len(libs.Movies) != 1 || libs.Movies[0].Name != "Filmek" || len(libs.Shows) != 1 {
+		t.Fatalf("libraries: %d %+v", code, libs)
+	}
+	if code := anna.do("POST", "/api/requests", map[string]any{"tmdb_id": 603, "library_id": libs.Shows[0].ID}, nil); code == 200 {
+		t.Error("a film requested into a series library")
+	}
 	var q map[string]any
-	if code := anna.do("POST", "/api/requests", map[string]any{"tmdb_id": 603}, &q); code != 200 || q["status"] != "pending" || q["title"] != "Mátrix" {
+	if code := anna.do("POST", "/api/requests", map[string]any{"tmdb_id": 603, "library_id": libs.Movies[0].ID}, &q); code != 200 || q["status"] != "pending" || q["title"] != "Mátrix" ||
+		q["library_name"] != "Filmek" {
 		t.Fatalf("request: %d %v", code, q)
 	}
 	var d map[string]any
@@ -144,9 +161,14 @@ func TestSeriesAPI(t *testing.T) {
 		t.Error("unknown monitor mode accepted")
 	}
 	shows, _ := filepath.Abs("../../testmedia/Shows")
-	admin.do("POST", "/api/libraries", map[string]any{"name": "Sorozatok", "path": shows, "kind": "shows"}, nil)
+	var lib map[string]any
+	admin.do("POST", "/api/libraries", map[string]any{"name": "Sorozatok", "path": shows, "kind": "shows"}, &lib)
 	var x map[string]any
-	if code := admin.do("POST", "/api/admin/acquire/series", map[string]any{"tmdb_id": 1399, "monitor": "seasons", "seasons": []int{1}}, &x); code != 200 {
+	// two series libraries now: one has to be chosen
+	if code := admin.do("POST", "/api/admin/acquire/series", map[string]any{"tmdb_id": 1399, "monitor": "seasons", "seasons": []int{1}}, &x); code == 200 {
+		t.Error("followed without choosing among two series libraries")
+	}
+	if code := admin.do("POST", "/api/admin/acquire/series", map[string]any{"tmdb_id": 1399, "monitor": "seasons", "seasons": []int{1}, "library_id": lib["id"]}, &x); code != 200 {
 		t.Fatalf("follow %d %v", code, x)
 	}
 	if x["total"].(float64) != 2 || x["wanted"].(float64) != 2 || x["monitor"] != "seasons" {
@@ -181,7 +203,7 @@ func TestSeriesAPI(t *testing.T) {
 		t.Errorf("series detail: %v", sd)
 	}
 	var q map[string]any
-	if code := admin.do("POST", "/api/requests", map[string]any{"kind": "series", "tmdb_id": 1399, "seasons": "1"}, &q); code != 200 || q["kind"] != "series" || q["seasons"] != "1" {
+	if code := admin.do("POST", "/api/requests", map[string]any{"kind": "series", "tmdb_id": 1399, "seasons": "1", "library_id": lib["id"]}, &q); code != 200 || q["kind"] != "series" || q["seasons"] != "1" {
 		t.Errorf("series request: %d %v", code, q)
 	}
 	if code := admin.do("POST", "/api/requests", map[string]any{"kind": "series", "tmdb_id": 1399, "seasons": "0"}, nil); code == 200 {

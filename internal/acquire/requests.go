@@ -47,7 +47,8 @@ func (m *Manager) retryWait() time.Duration {
 }
 
 // Request records that someone wants a film. A film already asked for returns the open request.
-func (m *Manager) Request(ctx context.Context, who Requester, tmdbID int64) (*store.AcqRequest, error) {
+// libraryID is the films library the requester chose (0: the only one).
+func (m *Manager) Request(ctx context.Context, who Requester, tmdbID, libraryID int64) (*store.AcqRequest, error) {
 	if !m.Enabled() {
 		return nil, ErrDisabled
 	}
@@ -65,12 +66,16 @@ func (m *Manager) Request(ctx context.Context, who Requester, tmdbID int64) (*st
 			return nil, ErrQuota
 		}
 	}
+	lib, err := m.LibraryFor("movie", libraryID)
+	if err != nil {
+		return nil, err
+	}
 	mv, err := m.movies.Movie(ctx, tmdbID)
 	if err != nil {
 		return nil, err
 	}
 	q := &store.AcqRequest{Kind: "movie", TmdbID: mv.ID, ImdbID: mv.IMDb, Title: mv.Title, Year: mv.Year, Poster: mv.Poster,
-		UserID: &who.UserID, Status: store.ReqPending}
+		UserID: &who.UserID, Status: store.ReqPending, LibraryID: &lib.ID, LibraryName: lib.Name}
 	if who.ProfileID > 0 {
 		q.ProfileID = &who.ProfileID
 	}
@@ -126,27 +131,53 @@ func (m *Manager) CancelRequest(id int64, who Requester) error {
 	return errors.New("ez a kérés már lezárult")
 }
 
-func (m *Manager) targetLibrary() (*store.Library, error) {
-	if id := m.st.SettingInt("acq_library", 0); id > 0 {
-		if l, err := m.st.Library(int64(id)); err == nil && l.Kind != "shows" {
-			return l, nil
+// LibraryFor is the library a film (kind "movie") or a series goes to. id > 0 is the one
+// chosen: a film never goes to a series library, nor a series to a films library. With 0
+// the only library of that kind is used; with several, someone has to choose.
+func (m *Manager) LibraryFor(kind string, id int64) (*store.Library, error) {
+	want, other := "movies", "shows"
+	if kind == "series" {
+		want, other = "shows", "movies"
+	}
+	if id > 0 {
+		l, err := m.st.Library(id)
+		if err != nil {
+			return nil, errors.New("a kiválasztott könyvtár nem létezik")
 		}
+		if l.Kind == other {
+			if kind == "series" {
+				return nil, errors.New("sorozat csak sorozatkönyvtárba kerülhet")
+			}
+			return nil, errors.New("film csak filmkönyvtárba kerülhet")
+		}
+		return l, nil
 	}
 	libs, err := m.st.Libraries()
 	if err != nil {
 		return nil, err
 	}
+	var found []*store.Library
 	for _, l := range libs {
-		if l.Kind == "movies" {
-			return l, nil
+		if l.Kind == want {
+			found = append(found, l)
 		}
 	}
-	for _, l := range libs {
-		if l.Kind != "shows" {
-			return l, nil
-		}
+	switch {
+	case len(found) == 1:
+		return found[0], nil
+	case len(found) > 1:
+		return nil, errors.New("válaszd ki, melyik könyvtárba kerüljön")
+	case kind == "series":
+		return nil, errors.New("nincs sorozatkönyvtár, ahová a sorozat kerülhetne")
 	}
-	return nil, errors.New("nincs filmkönyvtár, ahová a kért filmek kerülhetnének")
+	return nil, errors.New("nincs filmkönyvtár, ahová a film kerülhetne")
+}
+
+func idOf(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 // bestRelease is the first acceptable result that is not on the blocklist.
@@ -209,7 +240,7 @@ func (m *Manager) fulfil(ctx context.Context, q *store.AcqRequest) {
 	later := func(note string, wait time.Duration) {
 		m.st.SetRequestStatus(q.ID, store.ReqWaiting, note, time.Now().Add(wait).Unix())
 	}
-	lib, err := m.targetLibrary()
+	lib, err := m.LibraryFor("movie", idOf(q.LibraryID))
 	if err != nil {
 		later(err.Error(), RetryAfterError)
 		return
@@ -261,7 +292,8 @@ func (m *Manager) grabFailed(g *store.AcqGrab, reason string, badRelease bool) {
 }
 
 // RequestSeries records that someone wants a series: "all" its seasons, the "future" episodes, or some seasons ("1,2").
-func (m *Manager) RequestSeries(ctx context.Context, who Requester, tmdbID int64, seasons string) (*store.AcqRequest, error) {
+// libraryID is the series library the requester chose (0: the only one).
+func (m *Manager) RequestSeries(ctx context.Context, who Requester, tmdbID int64, seasons string, libraryID int64) (*store.AcqRequest, error) {
 	if !m.Enabled() {
 		return nil, ErrDisabled
 	}
@@ -280,12 +312,16 @@ func (m *Manager) RequestSeries(ctx context.Context, who Requester, tmdbID int64
 			return nil, ErrQuota
 		}
 	}
+	lib, err := m.LibraryFor("series", libraryID)
+	if err != nil {
+		return nil, err
+	}
 	info, err := m.movies.TV(ctx, tmdbID)
 	if err != nil {
 		return nil, err
 	}
 	q := &store.AcqRequest{Kind: "series", TmdbID: info.ID, ImdbID: info.IMDb, Title: info.Title, Year: info.Year, Poster: info.Poster,
-		UserID: &who.UserID, Status: store.ReqPending, Seasons: seasons}
+		UserID: &who.UserID, Status: store.ReqPending, Seasons: seasons, LibraryID: &lib.ID, LibraryName: lib.Name}
 	if who.ProfileID > 0 {
 		q.ProfileID = &who.ProfileID
 	}

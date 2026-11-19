@@ -705,21 +705,21 @@ func TestRequests(t *testing.T) {
 	adminID, anna, bela, cili := mk("admin", true), mk("anna", false), mk("bela", false), mk("cili", false)
 	user := Requester{UserID: anna}
 
-	if _, err := m.Request(ctx, Requester{UserID: anna, Kids: true}, 603); err != ErrKids {
+	if _, err := m.Request(ctx, Requester{UserID: anna, Kids: true}, 603, 0); err != ErrKids {
 		t.Errorf("kids: %v", err)
 	}
-	q, err := m.Request(ctx, user, 603)
+	q, err := m.Request(ctx, user, 603, 0)
 	if err != nil || q.Status != store.ReqPending || q.Title != "Mátrix" {
 		t.Fatalf("request: %+v %v", q, err)
 	}
-	if q2, _ := m.Request(ctx, Requester{UserID: bela}, 603); q2 == nil || q2.ID != q.ID {
+	if q2, _ := m.Request(ctx, Requester{UserID: bela}, 603, 0); q2 == nil || q2.ID != q.ID {
 		t.Error("a second request for the same film should return the open one")
 	}
 	st.SetSetting("acq_quota_week", "1")
-	if _, err := m.Request(ctx, user, 777); err != ErrQuota {
+	if _, err := m.Request(ctx, user, 777, 0); err != ErrQuota {
 		t.Errorf("quota: %v", err)
 	}
-	if _, err := m.Request(ctx, Requester{UserID: adminID, IsAdmin: true}, 777); err != nil {
+	if _, err := m.Request(ctx, Requester{UserID: adminID, IsAdmin: true}, 777, 0); err != nil {
 		t.Errorf("admins have no quota: %v", err)
 	}
 	st.SetSetting("acq_quota_week", "0")
@@ -786,7 +786,7 @@ func TestRequests(t *testing.T) {
 	}
 
 	// cancel: only own, only before the download
-	r3, _ := m.Request(ctx, Requester{UserID: cili}, 778)
+	r3, _ := m.Request(ctx, Requester{UserID: cili}, 778, 0)
 	if err := m.CancelRequest(r3.ID, Requester{UserID: anna}); err != ErrNotYours {
 		t.Errorf("cancel someone else's: %v", err)
 	}
@@ -917,7 +917,7 @@ func TestSeries(t *testing.T) {
 	// a request for the series: followed already, everything aired is here → available
 	st.SetSetting("acq_auto_approve", "all")
 	anna, _ := st.CreateUser("anna", "secret123", false)
-	q, err := m.RequestSeries(ctx, Requester{UserID: anna.ID}, 1399, "1")
+	q, err := m.RequestSeries(ctx, Requester{UserID: anna.ID}, 1399, "1", 0)
 	if err != nil || q.Status != store.ReqApproved || q.Seasons != "1" || q.Kind != "series" {
 		t.Fatalf("series request: %+v %v", q, err)
 	}

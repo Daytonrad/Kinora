@@ -71,10 +71,10 @@ func (s *Server) handleAcqSettings(w http.ResponseWriter, r *http.Request, c *re
 	libs, _ := s.st.Libraries()
 	movieLibs, tvLibs := []*store.Library{}, []*store.Library{}
 	for _, l := range libs {
-		if l.Kind != "shows" {
+		switch l.Kind { // a film goes to a films library, a series to a series library
+		case "movies":
 			movieLibs = append(movieLibs, l)
-		}
-		if l.Kind != "movies" {
+		case "shows":
 			tvLibs = append(tvLibs, l)
 		}
 	}
@@ -84,9 +84,7 @@ func (s *Server) handleAcqSettings(w http.ResponseWriter, r *http.Request, c *re
 		"import_mode":  s.st.Setting("acq_import_mode"),
 		"auto_approve": s.st.Setting("acq_auto_approve"),
 		"quota_week":   s.st.SettingInt("acq_quota_week", 0),
-		"library_id":   s.st.SettingInt("acq_library", 0),
 		"retry_hours":  s.st.SettingInt("acq_retry_hours", 6),
-		"library_tv":   s.st.SettingInt("acq_library_tv", 0),
 		"tv_libraries": tvLibs,
 		"profiles":     profiles,
 		"indexers":     outI,
@@ -103,14 +101,12 @@ func (s *Server) handleAcqSettingsPut(w http.ResponseWriter, r *http.Request, c 
 		ImportMode  *string          `json:"import_mode"`
 		AutoApprove *string          `json:"auto_approve"`
 		QuotaWeek   *int             `json:"quota_week"`
-		LibraryID   *int             `json:"library_id"`
 		RetryHours  *int             `json:"retry_hours"`
-		LibraryTV   *int             `json:"library_tv"`
 	}
 	if !decode(w, r, &in) {
 		return
 	}
-	if !s.saveRequestSettings(w, in.AutoApprove, in.QuotaWeek, in.LibraryID, in.RetryHours, in.LibraryTV) {
+	if !s.saveRequestSettings(w, in.AutoApprove, in.QuotaWeek, in.RetryHours) {
 		return
 	}
 	if in.Enabled != nil {
