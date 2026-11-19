@@ -58,6 +58,7 @@ Minden beállítás megadható környezeti változóval is. Ilyenkor az admin fe
 | `KINORA_CACHE` | `/cache` (natívan `<data>/cache`) | átkódolás, letöltések |
 | `KINORA_PUBLIC_URL` | – | nyilvános cím (meghívó linkekhez, QR-kódokhoz) |
 | `KINORA_TMDB_KEY` | – | TMDB API kulcs (v3 kulcs vagy v4 token) |
+| `KINORA_TMDB_API` | `https://api.themoviedb.org/3` | TMDB API-cím (proxy vagy tükör esetén) |
 | `KINORA_METADATA_LANG` | `hu-HU` | alapértelmezett metaadat-nyelv (a kliensek a saját felületi nyelvükön kapják a címeket, ha az eltér) |
 | `KINORA_ENCODER` | `auto` | `auto`, `h264_nvenc`, `h264_qsv`, `h264_vaapi`, `libx264` … |
 | `KINORA_VIDEO_CODEC` | `auto` | `auto`: HEVC/AV1 kimenet, ha a kliens jelzi és a hardveres encoder működik; `h264`: csak H.264 |
@@ -230,6 +231,11 @@ fejlécet: HTTPS mögött a session cookie `Secure` jelzést kap.
 Az appok a `POST /api/login` (vagy a Quick Connect) után kapott tokent `Authorization: Bearer <token>` fejlécben küldik. A CORS csak az app-originekre
 (`capacitor://localhost`, `http(s)://localhost`, `null`) és csak tokenes kérésekre engedélyezett, `Access-Control-Allow-Credentials` nélkül.
 A `<video>`/`<img>` számára a lejátszási válasz rövid életű, aláírt stream-tokent (`?st=`) tesz az URL-ekbe; ez elemre, felhasználóra és eszközre szól.
+
+## Beépített beszerzés (Radarr/Prowlarr/Jellyseerr helyett)
+
+**Admin → Beszerzés:** rákeresel egy filmre, kiválasztasz egy kiadást (vagy a Kinora választja ki a minőségprofil alapján), a qBittorrent letölti, a Kinora pedig hardlinkkel beteszi a filmkönyvtárba (`Cím (Év) {imdb-tt…}/Cím (Év) - 1080p BluRay.mkv`) és beolvassa. Alapból ki van kapcsolva, és nem tartalmaz trackert vagy indexert: a Torznab-forrásokat (egy tracker saját API-ja, Jackett vagy Prowlarr) az admin adja meg.
+A Kinora és a qBittorrent ugyanazt a `/data` mappát lássa (benne `downloads/` és `media/`), így a hardlink működik, és a torrent tovább seedelhet. Ha a qBittorrent más útvonalon látja a letöltéseket, az adminban útvonal-leképezés állítható. A teljes terv és a mérföldkövek: [docs/BESZERZES.md](docs/BESZERZES.md).
 
 ## Mentés és visszaállítás
 

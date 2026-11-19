@@ -981,3 +981,42 @@ html.tv .p-btn.p-main:focus { background: var(--amber); color: var(--amber-ink);
 html.tv .search-field kbd { display: none; }
 .app-switch { margin-top: var(--s4); }
 .app-leaving { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: var(--g0); color: var(--t1); font-size: var(--f3); }
+
+/* ============================================================ admin: acquisition (Beszerzés) */
+.acq-search { max-width: var(--measure-s); margin-bottom: var(--s5); }
+.acq-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--col-xs), 1fr)); gap: var(--s4) var(--s3); margin-bottom: var(--s6); }
+.acq-card { display: flex; flex-direction: column; gap: var(--s1); align-items: flex-start; text-align: left; padding: 0; background: none; border: 0; color: var(--t1); font: inherit; cursor: pointer; min-width: 0; }
+.acq-card b { font-size: var(--f1); color: var(--t0); line-height: 1.25; overflow-wrap: anywhere; }
+.acq-poster { width: 100%; aspect-ratio: 2 / 3; border-radius: var(--r2); overflow: hidden; background: var(--g2); border: var(--hair) solid var(--rule); display: flex; align-items: center; justify-content: center; text-align: center; padding: 0; transition: border-color var(--t-out) var(--ease); }
+.acq-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.acq-poster span { padding: var(--s3); font-family: var(--display); font-size: var(--f3); color: var(--t1); }
+.acq-card:hover .acq-poster, .acq-card:focus-visible .acq-poster { border-color: var(--amber); }
+html.tv .acq-card:focus .acq-poster { border-color: var(--amber); }
+.acq-card.have .acq-poster { opacity: .6; }
+.badge.acq-have { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
+.badge.acq-hun { color: var(--amber); border-color: var(--amber-dim); }
+.acq-loading { display: flex; gap: var(--s3); align-items: center; padding: var(--s5) 0; }
+.acq-movie { border-top: var(--hair) solid var(--rule-hi); padding-top: var(--s5); }
+.acq-mhead { display: flex; gap: var(--s5); align-items: flex-start; margin-bottom: var(--s5); }
+.acq-mposter { width: var(--col-xs); flex: none; border-radius: var(--r2); }
+.acq-mbody { min-width: 0; }
+.acq-mbody h2 { margin-bottom: var(--s1); }
+.acq-overview { max-width: var(--measure); color: var(--t1); margin: var(--s3) 0; }
+.acq-actions { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; }
+.acq-actions .field { margin: 0; min-width: var(--col-xs); }
+.acq-errs { margin-bottom: var(--s4); }
+.acq-tbl td { vertical-align: top; }
+.acq-tbl .acq-rel { min-width: 0; max-width: 34rem; }
+.acq-reltitle { overflow-wrap: anywhere; font-size: var(--f0); color: var(--t0); }
+.acq-tags { display: flex; flex-wrap: wrap; gap: var(--s1); align-items: center; margin-top: var(--s1); }
+.acq-tbl tr.acq-rej td { color: var(--t2); }
+.acq-tbl tr.acq-rej .acq-reltitle { color: var(--t2); }
+.acq-prog { min-width: var(--col-xs); margin-top: var(--s1); }
+.acq-url { overflow-wrap: anywhere; }
+.acq-resboxes { display: flex; flex-wrap: wrap; gap: 0 var(--s4); }
+p.ok, span.ok, div.ok { color: var(--ok); }
+p.bad, span.bad, div.bad { color: var(--danger); }
+@media (max-width: 760px) {
+  .acq-mhead { flex-direction: column; }
+  .acq-mposter { width: calc(var(--col-xs) * .8); }
+}

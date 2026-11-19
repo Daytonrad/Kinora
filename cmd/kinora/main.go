@@ -157,6 +157,9 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	go hub.Run(ctx)
 
 	fetcher := meta.New(st, imgDir, log)
+	if v := os.Getenv("KINORA_TMDB_API"); v != "" { // a TMDB proxy or mirror (also used by tests)
+		fetcher.BaseURL = strings.TrimRight(v, "/")
+	}
 	sc.OnScanned = func(libID int64) {
 		if !fetcher.Enabled() {
 			return
@@ -188,6 +191,7 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	go srv.Background(ctx)
 	go srv.RunDiscovery(ctx)
 	go sc.Run(ctx)
+	go srv.Acquire.Run(ctx) // built-in acquisition: follows downloads, imports finished ones
 
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr,

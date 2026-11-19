@@ -55,6 +55,7 @@ All settings can also be provided through environment variables. When set this w
 | `KINORA_CACHE` | `/cache` (native: `<data>/cache`) | Transcoding and downloads |
 | `KINORA_PUBLIC_URL` | — | Public URL for invitation links and QR codes |
 | `KINORA_TMDB_KEY` | — | TMDB API key (v3 key or v4 token) |
+| `KINORA_TMDB_API` | `https://api.themoviedb.org/3` | TMDB API address (for a proxy or mirror) |
 | `KINORA_METADATA_LANG` | `hu-HU` | Default metadata language (clients get titles in their own interface language when it differs) |
 | `KINORA_ENCODER` | `auto` | `auto`, `h264_nvenc`, `h264_qsv`, `h264_vaapi`, `libx264`, etc. |
 | `KINORA_VIDEO_CODEC` | `auto` | `auto`: HEVC/AV1 output when the client reports it and the hardware encoder works; `h264`: H.264 only |
@@ -209,6 +210,11 @@ Note: Cloudflare's terms may restrict large volumes of video traffic through a t
 Apps send the token returned by `POST /api/login` (or Quick Connect) in the `Authorization: Bearer <token>` header. CORS is allowed only for app origins (`capacitor://localhost`, `http(s)://localhost`, `null`) and token-authenticated requests, without `Access-Control-Allow-Credentials`.
 
 Because `<video>` and `<img>` elements cannot send authorization headers, playback responses include a short-lived, signed stream token (`?st=`) in their URLs. It is scoped to the item, user and device.
+
+## Built-in acquisition (instead of Radarr/Prowlarr/Jellyseerr)
+
+**Admin → Acquisition:** look up a film, pick a release (or let Kinora pick by the quality profile), qBittorrent downloads it, and Kinora hardlinks it into the movie library (`Title (Year) {imdb-tt…}/Title (Year) - 1080p BluRay.mkv`) and scans it. Off by default, with no tracker or indexer included: the admin adds the Torznab sources (a tracker's own API, Jackett or Prowlarr).
+Kinora and qBittorrent should see the same `/data` folder (with `downloads/` and `media/` in it) so hardlinks work and the torrent keeps seeding. If qBittorrent sees the downloads under another path, set a path mapping in the admin. Full plan and milestones (Hungarian): [docs/BESZERZES.md](docs/BESZERZES.md).
 
 ## Backup and restore
 

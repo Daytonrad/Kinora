@@ -297,6 +297,64 @@ CREATE TABLE item_subtitles(
   UNIQUE(item_id, provider, file_id)
 );
 `,
+	// 6: built-in acquisition (internal/acquire): indexers, download clients, downloads
+	`
+CREATE TABLE acq_indexers(
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'torznab',
+  url TEXT NOT NULL,
+  api_key TEXT NOT NULL DEFAULT '',
+  categories TEXT NOT NULL DEFAULT '',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  priority INTEGER NOT NULL DEFAULT 25,
+  last_ok_at INTEGER,
+  last_error TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE acq_clients(
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'qbittorrent',
+  url TEXT NOT NULL,
+  username TEXT NOT NULL DEFAULT '',
+  password TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT 'kinora',
+  save_path TEXT NOT NULL DEFAULT '',
+  path_remote TEXT NOT NULL DEFAULT '',
+  path_local TEXT NOT NULL DEFAULT '',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE acq_grabs(
+  id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL DEFAULT 'movie',
+  tmdb_id INTEGER NOT NULL DEFAULT 0,
+  imdb_id TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  year INTEGER NOT NULL DEFAULT 0,
+  library_id INTEGER REFERENCES libraries(id) ON DELETE SET NULL,
+  release_title TEXT NOT NULL,
+  indexer_id INTEGER REFERENCES acq_indexers(id) ON DELETE SET NULL,
+  indexer_name TEXT NOT NULL DEFAULT '',
+  client_id INTEGER REFERENCES acq_clients(id) ON DELETE SET NULL,
+  info_hash TEXT NOT NULL,
+  size INTEGER NOT NULL DEFAULT 0,
+  quality TEXT NOT NULL DEFAULT '',
+  score INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'downloading',
+  progress REAL NOT NULL DEFAULT 0,
+  eta INTEGER NOT NULL DEFAULT -1,
+  speed INTEGER NOT NULL DEFAULT 0,
+  error TEXT NOT NULL DEFAULT '',
+  target_path TEXT NOT NULL DEFAULT '',
+  requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX acq_grabs_status ON acq_grabs(status);
+CREATE INDEX acq_grabs_tmdb ON acq_grabs(kind, tmdb_id);
+`,
 }
 
 func (s *Store) migrate() error {
@@ -343,13 +401,13 @@ func (s *Store) SchemaVersion() int {
 
 // SettingDefaults are used when a key is not stored.
 var SettingDefaults = map[string]string{
-	"server_name":       "Kinora",
-	"tmdb_key":          "",
-	"metadata_lang":     "hu-HU",
-	"encoder":           "auto",
-	"video_codec":       "auto",
-	"public_url":        "",
-	"scan_interval_min": "15",
+	"server_name":          "Kinora",
+	"tmdb_key":             "",
+	"metadata_lang":        "hu-HU",
+	"encoder":              "auto",
+	"video_codec":          "auto",
+	"public_url":           "",
+	"scan_interval_min":    "15",
 	"quickconnect_enabled": "1",
 	"discovery_enabled":    "1",
 	"brand_accent":         "",
@@ -358,6 +416,9 @@ var SettingDefaults = map[string]string{
 	"opensubtitles_key":    "",
 	"opensubtitles_user":   "",
 	"opensubtitles_pass":   "",
+	"acq_enabled":          "0",
+	"acq_profile":          "",
+	"acq_import_mode":      "hardlink",
 }
 
 // SetOverride forces a setting from the environment (shown as locked in the admin UI).

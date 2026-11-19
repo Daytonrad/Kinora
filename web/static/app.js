@@ -2036,10 +2036,10 @@ function partyClient(code, player, stage, p) {
 async function viewAdmin(tab) {
   if (!state.me.user.is_admin) return go('#/home');
   const main = shell('admin');
-  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['languages', T.aLangs], ['settings', T.aSettings]];
+  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['languages', T.aLangs], ['settings', T.aSettings], ['acquire', T.aAcqFind], ['acqqueue', T.aAcqQueue], ['acqsettings', T.aAcqSettings]];
   const label = Object.fromEntries(tabs);
-  const groups = [[T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], [T.aGroupAccess, ['users', 'invites', 'devices', 'connect']], [T.aGroupSystem, ['languages', 'settings']]];
-  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, languages: adminLangs, settings: adminSettings }[tab];
+  const groups = [[T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], [T.aGroupAccess, ['users', 'invites', 'devices', 'connect']], [T.aGroupAcquire, ['acquire', 'acqqueue', 'acqsettings']], [T.aGroupSystem, ['languages', 'settings']]];
+  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, languages: adminLangs, settings: adminSettings, acquire: adminAcqFind, acqqueue: adminAcqQueue, acqsettings: adminAcqSettings }[tab];
   if (!fn) return go('#/admin/dash');
   const body = h('div.a-body', { 'aria-busy': 'true' }, aSkeleton());
   main.append(h('div.admin', null,
@@ -2596,4 +2596,216 @@ async function adminSettings(body) {
       { h: T.setNetwork, hint: T.setNetworkHint }, ['quickconnect_enabled', T.qcEnabled, 'toggle'], ['discovery_enabled', T.discEnabled, 'toggle']], () => { state.status = null; }),
     lookPanel(s.values, s.env, () => adminSettings(body)),
     aSplit(T.backupTitle, T.backupHint, h('a.btn', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
+}
+
+// ===================================================================== admin: acquisition (Beszerzés)
+// The built-in acquisition module (internal/acquire): find a film on TMDB, pick a release from the
+// indexers, the download client fetches it, Kinora imports it into a library. Admin only (M1).
+const acqStateLabel = st => ({ downloading: T.acqDownloading, importing: T.acqImporting, done: T.acqDone, failed: T.acqFailed, removed: T.acqRemoved })[st] || st;
+const acqReject = code => ({ resolution: T.acqRejRes, source: T.acqRejSource, size: T.acqRejSize, seeders: T.acqRejSeeders, language: T.acqRejLang, title: T.acqRejTitle, '3d': T.acqRej3d })[code] || code;
+const fmtSpeed = b => fmtBytes(b) + '/s';
+// a test button for an unsaved configuration: the result stays under the form
+function acqTestButton(url, body, out) {
+  return h('button.btn', { type: 'button', onclick: async e => {
+    const b = e.currentTarget;
+    b.disabled = true; put(out, T.acqTesting); out.className = 'small muted';
+    try { const r = await POST(url, body(), { quiet: true }); put(out, T.acqTestOk(r.server || '')); out.className = 'small ok'; }
+    catch (err) { put(out, err.message); out.className = 'small bad'; }
+    finally { b.disabled = false; }
+  } }, T.acqTest);
+}
+
+async function adminAcqFind(body) {
+  const s = await GET('/api/admin/acquire/settings');
+  const head = aHead(T.aAcqFind, T.aLedeAcqFind);
+  if (!s.tmdb) return put(body, head, emptyNote(T.acqNeedTmdb, null, h('a.btn.primary', { href: '#/admin/metadata' }, T.aMeta)));
+  if (!s.enabled) return put(body, head, emptyNote(T.acqOff, T.acqOffHint, h('a.btn.primary', { href: '#/admin/acqsettings' }, T.aAcqSettings)));
+  const input = h('input', { type: 'search', placeholder: T.acqSearchPh, 'aria-label': T.acqSearchPh });
+  const results = h('div.acq-results', { 'aria-live': 'polite' });
+  const detail = h('div.acq-detail');
+  let gen = 0;
+  const card = m => h('button.acq-card' + (m.in_library ? '.have' : ''), { type: 'button', 'aria-label': m.title + (m.year ? ' (' + m.year + ')' : ''), onclick: () => openReleases(m) },
+    h('div.acq-poster', null, m.poster ? h('img', { src: m.poster, alt: '', loading: 'lazy' }) : h('span', null, m.title)),
+    h('b', null, m.title), h('span.muted.small', null, m.year || '–'),
+    m.in_library ? h('span.badge.acq-have', null, T.acqInLibrary) : m.grab && m.grab !== 'removed' ? h('span.badge', null, acqStateLabel(m.grab)) : null);
+  const search = async () => {
+    const q = input.value.trim(), my = ++gen;
+    if (q.length < 2) { put(results); return; }
+    put(results, aSkeleton());
+    let list;
+    try { list = await GET('/api/admin/acquire/lookup?q=' + encodeURIComponent(q), { quiet: true }); }
+    catch (e) { if (my === gen) put(results, h('p.bad', null, e.message)); return; }
+    if (my !== gen) return;
+    put(results, list.length ? list.slice(0, 20).map(card) : h('p.empty', null, T.searchEmpty));
+  };
+  input.addEventListener('input', debounce(search, 350));
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+
+  async function openReleases(m) {
+    put(detail, h('div.acq-loading', null, h('div.spin'), h('p.muted', null, T.acqSearching)));
+    detail.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    let r;
+    try { r = await GET('/api/admin/acquire/releases?tmdb_id=' + m.id, { quiet: true }); }
+    catch (e) { put(detail, h('p.bad', null, e.message)); return; }
+    const mv = r.movie;
+    const lib = h('select', { 'aria-label': T.acqTargetLib }, s.libraries.map(l => h('option', { value: l.id }, l.name)));
+    const grab = async (rel, btn) => {
+      btn.disabled = true;
+      try {
+        await POST('/api/admin/acquire/grab', { tmdb_id: mv.id, library_id: +lib.value, release: rel || null });
+        toast(T.acqStarted(mv.title));
+        location.hash = '#/admin/acqqueue';
+      } finally { btn.disabled = false; }
+    };
+    const ok = r.results.filter(x => !x.rejected);
+    const best = h('button.btn.primary', { disabled: !ok.length || !s.libraries.length, onclick: e => grab(null, e.currentTarget) }, icon('dl'), T.acqGrabBest);
+    const row = x => h('tr' + (x.rejected ? '.acq-rej' : ''), null,
+      tdl('.acq-rel', T.acqRelease, h('div.acq-reltitle', { title: x.title }, x.title),
+        h('div.acq-tags', null, x.quality && h('span.badge', null, x.quality), x.release.codec && h('span.badge', null, x.release.codec.toUpperCase()),
+          x.release.hdr && h('span.badge', null, x.release.hdr.toUpperCase()), (x.release.languages || []).includes('hun') && h('span.badge.acq-hun', null, 'HUN'),
+          x.info_url && /^https?:/.test(x.info_url) && h('a.small', { href: x.info_url, target: '_blank', rel: 'noopener noreferrer' }, T.acqInfo))),
+      tdl('', T.acqSize, x.size ? fmtBytes(x.size) : '–'),
+      tdl('', T.acqSeeders, x.seeders >= 0 ? num(x.seeders, 0) : '–'),
+      tdl('', T.acqIndexer, x.indexer),
+      tdl('', T.acqScore, x.rejected ? h('span.bad.small', null, acqReject(x.rejected)) : num(x.score, 0)),
+      tdl('.a-tbl-acts', '', h('button.btn', { disabled: !s.libraries.length, onclick: e => grab(x, e.currentTarget) }, T.acqGrab)));
+    put(detail, h('section.acq-movie', null,
+      h('div.acq-mhead', null,
+        mv.poster && h('img.acq-mposter', { src: mv.poster, alt: '' }),
+        h('div.acq-mbody', null, h('h2', null, mv.title, mv.year ? h('span.muted', null, ' (' + mv.year + ')') : null),
+          mv.original_title && mv.original_title !== mv.title && h('p.muted.small', null, mv.original_title),
+          m.in_library && h('p', null, h('span.badge.acq-have', null, T.acqInLibrary)),
+          mv.overview && h('p.acq-overview', null, mv.overview),
+          s.libraries.length ? h('div.acq-actions', null, field(T.acqTargetLib, lib), best) : h('p.bad', null, T.acqNoMovieLib))),
+      r.errors.length > 0 && h('div.acq-errs', { role: 'alert' }, r.errors.map(e => h('p.bad.small', null, e.name + ': ' + srv(e.error)))),
+      r.results.length ? [h('p.muted.small', null, T.acqFound(r.results.length, ok.length)),
+        aTable([T.acqRelease, T.acqSize, T.acqSeeders, T.acqIndexer, T.acqScore, ''], r.results.map(row), '.a-stack.acq-tbl')]
+        : h('p.empty', null, T.acqNoReleases)));
+  }
+  put(body, head, searchField(input, 'acq-search'), results, detail);
+  setTimeout(() => input.focus(), 30);
+}
+
+async function adminAcqQueue(body) {
+  let t, dead = false;
+  onCleanup(() => { dead = true; clearTimeout(t); });
+  const render = async () => {
+    const list = await GET('/api/admin/acquire/queue', { quiet: true }).catch(() => null);
+    if (dead || !list) return;
+    const active = list.some(g => g.status === 'downloading' || g.status === 'importing');
+    const row = g => h('tr', null,
+      tdl('.acq-rel', T.title, h('b', null, g.title, g.year ? ' (' + g.year + ')' : ''), h('div.acq-reltitle.muted.small', { title: g.release_title }, g.release_title),
+        g.error && h('div.bad.small', null, srv(g.error)), g.status === 'done' && g.target_path && h('div.muted.small.mono.acq-url', null, g.target_path)),
+      tdl('', T.acqStatus, h('span.badge' + (g.status === 'failed' ? '.warn' : ''), null, acqStateLabel(g.status)),
+        g.status === 'downloading' && h('div.acq-prog', null, aBar(g.progress, 1), h('span.small.muted', null,
+          num(g.progress * 100, 0) + '%' + (g.speed > 0 ? ' · ' + fmtSpeed(g.speed) : '') + (g.eta > 0 ? ' · ' + fmtTime(g.eta) : '')))),
+      tdl('', T.acqSize, g.size ? fmtBytes(g.size) : '–'),
+      tdl('', T.acqAdded, ago(Date.now() / 1000 - g.created_at)),
+      tdl('.a-tbl-acts', '', h('div.row-gap', null,
+        g.status === 'failed' && h('button.btn', { onclick: async () => { await POST(`/api/admin/acquire/grabs/${g.id}/retry`); render(); } }, T.retry),
+        g.status !== 'removed' && h('button.btn.danger', { onclick: async () => {
+          if (!await confirmBox(g.status === 'done' ? T.acqForgetAsk(g.title) : T.acqRemoveAsk(g.title), g.status === 'done' ? T.acqForget : T.acqRemove)) return;
+          await api('DELETE', `/api/admin/acquire/grabs/${g.id}?files=${g.status === 'done' ? 0 : 1}`); render();
+        } }, g.status === 'done' ? T.acqForget : T.acqRemove))));
+    put(body, aHead(T.aAcqQueue, T.aLedeAcqQueue, h('a.btn.primary', { href: '#/admin/acquire' }, icon('search'), T.aAcqFind)),
+      list.length ? aTable([T.title, T.acqStatus, T.acqSize, T.acqAdded, ''], list.map(row), '.a-stack.acq-tbl')
+        : emptyNote(T.acqQueueEmpty, null, h('a.btn', { href: '#/admin/acquire' }, T.aAcqFind)));
+    clearTimeout(t);
+    t = setTimeout(render, active ? 3000 : 15000);
+  };
+  await render();
+}
+
+async function adminAcqSettings(body) {
+  const s = await GET('/api/admin/acquire/settings');
+  const rerender = () => adminAcqSettings(body);
+  const enabled = h('input.switch', { type: 'checkbox', role: 'switch', checked: s.enabled, onchange: async e => {
+    await api('PUT', '/api/admin/acquire/settings', { enabled: e.target.checked }); toast(T.saved);
+  } });
+
+  // indexers (Torznab: a tracker's own API, or Jackett / Prowlarr standing in for several)
+  const indexerDialog = x => {
+    const isNew = !x;
+    x = x || { name: '', url: '', api_key: '', categories: '', enabled: true, priority: 25 };
+    const name = h('input', { type: 'text', value: x.name });
+    const url = h('input', { type: 'url', value: x.url, placeholder: 'http://192.168.1.10:9117/api/v2.0/indexers/all/results/torznab' });
+    const key = h('input', { type: 'password', value: x.api_key, autocomplete: 'off' });
+    const cats = h('input', { type: 'text', value: x.categories, placeholder: '2000' });
+    const prio = h('input', { type: 'number', min: 1, max: 99, value: x.priority });
+    const en = h('input.switch', { type: 'checkbox', role: 'switch', checked: x.enabled });
+    const out = h('p.small', { role: 'status' });
+    const data = () => ({ id: x.id || 0, name: name.value, url: url.value, api_key: key.value, categories: cats.value, priority: +prio.value || 25, enabled: en.checked });
+    modal(isNew ? T.acqAddIndexer : x.name, h('div.a-form', null, field(T.acqName, name), field(T.acqUrl, url, T.acqUrlHint), field(T.acqApiKey, key),
+      h('div.grid2', null, field(T.acqCats, cats, T.acqCatsHint), field(T.acqPriority, prio, T.acqPriorityHint)),
+      h('div.form-row', null, h('label.switch-row', null, h('span', null, T.acqEnabledRow), en)), out),
+      close => [acqTestButton('/api/admin/acquire/indexers/test', data, out),
+        h('button.btn', { onclick: close }, T.cancel),
+        h('button.btn.primary', { onclick: async () => { await api(isNew ? 'POST' : 'PATCH', '/api/admin/acquire/indexers' + (isNew ? '' : '/' + x.id), data()); close(); toast(T.saved); rerender(); } }, T.save)]);
+  };
+  const ixRows = s.indexers.map(x => h('tr', null,
+    tdl('', T.acqName, h('b', null, x.name), h('div.muted.small.mono.acq-url', null, x.url)),
+    tdl('', T.acqStatus, !x.enabled ? h('span.muted.small', null, T.acqIdxOff) : x.last_error ? h('span.bad.small', { title: x.last_error }, T.acqIdxError) : x.last_ok_at ? h('span.ok.small', null, T.acqIdxOk) : h('span.muted.small', null, '–')),
+    tdl('', T.acqPriority, x.priority),
+    tdl('.a-tbl-acts', '', h('div.row-gap', null, h('button.btn', { onclick: () => indexerDialog(x) }, T.acqEdit),
+      h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(x.name))) { await api('DELETE', '/api/admin/acquire/indexers/' + x.id); rerender(); } } }, T.delete)))));
+
+  // the download client (one for now)
+  const c = s.clients[0] || { name: 'qBittorrent', kind: 'qbittorrent', url: '', username: '', password: '', category: 'kinora', save_path: '', path_remote: '', path_local: '', enabled: true };
+  const ci = {
+    url: h('input', { type: 'url', value: c.url, placeholder: 'http://192.168.1.10:8080' }),
+    username: h('input', { type: 'text', value: c.username, autocomplete: 'off' }),
+    password: h('input', { type: 'password', value: c.password, autocomplete: 'new-password' }),
+    category: h('input', { type: 'text', value: c.category }),
+    save_path: h('input', { type: 'text', value: c.save_path, placeholder: '/downloads/kinora' }),
+    path_remote: h('input', { type: 'text', value: c.path_remote, placeholder: '/downloads' }),
+    path_local: h('input', { type: 'text', value: c.path_local, placeholder: '/data/downloads' }),
+  };
+  const cOut = h('p.small', { role: 'status' });
+  const cData = () => Object.assign({ id: c.id || 0, name: c.name || 'qBittorrent', kind: 'qbittorrent', enabled: true },
+    Object.fromEntries(Object.entries(ci).map(([k, el]) => [k, el.value.trim()])));
+  const clientForm = h('div.a-form', null,
+    field(T.acqClientUrl, ci.url, T.acqClientUrlHint),
+    h('div.grid2', null, field(T.username, ci.username), field(T.password, ci.password)),
+    h('div.grid2', null, field(T.acqCategory, ci.category, T.acqCategoryHint), field(T.acqSavePath, ci.save_path, T.acqSavePathHint)),
+    h('div.grid2', null, field(T.acqPathRemote, ci.path_remote), field(T.acqPathLocal, ci.path_local)),
+    h('div.hint', null, T.acqPathHint), cOut,
+    h('div.a-form-foot', null, acqTestButton('/api/admin/acquire/clients/test', cData, cOut),
+      h('button.btn.primary', { onclick: async () => { await api(c.id ? 'PATCH' : 'POST', '/api/admin/acquire/clients' + (c.id ? '/' + c.id : ''), cData()); toast(T.saved); rerender(); } }, T.save)));
+
+  // quality profile and import
+  const p = s.profile;
+  const RES = [[2160, '2160p (4K)'], [1080, '1080p'], [720, '720p'], [576, '576p'], [480, '480p'], [0, T.acqResUnknown]];
+  const primary = h('select', null, RES.filter(([v]) => v).map(([v, l]) => h('option', { value: v, selected: p.resolutions[0] === v }, l)));
+  const resBoxes = RES.map(([v, l]) => [v, h('input', { type: 'checkbox', checked: p.resolutions.includes(v) }), l]);
+  const minGB = h('input', { type: 'number', min: 0, step: 0.1, value: p.min_size_gb });
+  const maxGB = h('input', { type: 'number', min: 0, step: 1, value: p.max_size_gb });
+  const seeders = h('input', { type: 'number', min: 0, value: p.min_seeders });
+  const hun = h('input.switch', { type: 'checkbox', role: 'switch', checked: p.prefer_hun });
+  const hunOnly = h('input.switch', { type: 'checkbox', role: 'switch', checked: p.require_hun });
+  const hevc = h('input.switch', { type: 'checkbox', role: 'switch', checked: p.prefer_hevc });
+  const mode = h('select', null, [['hardlink', T.acqModeLink], ['copy', T.acqModeCopy]].map(([v, l]) => h('option', { value: v, selected: s.import_mode === v }, l)));
+  const saveProfile = h('button.btn.primary', { onclick: async () => {
+    const first = +primary.value;
+    // the preferred resolution first, then the other ticked ones from the highest down
+    const others = resBoxes.filter(([v, el]) => el.checked && v !== first).map(([v]) => v);
+    const profile = Object.assign({}, p, { resolutions: [first, ...others], min_size_gb: +minGB.value || 0, max_size_gb: +maxGB.value || 0,
+      min_seeders: +seeders.value || 0, prefer_hun: hun.checked, require_hun: hunOnly.checked, prefer_hevc: hevc.checked });
+    await api('PUT', '/api/admin/acquire/settings', { profile, import_mode: mode.value }); toast(T.saved); rerender();
+  } }, T.save);
+  const sw = (label, el) => h('div.form-row', null, h('label.switch-row', null, h('span', null, label), el));
+
+  put(body, aHead(T.aAcqSettings, T.aLedeAcqSettings),
+    aSplit(T.acqModule, T.acqModuleHint, sw(T.acqEnable, enabled)),
+    aSplit(T.acqIndexers, T.acqIndexersHint,
+      s.indexers.length ? aTable([T.acqName, T.acqStatus, T.acqPriority, ''], ixRows, '.a-stack') : emptyNote(T.acqNoIndexers, null),
+      h('div.a-form-foot', null, h('button.btn', { onclick: () => indexerDialog(null) }, icon('plus'), T.acqAddIndexer))),
+    aSplit(T.acqClient, T.acqClientHint, clientForm),
+    aSplit(T.acqProfile, T.acqProfileHint, h('div.a-form', null,
+      field(T.acqPrimaryRes, primary),
+      h('div.form-row', null, h('span.small.muted', null, T.acqAllowedRes), h('div.acq-resboxes', null, resBoxes.map(([, el, l]) => h('label.check', null, el, l)))),
+      h('div.grid2', null, field(T.acqMinGB, minGB), field(T.acqMaxGB, maxGB, T.acqMaxGBHint)),
+      field(T.acqMinSeeders, seeders),
+      sw(T.acqPreferHun, hun), sw(T.acqRequireHun, hunOnly), sw(T.acqPreferHevc, hevc),
+      field(T.acqImportMode, mode, T.acqImportModeHint),
+      h('div.a-form-foot', null, saveProfile))));
 }

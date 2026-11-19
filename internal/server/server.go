@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ScotyLucas/kinora/internal/acquire"
 	"github.com/ScotyLucas/kinora/internal/intro"
 	"github.com/ScotyLucas/kinora/internal/media"
 	"github.com/ScotyLucas/kinora/internal/meta"
@@ -79,6 +80,7 @@ type Deps struct {
 	Meta      *meta.Fetcher
 	Intro     *intro.Analyzer     // skip intro / credits detection (nil = off)
 	OpenSubs  *meta.OpenSubtitles // subtitle search and download (created by New when nil)
+	Acquire   *acquire.Manager    // built-in acquisition (created by New when nil and Meta is set; main runs it)
 }
 
 // New builds the server and its routes.
@@ -90,6 +92,13 @@ func New(cfg Config, st *store.Store, log *slog.Logger, deps Deps) *Server {
 	}
 	if s.OpenSubs == nil {
 		s.OpenSubs = meta.NewOpenSubtitles(st, "Kinora v"+Version)
+	}
+	if s.Acquire == nil && s.Meta != nil {
+		s.Acquire = acquire.New(st, s.Meta, func(libID int64) {
+			if s.Scanner != nil {
+				s.Scanner.Trigger(s.bgCtx, libID)
+			}
+		}, log)
 	}
 	s.routes()
 	return s

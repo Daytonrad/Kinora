@@ -45,17 +45,17 @@ type Fetcher struct {
 
 // Status is the progress of a refresh.
 type Status struct {
-	Running   bool   `json:"running"`
-	Total     int    `json:"total"`
-	Done      int    `json:"done"`
-	Matched   int    `json:"matched"`
+	Running bool `json:"running"`
+	Total   int  `json:"total"`
+	Done    int  `json:"done"`
+	Matched int  `json:"matched"`
 	// Relang is the metadata language matched items are being re-fetched in, set while that runs.
-	Relang    string `json:"relang,omitempty"`
+	Relang string `json:"relang,omitempty"`
 	// Translate is the viewer language titles are being fetched in, set while that runs.
-	Translate string `json:"translate,omitempty"`
-	NoMatch   int    `json:"no_match"`
-	LastError string `json:"last_error,omitempty"`
-	FinishedAt int64 `json:"finished_at,omitempty"`
+	Translate  string `json:"translate,omitempty"`
+	NoMatch    int    `json:"no_match"`
+	LastError  string `json:"last_error,omitempty"`
+	FinishedAt int64  `json:"finished_at,omitempty"`
 }
 
 // New creates a fetcher writing artwork below imgDir.
@@ -676,4 +676,57 @@ func (f *Fetcher) imdbBackfill(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// MovieInfo is what the acquisition module needs about a film: the ids to search by and
+// every title a release name may use.
+type MovieInfo struct {
+	ID            int64    `json:"id"`
+	IMDb          string   `json:"imdb_id"`
+	Title         string   `json:"title"`          // in the server's metadata language
+	OriginalTitle string   `json:"original_title"` // release names usually carry this…
+	EnglishTitle  string   `json:"english_title"`  // …or the English one
+	Year          int      `json:"year"`
+	Overview      string   `json:"overview"`
+	Poster        string   `json:"poster,omitempty"`
+	Backdrop      string   `json:"backdrop,omitempty"`
+	Rating        float64  `json:"rating"`
+	Runtime       int      `json:"runtime"`
+	Genres        []string `json:"genres"`
+}
+
+// Movie fetches one film by its TMDB id (in the metadata language, plus the English title).
+func (f *Fetcher) Movie(ctx context.Context, id int64) (MovieInfo, error) {
+	var d struct {
+		movieDetails
+		OriginalTitle string `json:"original_title"`
+		Runtime       int    `json:"runtime"`
+	}
+	if err := f.get(ctx, "/movie/"+strconv.FormatInt(id, 10), nil, &d); err != nil {
+		if errors.Is(err, errNotFound) {
+			return MovieInfo{}, errors.New("a film nem található a TMDB-ben")
+		}
+		return MovieInfo{}, err
+	}
+	m := MovieInfo{ID: d.ID, IMDb: d.ImdbID, Title: d.Title, OriginalTitle: d.OriginalTitle, Year: yearOf(d.ReleaseDate),
+		Overview: d.Overview, Rating: d.VoteAverage, Runtime: d.Runtime, Genres: []string{}}
+	for _, g := range d.Genres {
+		m.Genres = append(m.Genres, g.Name)
+	}
+	if d.PosterPath != "" {
+		m.Poster = f.ImageURL + "w342" + d.PosterPath
+	}
+	if d.BackdropPath != "" {
+		m.Backdrop = f.ImageURL + "w1280" + d.BackdropPath
+	}
+	m.EnglishTitle = m.Title
+	if !strings.HasPrefix(f.st.Setting("metadata_lang"), "en") {
+		var en struct {
+			Title string `json:"title"`
+		}
+		if err := f.get(ctx, "/movie/"+strconv.FormatInt(id, 10), url.Values{"language": {"en-US"}}, &en); err == nil && en.Title != "" {
+			m.EnglishTitle = en.Title
+		}
+	}
+	return m, nil
 }
