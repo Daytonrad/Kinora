@@ -6,7 +6,7 @@ description: Verify Kinora before a commit or at the end of a milestone - runs g
 # Kinora verify
 
 Run these from the repo root, in order, and stop at the first failure. Go is **not** installed on the
-host; `scripts/go.sh` runs the toolchain in the `kinora-dev` image (golang:1.24-bookworm + ffmpeg).
+host; `scripts/go.sh` runs the toolchain in the `kinora-dev` image (golang:1.27-trixie + ffmpeg).
 
 1. `scripts/go.sh go vet ./...`
 2. `scripts/go.sh go test -count=1 ./...`

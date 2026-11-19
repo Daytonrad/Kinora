@@ -1,8 +1,8 @@
 # Android build environment for the Kinora APK (JDK 21 + Android SDK 36 + Node 22).
 # Nothing has to be installed on the host: apps/android/build.sh runs Gradle inside this image.
-FROM node:22.11.0-bookworm-slim AS node
+FROM node:22.23.5-bookworm-slim AS node
 
-FROM eclipse-temurin:21.0.5_11-jdk-jammy
+FROM eclipse-temurin:21.0.13_9-jdk-jammy
 ENV ANDROID_HOME=/opt/android-sdk ANDROID_SDK_ROOT=/opt/android-sdk \
     GRADLE_USER_HOME=/gradle
 RUN apt-get update && apt-get install -y --no-install-recommends unzip curl ca-certificates git && rm -rf /var/lib/apt/lists/*

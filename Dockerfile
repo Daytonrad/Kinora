@@ -3,16 +3,16 @@
 # Kinora – multi-stage build.
 #   dev     : Go toolchain + ffmpeg, used by scripts/go.sh for vet/test without a local Go install
 #   build   : compiles the cgo (sqlite) binary
-#   runtime : debian:bookworm-slim + Debian ffmpeg + VA-API drivers, non-root "kinora" user
-ARG GO_VERSION=1.24
+#   runtime : debian:trixie-slim + Debian ffmpeg + VA-API drivers, non-root "kinora" user
+ARG GO_VERSION=1.27
 
-FROM golang:${GO_VERSION}-bookworm AS dev
+FROM golang:${GO_VERSION}-trixie AS dev
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 
-FROM golang:${GO_VERSION}-bookworm AS build
+FROM golang:${GO_VERSION}-trixie AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
@@ -24,13 +24,13 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -ldflags "-s -w -X github.com/ScotyLucas/kinora/internal/server.Version=${VERSION}" \
       -o /out/kinora ./cmd/kinora
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 ARG TARGETARCH
 ARG VERSION=dev
 # AMD=1 adds Mesa's VA-API driver (radeonsi) for AMD GPUs. It pulls in LLVM (~115 MB),
 # so the default image leaves it out: Intel VA-API/QSV, NVIDIA NVENC and software encoding work without it.
 ARG AMD=0
-# Debian's own ffmpeg (5.1, built with libzimg/zscale, VA-API, QSV via libmfx/vpl, NVENC via ffnvcodec).
+# Debian's own ffmpeg (7.1, built with libzimg/zscale, VA-API, QSV via libmfx/vpl, NVENC via ffnvcodec).
 # libchromaprint-tools adds fpcalc, the fallback fingerprinter of the Skip Intro detector.
 # non-free component is enabled only for intel-media-va-driver-non-free (amd64, Gen8+ Intel iGPU incl. QSV).
 RUN set -eux; \
@@ -41,11 +41,15 @@ RUN set -eux; \
     if [ "$AMD" = "1" ]; then extra="$extra mesa-va-drivers"; fi; \
     apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools ca-certificates tzdata gosu $extra; \
     if [ "$AMD" != "1" ]; then \
-      # libavdevice -> libgl1 -> libglx-mesa0 -> libgl1-mesa-dri -> libllvm15 (+ libz3). The ffmpeg CLI never
-      # creates an OpenGL context, so the Mesa DRI drivers (the only LLVM users) are dead weight here.
+      # libavdevice -> libgl1 -> libglx-mesa0 -> libgl1-mesa-dri / libgbm1 -> mesa-libgallium -> libllvmNN (+ libz3).
+      # The ffmpeg CLI never creates an OpenGL context, so the Mesa drivers (the only LLVM users) are dead weight here.
       # Removed with --force-depends: apt inside this image will report the gap, which is fine for an appliance.
-      dpkg --purge --force-depends libgl1-mesa-dri libllvm15 libz3-4; \
+      # The list comes from what is actually installed, so an LLVM version bump in Debian does not break the build.
+      purge="$(dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' 'libllvm*' 'libz3-*' mesa-libgallium libgl1-mesa-dri 2>/dev/null | awk '$1 == "ii" { print $2 }')"; \
+      [ -n "$purge" ]; \
+      dpkg --purge --force-depends $purge; \
       ffmpeg -hide_banner -f lavfi -i testsrc2=size=320x240:rate=5 -t 1 -c:v libx264 -f null - ; \
+      ffprobe -hide_banner -version >/dev/null; \
     fi; \
     rm -rf /var/lib/apt/lists/*; \
     groupadd -g 1000 kinora; \

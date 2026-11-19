@@ -217,7 +217,7 @@ Because `<video>` and `<img>` elements cannot send authorization headers, playba
 
 ## Why this FFmpeg build?
 
-The image uses Debian Bookworm's own **FFmpeg** package (5.1, with `libzimg`/zscale tone mapping, VA-API, QSV (libmfx) and NVENC (ffnvcodec)). It also includes `intel-media-va-driver-non-free` (amd64, Intel iGPU Gen8+) and, in the `-amd` image, `mesa-va-drivers` for AMD. Why not `jellyfin-ffmpeg`?
+The image uses Debian Trixie's own **FFmpeg** package (7.1, with `libzimg`/zscale tone mapping, VA-API, QSV (libmfx) and NVENC (ffnvcodec)). It also includes `intel-media-va-driver-non-free` (amd64, Intel iGPU Gen8+) and, in the `-amd` image, `mesa-va-drivers` for AMD. Why not `jellyfin-ffmpeg`?
 
 - Debian provides the same package for amd64 and arm64, making multi-architecture builds simple and reproducible.
 - Kinora uses H.264 output and the standard `zscale` + `tonemap` chain, so it does not need jellyfin-ffmpeg's custom OpenCL/Vulkan tone mapping.
@@ -225,7 +225,7 @@ The image uses Debian Bookworm's own **FFmpeg** package (5.1, with `libzimg`/zsc
 
 If you need jellyfin-ffmpeg (for example, for newer Intel Arc GPUs), install it in a custom image and set `KINORA_FFMPEG=/usr/lib/jellyfin-ffmpeg/ffmpeg` and `KINORA_FFPROBE=/usr/lib/jellyfin-ffmpeg/ffprobe`.
 
-**Image size.** Debian's FFmpeg pulls in Mesa OpenGL drivers and LLVM through the `libavdevice → libgl1 → … → libgl1-mesa-dri → libllvm15` dependency chain (about 140 MB). The FFmpeg command-line tool does not create an OpenGL context, so the standard (`latest`) image removes `libgl1-mesa-dri`, `libllvm15` and `libz3-4` with `dpkg --force-depends`. A test encode runs immediately afterwards to verify FFmpeg still works. The trade-off is that `apt` reports missing dependencies inside this image; the container is not intended for package installation. These libraries remain in `latest-amd` because AMD's radeonsi VA-API driver needs LLVM.
+**Image size.** Debian's FFmpeg pulls in Mesa OpenGL drivers and LLVM through the `libavdevice → libgl1 → … → mesa-libgallium → libllvm19` dependency chain (about 140 MB). The FFmpeg command-line tool does not create an OpenGL context, so the standard (`latest`) image removes `libgl1-mesa-dri`, `mesa-libgallium`, `libllvm*` and `libz3-4` with `dpkg --force-depends`. A test encode runs immediately afterwards to verify FFmpeg still works. The trade-off is that `apt` reports missing dependencies inside this image; the container is not intended for package installation. These libraries remain in `latest-amd` because AMD's radeonsi VA-API driver needs LLVM.
 
 The Kinora binary itself is about 10 MB.
 

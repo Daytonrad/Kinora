@@ -239,7 +239,7 @@ A `<video>`/`<img>` számára a lejátszási válasz rövid életű, aláírt st
 
 ## Az ffmpeg választásáról
 
-A kép a **Debian bookworm saját `ffmpeg` csomagját** használja (5.1, `libzimg`/zscale tónusleképezéssel, VA-API, QSV (libmfx), NVENC (ffnvcodec)).
+A kép a **Debian trixie saját `ffmpeg` csomagját** használja (7.1, `libzimg`/zscale tónusleképezéssel, VA-API, QSV (libmfx), NVENC (ffnvcodec)).
 Mellette van az `intel-media-va-driver-non-free` (amd64, Gen8+ Intel iGPU), az `-amd` változatban pedig a `mesa-va-drivers` (AMD) is. Miért nem a `jellyfin-ffmpeg`?
 
 - Ugyanabból a Debian-tárolóból jön amd64-re és arm64-re is, így a multi-arch build egyszerű és reprodukálható.
@@ -249,9 +249,9 @@ Mellette van az `intel-media-va-driver-non-free` (amd64, Gen8+ Intel iGPU), az `
 Ha a jellyfin-ffmpeg kell (pl. újabb Intel Arc GPU-khoz), egy saját képben telepítsd, és add meg a
 `KINORA_FFMPEG=/usr/lib/jellyfin-ffmpeg/ffmpeg` és `KINORA_FFPROBE=/usr/lib/jellyfin-ffmpeg/ffprobe` változót.
 
-**Képméret.** A Debian ffmpeg-je a `libavdevice → libgl1 → … → libgl1-mesa-dri → libllvm15` láncon keresztül behúzza a Mesa OpenGL-drivereit
+**Képméret.** A Debian ffmpeg-je a `libavdevice → libgl1 → … → mesa-libgallium → libllvm19` láncon keresztül behúzza a Mesa OpenGL-drivereit
 és az LLVM-et (kb. 140 MB). Az ffmpeg parancssori eszköz soha nem hoz létre OpenGL kontextust, ezért az alap (`latest`) image-ből a build
-`dpkg --force-depends`-szel eltávolítja a `libgl1-mesa-dri`, `libllvm15` és `libz3-4` csomagot. Rögtön utána egy tesztkódolás is lefut,
+`dpkg --force-depends`-szel eltávolítja a `libgl1-mesa-dri`, `mesa-libgallium`, `libllvm*` és `libz3-4` csomagot. Rögtön utána egy tesztkódolás is lefut,
 ami ellenőrzi, hogy az ffmpeg ép. Ennek az ára, hogy az image-en belül az `apt` hiányzó függőséget jelez; a konténert nem is erre szánták.
 A `latest-amd` image-ben ezek megmaradnak, mert az AMD VA-API driver (radeonsi) valóban használja az LLVM-et.
 Maga a Kinora bináris kb. 10 MB.
