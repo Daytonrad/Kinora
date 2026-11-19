@@ -267,6 +267,9 @@ private struct TVMenuRow: View, Equatable {
     var focus: FocusState<TVPlayerView.Focus?>.Binding
     @State private var composing = false
     @State private var message = ""
+    @State private var subSearch = false
+    /// Playback was running when the subtitle search opened; it goes on when it closes.
+    @State private var resumeAfterSearch = false
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.player === b.player }
 
@@ -274,7 +277,7 @@ private struct TVMenuRow: View, Equatable {
         let audio = player.info?.audioTracks ?? []
         let subs = player.info?.textSubtitles ?? []
         HStack(spacing: 24) {
-            if !subs.isEmpty {
+            if !subs.isEmpty || !player.isOffline {
                 Menu {
                     Button { player.selectSubtitle(nil) } label: { check(L("Ki"), player.subtitle == nil) }
                     ForEach(subs) { s in
@@ -286,6 +289,16 @@ private struct TVMenuRow: View, Equatable {
                             Button(L("Később (+0,5 mp)"), systemImage: "plus") { player.shiftSubtitles(by: 0.5) }
                             if player.subtitleDelay != 0 {
                                 Button(L("Visszaállítás"), systemImage: "arrow.counterclockwise") { player.shiftSubtitles(by: 0) }
+                            }
+                        }
+                    }
+                    if !player.isOffline {
+                        Section {
+                            Button(L("Felirat keresése…"), systemImage: "text.magnifyingglass") {
+                                // A party keeps going: pausing here would stop the whole room.
+                                resumeAfterSearch = player.party == nil && player.isPlaying
+                                if resumeAfterSearch { player.pause() }
+                                subSearch = true
                             }
                         }
                     }
@@ -367,6 +380,9 @@ private struct TVMenuRow: View, Equatable {
         }
         .font(.callout)
         .focusSection()
+        .sheet(isPresented: $subSearch, onDismiss: { if resumeAfterSearch { player.play() } }) {
+            TVSubtitleSearchView(item: player.item) { player.addDownloadedSubtitle($0) }
+        }
     }
 
     @ViewBuilder private func check(_ title: String, _ on: Bool) -> some View {

@@ -246,14 +246,32 @@ struct TVDetailView: View {
     /// A failed favorite or watched toggle.
     @State private var actionError: String?
     @FocusState private var playFocused: Bool
+    /// The version of a film picked here; nil = the one played last.
+    @State private var selectedVersion: Int?
+    @State private var askVersion = false
+    @State private var subSearch: Item?
 
     private var current: Item { detail?.item ?? item }
 
     private var playTarget: Item? {
         switch current.kind {
-        case .movie, .episode: current
+        case .movie: chosenVersion.map { $0.item(from: current) } ?? current
+        case .episode: current
         default: detail?.playNext
         }
+    }
+
+    private var versions: [FilmVersion] {
+        guard current.kind == .movie, let vs = detail?.versions, vs.count > 1 else { return [] }
+        return vs
+    }
+
+    /// The version Play starts: picked here, else played last, else this page's file.
+    private var chosenVersion: FilmVersion? {
+        let vs = versions
+        guard !vs.isEmpty else { return nil }
+        let id = selectedVersion ?? detail?.preferredVersion ?? current.id
+        return vs.first { $0.id == id } ?? vs.first { $0.id == current.id } ?? vs.first
     }
 
     var body: some View {
@@ -276,6 +294,17 @@ struct TVDetailView: View {
         .task { await load() }
         .onChange(of: model.playbackGeneration) { Task { await load() } }
         .task(id: season) { await loadEpisodes() }
+        .confirmationDialog(L("Változat"), isPresented: $askVersion, titleVisibility: .visible) {
+            ForEach(versions) { v in
+                Button((v.id == chosenVersion?.id ? "✓ " : "") + [v.title, v.details].filter { !$0.isEmpty }.joined(separator: " — ")) {
+                    selectedVersion = v.id
+                }
+            }
+            Button(L("Mégse"), role: .cancel) {}
+        } message: {
+            Text(L("{0} változat közül választhatsz", versions.count))
+        }
+        .sheet(item: $subSearch) { TVSubtitleSearchView(item: $0) }
     }
 
     private var header: some View {
@@ -292,6 +321,10 @@ struct TVDetailView: View {
             }
             if let o = current.overview, !o.isEmpty {
                 Text(o).font(.callout).foregroundStyle(Theme.plaster).lineLimit(5).frame(maxWidth: 1100, alignment: .leading)
+            }
+            if let v = chosenVersion {
+                Text([L("Változat: {0}", v.title), v.details].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.callout).foregroundStyle(Theme.plaster)
             }
             if let t = playTarget, let p = t.progress {
                 HStack(spacing: 16) {
@@ -312,10 +345,18 @@ struct TVDetailView: View {
                     Button { model.play(t, from: 0) } label: { Label(L("Elölről"), systemImage: "arrow.counterclockwise") }
                         .buttonStyle(TVPillStyle())
                 }
+                if !versions.isEmpty {
+                    Button { askVersion = true } label: { Label(L("Változat"), systemImage: "square.stack.3d.up") }
+                        .buttonStyle(TVPillStyle())
+                }
                 if let t = playTarget, t.kind == .movie || t.kind == .episode {
                     Button { model.startParty(t) } label: { Label(L("Watch party"), systemImage: "person.2") }
                         .buttonStyle(TVPillStyle())
                         .disabled(model.partyJoining)
+                    if current.kind == .movie || current.kind == .episode {
+                        Button { subSearch = t } label: { Label(L("Felirat"), systemImage: "text.magnifyingglass") }
+                            .buttonStyle(TVPillStyle())
+                    }
                 }
                 Button { Task { await setPlayed(!userData.played) } } label: {
                     Label(userData.played ? L("Megnézve") : L("Megnézettnek jelölés"),
