@@ -21,9 +21,11 @@ struct DownloadsLiveActivity: Widget {
                         .foregroundStyle(Palette.amber)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(s.fraction, format: .percent.precision(.fractionLength(0)))
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(Palette.bright)
+                    if DownloadsLockView.showsPercent(s) {
+                        Text(DownloadsLockView.percent(s))
+                            .font(.headline.monospacedDigit())
+                            .foregroundStyle(Palette.bright)
+                    }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 6) {
@@ -37,13 +39,21 @@ struct DownloadsLiveActivity: Widget {
             } compactLeading: {
                 Image(systemName: "arrow.down.circle.fill").foregroundStyle(Palette.amber)
             } compactTrailing: {
-                if s.active > 0 {
+                if DownloadsLockView.showsPercent(s) {
+                    Text(DownloadsLockView.percent(s))
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(Palette.amber)
+                } else if s.active > 0 {
                     ProgressView(value: s.fraction).progressViewStyle(.circular).tint(Palette.amber)
                 } else {
                     Image(systemName: "checkmark").foregroundStyle(Palette.amber)
                 }
             } minimal: {
-                Image(systemName: s.active > 0 ? "arrow.down" : "checkmark").foregroundStyle(Palette.amber)
+                if s.active > 0 {
+                    ProgressView(value: s.fraction).progressViewStyle(.circular).tint(Palette.amber)
+                } else {
+                    Image(systemName: "checkmark").foregroundStyle(Palette.amber)
+                }
             }
             .widgetURL(URL(string: "kinora://downloads"))
         }
@@ -52,6 +62,15 @@ struct DownloadsLiveActivity: Widget {
 
 struct DownloadsLockView: View {
     var state: DownloadsActivityAttributes.ContentState
+
+    /// A percentage only means something once bytes are moving; while the server prepares it would sit at 0%.
+    static func showsPercent(_ s: DownloadsActivityAttributes.ContentState) -> Bool {
+        s.active > 0 && !s.preparing
+    }
+
+    static func percent(_ s: DownloadsActivityAttributes.ContentState) -> String {
+        min(max(s.fraction, 0), 1).formatted(.percent.precision(.fractionLength(0)))
+    }
 
     static func headline(_ s: DownloadsActivityAttributes.ContentState) -> String {
         if s.active == 0 {
@@ -68,9 +87,17 @@ struct DownloadsLockView: View {
                 .font(.system(size: 34))
                 .foregroundStyle(Palette.amber)
             VStack(alignment: .leading, spacing: 4) {
-                Text(Self.headline(state))
-                    .font(.headline)
-                    .foregroundStyle(Palette.bright)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(Self.headline(state))
+                        .font(.headline)
+                        .foregroundStyle(Palette.bright)
+                    Spacer(minLength: 8)
+                    if Self.showsPercent(state) {
+                        Text(Self.percent(state))
+                            .font(.headline.monospacedDigit())
+                            .foregroundStyle(Palette.amber)
+                    }
+                }
                 if state.active > 0 {
                     Text(state.title).font(.subheadline).foregroundStyle(Palette.plaster).lineLimit(1)
                     ProgressView(value: state.fraction).tint(Palette.amber)
