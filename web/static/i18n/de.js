@@ -615,6 +615,7 @@
    "A tévén vagy a másik eszközön válaszd a „Belépés kóddal” lehetőséget.": "Wähle auf dem Fernseher oder dem anderen Gerät „Mit Code anmelden“.",
    "A többit később próbáld újra.": "Versuche den Rest später erneut.",
    "A videó nem játszható le.": "Das Video kann nicht abgespielt werden.",
+   "A lejátszás megszakadt.": "Die Wiedergabe wurde unterbrochen.",
    "A webes felületen: profil menü → Eszköz csatlakoztatása": "In der Weboberfläche: Profilmenü → Gerät verbinden",
    "A(z) {0} címen nem Kinora-szerver válaszol.": "Unter {0} antwortet kein Kinora-Server.",
    "Adatlap": "Details",

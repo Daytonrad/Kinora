@@ -621,6 +621,7 @@
    "A tévén vagy a másik eszközön válaszd a „Belépés kóddal” lehetőséget.": "On the TV or the other device, choose “Sign in with a code”.",
    "A többit később próbáld újra.": "Try the rest again later.",
    "A videó nem játszható le.": "The video can't be played.",
+   "A lejátszás megszakadt.": "Playback was interrupted.",
    "A webes felületen: profil menü → Eszköz csatlakoztatása": "In the web interface: profile menu → Connect a device",
    "A(z) {0} címen nem Kinora-szerver válaszol.": "The server at {0} is not a Kinora server.",
    "Adatlap": "Details",

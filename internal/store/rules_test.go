@@ -184,8 +184,8 @@ func TestProgressNextUpHide(t *testing.T) {
 		t.Fatal("progress must unhide the series")
 	}
 	// finishing the last regular episode: specials are skipped
-	f.s.ReportProgress(f.p.ID, ep("ep2"), 0, true)
-	f.s.ReportProgress(f.p.ID, ep("ep3"), 0, true)
+	f.s.ReportProgress(f.p.ID, ep("ep2"), 1190, true)
+	f.s.ReportProgress(f.p.ID, ep("ep3"), 1190, true)
 	if nu, _ := f.s.NextUp(f.p, 10); len(nu) != 0 {
 		t.Fatalf("specials must be skipped: %s", titles(nu))
 	}
@@ -202,7 +202,7 @@ func TestProgressNextUpHide(t *testing.T) {
 func TestRecommenderAndCollections(t *testing.T) {
 	f := fixture(t)
 	arrival, _ := f.s.Item(f.ids["arrival"], f.p)
-	f.s.ReportProgress(f.p.ID, arrival, 0, true)
+	f.s.ReportProgress(f.p.ID, arrival, 5990, true)
 	five := 5
 	f.s.SetStars(f.p.ID, arrival.ID, &five)
 	rec, err := f.s.Recommend(f.p)
@@ -267,5 +267,22 @@ func TestRecommenderAndCollections(t *testing.T) {
 	kc, _ := f.s.Collections(f.kid)
 	if len(kc) != 1 || kc[0].ID != man.ID {
 		t.Fatalf("kid should only see the shared collection: %+v", kc)
+	}
+}
+
+// A stream that breaks off reports "ended" mid-film; that must not mark it played.
+func TestEndedFarFromTheEndIsNotPlayed(t *testing.T) {
+	f := fixture(t)
+	arrival, _ := f.s.Item(f.ids["arrival"], f.p)
+	played, err := f.s.ReportProgress(f.p.ID, arrival, 1800, true)
+	if err != nil || played {
+		t.Fatalf("broken stream marked played (%v)", err)
+	}
+	if ud := f.s.GetUserData(f.p.ID, arrival.ID); ud.Played || ud.Position != 1800 {
+		t.Fatalf("want position kept, unplayed: %+v", ud)
+	}
+	// From the credits on, an end counts even before the 92% mark.
+	if played, _ := f.s.ReportProgress(f.p.ID, arrival, 5000, true); !played {
+		t.Fatal("end at the credits not counted")
 	}
 }

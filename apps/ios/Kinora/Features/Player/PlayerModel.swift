@@ -68,6 +68,12 @@ final class PlayerModel: NSObject {
     private var session: String?
     private var force: String?
     private var pendingSeek: Double?
+    /// Counts `start` calls: a response that a newer one overtook is dropped.
+    private var startGeneration = 0
+    /// A session request is in flight; the player still holds the previous item.
+    private var requesting = false
+    /// Where a stream that ended early was last picked up again (once per spot).
+    private var resumedAt: Double?
     private var ended = false
     private var closed = false
     private var restoring = false
@@ -142,6 +148,12 @@ final class PlayerModel: NSObject {
         return position >= at
     }
 
+    /// At the credits or close to the end, whether or not there is a next episode.
+    private var showNextReached: Bool {
+        guard duration > 0 else { return false }
+        return position >= (info?.creditsAt ?? max(duration - 30, duration * 0.85))
+    }
+
     // MARK: - lifecycle
 
     func begin() async {
@@ -186,6 +198,9 @@ final class PlayerModel: NSObject {
     }
 
     private func start(at t: Double) async {
+        startGeneration += 1
+        let generation = startGeneration
+        requesting = true
         loading = true
         error = nil
         let prev = session
@@ -198,7 +213,11 @@ final class PlayerModel: NSObject {
                 info = try await client.playback(item.id, PlaybackRequest(start: t, audioIdx: audioIdx, maxBitrate: effectiveMaxBitrate,
                                                                           force: force, prevSession: prev))
             }
-            guard !closed else { return }
+            guard !closed, generation == startGeneration else {
+                // A later seek asked for another session meanwhile: this one is not needed.
+                if let s = info.session, localInfo == nil { let c = client; Task { try? await c.stopStream(s) } }
+                return
+            }
             guard let url = info.url.hasPrefix("file:") ? URL(string: info.url) : await client.url(info.url)
             else { throw KinoraError.network }
             self.info = info
@@ -230,6 +249,7 @@ final class PlayerModel: NSObject {
             let playerItem = AVPlayerItem(url: url)
             watch(playerItem)
             player.replaceCurrentItem(with: playerItem)
+            requesting = false
             player.defaultRate = speed
             // In a party the room says whether to play (the sync starts it when it does).
             if party?.state.map({ $0.playing }) ?? true { player.play() }
@@ -239,7 +259,10 @@ final class PlayerModel: NSObject {
             updateNowPlaying()
             loadNowPlayingArtwork()
         } catch is CancellationError {
+            if generation == startGeneration { requesting = false }
         } catch {
+            guard generation == startGeneration else { return }
+            requesting = false
             self.error = error.localizedDescription
             loading = false
         }
@@ -372,7 +395,14 @@ final class PlayerModel: NSObject {
         ended = false
         position = t
         syncChapter()
-        if info.mode == .direct {
+        if requesting {
+            // A session is still being asked for (an earlier seek, a track change): the
+            // current item is the old one, so ask again from here; the newer request wins.
+            Task { await start(at: t) }
+        } else if info.mode == .direct {
+            // Before the item is ready its resume seek is still pending: replace it, or it
+            // would land after (and undo) this one.
+            if pendingSeek != nil { pendingSeek = t }
             player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         } else {
             let rel = t - offset
@@ -411,7 +441,8 @@ final class PlayerModel: NSObject {
     private func load(_ n: Item, at start: Double) {
         countdown?.cancel()
         nextCountdown = nil
-        report(ended: true)
+        // Only finished if it got to the credits (a party can move on mid-film).
+        report(ended: ended || showNextReached)
         item = n
         next = nil
         info = nil
@@ -555,6 +586,20 @@ final class PlayerModel: NSObject {
     }
 
     private func didEnd() {
+        // A transcode that broke off closes its playlist early, and the player "finishes"
+        // mid-film. That is not the end: pick it up from here once, then say it broke.
+        if duration > 0, duration - position > max(60, duration * 0.05) {
+            isPlaying = false
+            report()
+            if !isOffline, info?.mode != .direct, resumedAt.map({ abs($0 - position) > 5 }) ?? true {
+                resumedAt = position
+                Task { await start(at: position) }
+            } else {
+                player.pause()
+                error = L("A lejátszás megszakadt.")
+            }
+            return
+        }
         ended = true
         isPlaying = false
         report(ended: true)

@@ -45,6 +45,11 @@ func ensureUD(q execer, profileID, itemID int64) error {
 // PlayedThreshold marks an item played after this fraction of its runtime.
 const PlayedThreshold = 0.92
 
+// EndedMinFraction is how far in a reported end has to be to count (the credits of a
+// long film can start before 92%; a broken stream "ends" anywhere). The runtime is
+// metadata and can be off, so this stays well below the credits.
+const EndedMinFraction = 0.75
+
 // ReportProgress stores a playback position. Past 92% the item becomes played.
 // Any progress un-hides the item and its series (rewatching brings it back).
 func (s *Store) ReportProgress(profileID int64, it *Item, position float64, ended bool) (played bool, err error) {
@@ -60,7 +65,16 @@ func (s *Store) ReportProgress(profileID int64, it *Item, position float64, ende
 	if position < 0 {
 		position = 0
 	}
-	done := ended || (it.RuntimeSec > 0 && position/float64(it.RuntimeSec) >= PlayedThreshold)
+	frac := 0.0
+	if it.RuntimeSec > 0 {
+		frac = position / float64(it.RuntimeSec)
+	}
+	// A player reports "ended" when its stream runs out, and a stream cut off by a failed
+	// transcode runs out early: far from the end, that is not the end of the film.
+	if ended && it.RuntimeSec > 0 && frac < EndedMinFraction {
+		ended = false
+	}
+	done := ended || frac >= PlayedThreshold
 	if done {
 		_, err = tx.Exec(`UPDATE user_data SET position=0, played=1, play_count=play_count+CASE WHEN played=1 AND position=0 THEN 0 ELSE 1 END,
 			last_played_at=?, hidden=0 WHERE profile_id=? AND item_id=?`, t, profileID, it.ID)

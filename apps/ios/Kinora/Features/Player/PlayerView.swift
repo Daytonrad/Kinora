@@ -313,6 +313,7 @@ private struct Scrubber: View {
     var began: () -> Void
     var ended: () -> Void
     @State private var scrub: Double?
+    @State private var commitTask: Task<Void, Never>?
 
     var body: some View {
         let pos = scrub ?? player.position
@@ -321,16 +322,23 @@ private struct Scrubber: View {
                        // A tick at every chapter mark the thumb passes.
                        if chapterIndex(scrub ?? player.position) != chapterIndex(t) { Haptic.select.play() }
                        scrub = t
+                       // A tap on the track (or VoiceOver's adjust) moves the value without a
+                       // drag, and iOS doesn't always report it as an edit: commit it shortly.
+                       if !scrubbing {
+                           commitTask?.cancel()
+                           commitTask = Task {
+                               try? await Task.sleep(for: .milliseconds(350))
+                               if !Task.isCancelled, !scrubbing { commit() }
+                           }
+                       }
                    }),
                    in: 0...max(player.duration, 1)) { editing in
                 scrubbing = editing
                 if editing {
+                    commitTask?.cancel()
                     began()
-                } else if let t = scrub {
-                    Haptic.tap.play()
-                    player.seek(to: t)
-                    scrub = nil
-                    ended()
+                } else {
+                    commit()
                 }
             }
             .tint(Theme.amber)
@@ -350,6 +358,17 @@ private struct Scrubber: View {
             .font(.caption.monospacedDigit())
             .foregroundStyle(.white.opacity(0.8))
         }
+    }
+
+    /// Seeks to where the thumb was let go.
+    private func commit() {
+        commitTask?.cancel()
+        commitTask = nil
+        guard let t = scrub else { return }
+        Haptic.tap.play()
+        player.seek(to: t)
+        scrub = nil
+        ended()
     }
 
     /// Which chapter a time falls in; nil without chapters (then scrubbing is silent).
