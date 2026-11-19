@@ -138,14 +138,16 @@ function add(e, kids) {
   return e;
 }
 const ICONS = {
-  play: 'M8 5v14l11-7z', pause: 'M7 5h4v14H7zM13 5h4v14h-4z', back: 'M15 5l-7 7 7 7', more: 'M12 7a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 6.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 6.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z',
+  play: 'M8 5v14l11-7z', pause: 'M7 5h4v14H7zM13 5h4v14h-4z', back: 'M19 12H5M11 6l-6 6 6 6', more: 'M12 7a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 6.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 6.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z',
   check: 'M5 12.5l4.5 4.5L19 7.5', heart: 'M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z', star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',
-  rw: 'M11 7L5 12l6 5zM19 7l-6 5 6 5z', ff: 'M13 7l6 5-6 5zM5 7l6 5-6 5z', vol: 'M5 9h4l5-4v14l-5-4H5zM17 9a4 4 0 010 6', mute: 'M5 9h4l5-4v14l-5-4H5zM17 9l4 6M21 9l-4 6',
-  fs: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5', cc: 'M4 6h16v12H4zM8 10.5a2 2 0 100 3M14 10.5a2 2 0 100 3', gear: 'M12 9a3 3 0 100 6 3 3 0 000-6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4',
+  rw: 'M4.5 12a7.5 7.5 0 102.2-5.3L4.5 9M4.5 4.5V9H9', ff: 'M19.5 12a7.5 7.5 0 11-2.2-5.3L19.5 9M19.5 4.5V9H15',
+  vol: 'M4 9.5h3.5L12 6v12l-4.5-3.5H4zM15.5 9.5a3.5 3.5 0 010 5M18.5 6.8a7.5 7.5 0 010 10.4', mute: 'M4 9.5h3.5L12 6v12l-4.5-3.5H4zM16 10l4 4M20 10l-4 4',
+  fs: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5', cc: 'M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2zM10.5 10a2.4 2.4 0 100 4M17 10a2.4 2.4 0 100 4',
+  gear: 'M4 7h9M17 7h3M15 5v4M4 12h3M11 12h9M9 10v4M4 17h11M19 17h1M17 15v4',
   info: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 11v6M12 7.5v.5', next: 'M6 6l8 6-8 6zM17 6v12', chat: 'M4 5h16v11H9l-5 4z', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z',
   eyeOff: 'M3 3l18 18M10.6 6.1A10 10 0 0112 6c6 0 10 6 10 6a17 17 0 01-3 3.5M6.6 7.6C3.8 9.3 2 12 2 12s4 7 10 7a9.5 9.5 0 004.4-1.1', plus: 'M12 5v14M5 12h14', dl: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   lock: 'M7 11V8a5 5 0 0110 0v3M5 11h14v10H5z', people: 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2 20c0-4 3-6 7-6s7 2 7 6M16 4.5a3.5 3.5 0 010 6.5M18 14c2.5.6 4 2.6 4 6', tag: 'M3 12V4h8l10 10-8 8z M7.5 8.5h.01',
-  pip: 'M3 5h18v14H3zM12 12h7v5h-7z', list: 'M4 6h16M4 12h16M4 18h10', pencil: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
+  pip: 'M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2zM12.5 12.5h5.5v3.5h-5.5z', list: 'M4 6h16M4 12h16M4 18h10', pencil: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   x: 'M6 6l12 12M18 6L6 18', filter: 'M4 5h16l-6 8v6l-4-2v-4z',
   search: 'M10.5 4a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM20 20l-4.8-4.8', sortAsc: 'M4 7h5M4 12h8M4 17h11M18 19V5M15 8l3-3 3 3', sortDesc: 'M4 7h11M4 12h8M4 17h5M18 5v14M15 16l3 3 3-3',
 };
@@ -392,9 +394,18 @@ function shell(active, ...content) {
   root.append(top, main);
   (state.libs ? Promise.resolve(state.libs) : GET('/api/libraries').then(l => (state.libs = l))).then(libs => {
     libsNav.replaceWith(...libs.map(l => h('a' + (active === 'lib' + l.id ? '.on' : ''), { href: '#/library/' + l.id }, l.name)));
+    revealActiveNav(top);
   }).catch(() => {});
   window.scrollTo(0, 0);
   return main;
+}
+
+// on a phone the menu scrolls sideways; keep the current page's link in view instead of cut off at the edge
+function revealActiveNav(top) {
+  const nav = top.querySelector('.nav'), a = nav && nav.querySelector('a.on');
+  if (!a || nav.scrollWidth <= nav.clientWidth) return;
+  const r = a.getBoundingClientRect(), nr = nav.getBoundingClientRect();
+  if (r.left < nr.left || r.right > nr.right) nav.scrollLeft += r.left - nr.left - (nr.width - r.width) / 2;
 }
 
 function modal(title, body, actions, onClose) {
@@ -1366,10 +1377,11 @@ async function viewPlayer(id, q) {
   const spinner = h('div.spin', { role: 'progressbar', 'aria-label': T.loading });
   const mid = h('div.p-mid', null, spinner);
   const titleEl = h('h2'), subEl = h('div.s');
-  const timeEl = h('span.p-time', null, '0:00 / 0:00');
+  const timeEl = h('span.p-time', null, '0:00'), remEl = h('span.p-time.rem', null, '');
   const rail = h('div.rail'), ready = h('div.ready'), done = h('div.done'), knob = h('div.knob'), hoverT = h('div.hover-t.hidden');
   const timeline = h('div.timeline', { role: 'slider', tabindex: 0, 'aria-label': T.timeline, 'aria-valuemin': 0 }, rail, ready, done, knob, hoverT);
-  const playBtn = h('button.p-btn', { 'aria-label': T.play }, icon('play'));
+  const playBtn = h('button.p-btn.p-main', { 'aria-label': T.play }, icon('play'));
+  const bigPlay = h('button.p-big', { 'aria-label': T.play, onclick: () => togglePlay() }, icon('play')); // paused: a large target in the middle of the picture
   const volBtn = h('button.p-btn', { 'aria-label': T.mute }, icon('vol'));
   const vol = h('input.vol', { type: 'range', min: 0, max: 1, step: 0.05, value: localStorage.getItem('kinora-vol') || 1, 'aria-label': T.volume });
   const nextBtn = h('button.p-btn.hidden', { 'aria-label': T.nextEp, title: T.nextEp + ' (N)' }, icon('next'));
@@ -1385,13 +1397,22 @@ async function viewPlayer(id, q) {
   const upnext = h('div.upnext.hidden');
   const skipBtn = h('button.btn.primary.big.skip-seg.hidden', { onclick: () => doSkip() });
   const ui = h('div.ui', null,
-    h('div.p-top', null, h('button.p-btn', { 'aria-label': T.back, onclick: () => exit() }, icon('back')), h('div.t', null, titleEl, subEl)),
-    mid,
-    h('div.p-bottom', null, timeline, h('div.p-bar', null,
-      playBtn, h('button.p-btn', { 'aria-label': T.rewind, title: T.rewind, onclick: () => seekBy(-10) }, icon('rw')), h('button.p-btn', { 'aria-label': T.forward, title: T.forward, onclick: () => seekBy(10) }, icon('ff')),
-      volBtn, vol, timeEl, h('span.grow'), nextBtn, favBtn, moreBtn, whyBtn, chapBtn, ccBtn, gearBtn, pipBtn, fsBtn)));
+    h('div.p-top', null, h('button.p-btn', { 'aria-label': T.back, title: T.back, onclick: () => exit() }, icon('back')), h('div.p-acts', null, favBtn, moreBtn, whyBtn)),
+    mid, bigPlay,
+    // bottom: title, the time line with elapsed and remaining at its ends, then three groups: sound | transport | the rest
+    h('div.p-bottom', null,
+      h('div.p-head', null, titleEl, subEl),
+      h('div.p-line', null, timeEl, timeline, remEl),
+      h('div.p-bar', null,
+        h('div.p-l', null, h('div.p-vol', null, volBtn, vol)),
+        h('div.p-c', null,
+          h('button.p-btn', { 'aria-label': T.rewind, title: T.rewind, onclick: () => seekBy(-10) }, icon('rw')),
+          playBtn,
+          h('button.p-btn', { 'aria-label': T.forward, title: T.forward, onclick: () => seekBy(10) }, icon('ff')),
+          nextBtn),
+        h('div.p-r', null, chapBtn, ccBtn, gearBtn, pipBtn, fsBtn))));
   const stage = h('div.stage', null, video, ui, pop, upnext, skipBtn);
-  const player = h('div.player', null, stage);
+  const player = h('div.player.paused', null, stage);
   root.append(player);
 
   // ---------------------------------------------------------------- state
@@ -1542,6 +1563,7 @@ async function viewPlayer(id, q) {
   function openPop(build) {
     if (!pop.classList.contains('hidden') && pop._b === build) { pop.classList.add('hidden'); return; }
     pop._b = build; put(pop, build()); pop.classList.remove('hidden');
+    pop.classList.toggle('at-top', build === buildWhy || build === buildMore); // opened from the top bar
     pop.querySelector('button')?.focus();
   }
   const opt = (label, on, fn) => h('button.opt' + (on ? '.on' : ''), { 'aria-pressed': on ? 'true' : 'false', onclick: () => { pop.classList.add('hidden'); fn(); } }, on ? icon('check') : h('span', { class: 'opt-gap' }), label);
@@ -1646,7 +1668,8 @@ async function viewPlayer(id, q) {
     const te = transcodedEnd();
     ready.style.left = (isHLS() ? offset / d * 100 : 0) + '%';
     ready.style.width = (Math.max(0, Math.min(d, te) - (isHLS() ? offset : 0)) / d * 100) + '%';
-    timeEl.textContent = `${fmtTime(p)} / ${fmtTime(duration)}`;
+    timeEl.textContent = fmtTime(p);
+    remEl.textContent = duration ? '−' + fmtTime(Math.max(0, duration - p)) : '';
     timeline.setAttribute('aria-valuemax', Math.round(duration));
     timeline.setAttribute('aria-valuenow', Math.round(p));
     timeline.setAttribute('aria-valuetext', fmtTime(p));
@@ -1673,15 +1696,18 @@ async function viewPlayer(id, q) {
   video.addEventListener('dblclick', toggleFS);
   vol.oninput = () => { video.volume = +vol.value; video.muted = false; localStorage.setItem('kinora-vol', vol.value); paintVol(); };
   volBtn.onclick = () => { video.muted = !video.muted; paintVol(); };
-  const paintVol = () => put(volBtn, icon(video.muted || video.volume === 0 ? 'mute' : 'vol'));
+  const paintVol = () => {
+    put(volBtn, icon(video.muted || video.volume === 0 ? 'mute' : 'vol'));
+    vol.style.setProperty('--v', (video.muted ? 0 : video.volume) * 100 + '%'); // the filled part of the slider track
+  };
   const setVol = v => { // keys behave like the slider: unmute, remember
     video.volume = Math.round(Math.max(0, Math.min(1, v)) * 100) / 100; video.muted = false;
     vol.value = video.volume; localStorage.setItem('kinora-vol', video.volume); paintVol();
   };
   fsBtn.onclick = toggleFS;
   function toggleFS() { if (document.fullscreenElement) document.exitFullscreen(); else player.requestFullscreen?.().catch(() => {}); }
-  video.addEventListener('play', () => { put(playBtn, icon('pause')); playBtn.setAttribute('aria-label', T.pause); if (ms) ms.playbackState = 'playing'; });
-  video.addEventListener('pause', () => { put(playBtn, icon('play')); playBtn.setAttribute('aria-label', T.play); if (ms) ms.playbackState = 'paused'; report(); });
+  video.addEventListener('play', () => { player.classList.remove('paused'); put(playBtn, icon('pause')); playBtn.setAttribute('aria-label', T.pause); if (ms) ms.playbackState = 'playing'; });
+  video.addEventListener('pause', () => { player.classList.add('paused'); wake(); /* paused: show the controls again */ put(playBtn, icon('play')); playBtn.setAttribute('aria-label', T.play); if (ms) ms.playbackState = 'paused'; report(); });
   const ms = navigator.mediaSession;
   const msAction = (a, f) => { try { ms.setActionHandler(a, f); } catch { /* action not supported here */ } };
   let lastPosState = 0;

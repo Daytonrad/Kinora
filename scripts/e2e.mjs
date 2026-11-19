@@ -175,7 +175,7 @@ try {
     await shot(page, '11-player-upnext');
     await page.click('.upnext button:has-text("Indítás most")');
     await page.waitForFunction(id => !location.hash.includes('/play/' + id), ep1);
-    await page.waitForSelector('.p-top .s:has-text("S01E02")');
+    await page.waitForSelector('.p-head .s:has-text("S01E02")');
     ok('advanced to S01E02');
   }
 
