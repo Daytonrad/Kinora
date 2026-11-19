@@ -54,6 +54,7 @@ type Server struct {
 	mux     *http.ServeMux
 	limiter *rateLimiter
 	qc      *quickConnect
+	updates *releaseChecker
 
 	serverIDMu    sync.Mutex
 	streamKeyOnce sync.Once
@@ -81,7 +82,7 @@ type Deps struct {
 // New builds the server and its routes.
 func New(cfg Config, st *store.Store, log *slog.Logger, deps Deps) *Server {
 	s := &Server{cfg: cfg, st: st, log: log, started: time.Now(), mux: http.NewServeMux(), limiter: newRateLimiter(), Deps: deps, bgCtx: deps.Ctx,
-		qc: newQuickConnect(), extraOrigins: parseOrigins(cfg.CORSOrigins)}
+		qc: newQuickConnect(), updates: newReleaseChecker(), extraOrigins: parseOrigins(cfg.CORSOrigins)}
 	if s.bgCtx == nil {
 		s.bgCtx = context.Background()
 	}

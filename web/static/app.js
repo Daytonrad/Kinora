@@ -1812,7 +1812,7 @@ async function adminDash(body) {
       h('div.a-ledger', null,
         group(T.aGroupLibrary, [stat(d.library.movies, T.statMovies), stat(d.library.series, T.statSeries), stat(d.library.episodes, T.statEpisodes), stat(fmtBytes(d.library.bytes), T.size)]),
         group(T.aServer, [stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime)],
-          h('p.a-ver', null, T.version + ' ', h('span', null, d.version)))),
+          verLine(d.version, d.update))),
       d.library.missing > 0 && h('p.a-warn', null, T.missingFiles(d.library.missing)),
       aSec(T.activeTranscodes, null, null, d.transcodes.length
         ? aTable([T.title, T.aColMode, T.encoder, T.time], d.transcodes.map(s => h('tr', null, tdl('', T.title, h('b', null, s.title)), tdl('', T.aColMode, s.mode), tdl('.mono.small', T.encoder, s.encoder), tdl('', T.time, fmtTime(s.seconds)))), '.a-stack')
@@ -1824,6 +1824,23 @@ async function adminDash(body) {
   };
   onCleanup(() => clearTimeout(t));
   await render();
+}
+// The version footer of the dashboard: the running version, and next to it whether GitHub has a newer release.
+function verLine(version, u) {
+  const day = s => new Date(s * 1000).toLocaleDateString(T.locale);
+  const line = h('p.a-ver', null, T.version + ' ', h('span', null, version));
+  if (!u || u.disabled) return line;
+  if (u.available) {
+    const how = { docker: T.updHowDocker, windows: T.updHowWindows, systemd: T.updHowSystemd }[u.mode] || T.updHowManual;
+    return h('div.a-upd', null,
+      line,
+      h('a.a-upd-link', { href: u.url, target: '_blank', rel: 'noopener noreferrer' },
+        h('b', null, T.updAvailable(u.latest)), u.published_at ? h('span', null, day(u.published_at)) : null, ' →'),
+      h('p.a-upd-how', null, how));
+  }
+  if (u.checked_at) line.append(h('span.a-upd-ok', { title: T.updChecked(new Date(u.checked_at * 1000).toLocaleString(T.locale)) }, ' · ' + T.updLatest));
+  else if (u.error) line.append(h('span.a-upd-ok', null, ' · ' + T.updFailed));
+  return line;
 }
 function scanTable(scans) {
   if (!scans || !scans.length) return h('p.a-quiet', null, T.noScans);

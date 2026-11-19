@@ -605,6 +605,16 @@ pre.code { background: var(--g1); border-left: var(--hair) solid var(--rule-hi);
 /* text values (version string): smaller body face, wrap instead of clipping */
 .a-ver { margin: var(--s4) 0 0; font-size: var(--f0); color: var(--t2); overflow-wrap: anywhere; }
 .a-ver span { color: var(--t1); font-variant-numeric: tabular-nums; }
+.a-ver .a-upd-ok { color: var(--t2); }
+.a-upd { margin: var(--s4) 0 0; padding-left: var(--s3); border-left: var(--frame) solid var(--amber); }
+.a-upd .a-ver { margin: 0; }
+.a-upd-link {
+  display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); margin-top: var(--s1); min-height: var(--hit);
+  color: var(--amber); text-decoration: none; font-size: var(--f1);
+}
+.a-upd-link span { color: var(--t2); font-size: var(--f0); font-variant-numeric: tabular-nums; }
+.a-upd-link:hover b { text-decoration: underline; text-underline-offset: 3px; }
+.a-upd-how { margin: 0; max-width: var(--measure-xs); color: var(--t2); font-size: var(--f0); line-height: var(--lh-text); }
 .a-warn { color: var(--amber); font-size: var(--f1); margin: var(--s4) 0 0; }
 .a-quiet { color: var(--t2); margin: 0; }
 .a-count { color: var(--t2); font-size: var(--f0); margin: 0 0 var(--s1); }

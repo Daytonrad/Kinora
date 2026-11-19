@@ -401,6 +401,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request, c *reqC
 		"uptime_sec": int(time.Since(s.started).Seconds()),
 		"started_at": s.started.Unix(),
 		"schema":     s.st.SchemaVersion(),
+		"update":     s.updates.Status(s.bgCtx),
 	}
 	s.dashboardExtras(d)
 	writeJSON(w, http.StatusOK, d)
