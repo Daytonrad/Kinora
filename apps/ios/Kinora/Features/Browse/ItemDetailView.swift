@@ -20,6 +20,9 @@ struct ItemDetailView: View {
     @State private var episodesError: String?
     /// A short message after an action: a season download, a failed toggle.
     @State private var notice: Notice?
+    /// The version of a film picked here; nil = the one played last.
+    @State private var selectedVersion: Int?
+    @State private var subSearch: Item?
 
     private struct Notice {
         var title: String
@@ -59,6 +62,7 @@ struct ItemDetailView: View {
         } message: {
             Text(notice?.message ?? "")
         }
+        .sheet(item: $subSearch) { SubtitleSearchView(item: $0) }
         .kinoraScreen()
         .navigationTitle(current.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -106,9 +110,24 @@ struct ItemDetailView: View {
 
     private var playTarget: Item? {
         switch current.kind {
-        case .movie, .episode: current
+        case .movie: chosenVersion.map { $0.item(from: current) } ?? current
+        case .episode: current
         default: detail?.playNext
         }
+    }
+
+    /// The film's versions when there are several (Director's Cut, 4K…).
+    private var versions: [FilmVersion] {
+        guard current.kind == .movie, let vs = detail?.versions, vs.count > 1 else { return [] }
+        return vs
+    }
+
+    /// The version Play starts: picked here, else played last, else this page's file.
+    private var chosenVersion: FilmVersion? {
+        let vs = versions
+        guard !vs.isEmpty else { return nil }
+        let id = selectedVersion ?? detail?.preferredVersion ?? current.id
+        return vs.first { $0.id == id } ?? vs.first { $0.id == current.id } ?? vs.first
     }
 
     private var actions: some View {
@@ -120,8 +139,8 @@ struct ItemDetailView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(playTarget == nil)
 
-                if current.kind == .movie || current.kind == .episode {
-                    DownloadButton(item: current)
+                if let t = playTarget, current.kind == .movie || current.kind == .episode {
+                    DownloadButton(item: t).id(t.id)
                 }
                 IconToggle(on: userData.favorite, onIcon: "heart.fill", offIcon: "heart",
                            label: userData.favorite ? L("Kedvenc – eltávolítás") : L("Kedvencekhez")) {
@@ -132,15 +151,27 @@ struct ItemDetailView: View {
                     await setPlayed(!userData.played)
                 }
             }
+            if let chosen = chosenVersion {
+                versionPicker(chosen)
+            }
             if let t = playTarget, t.kind == .movie || t.kind == .episode {
-                Button { Haptic.tap.play(); model.startParty(t) } label: {
-                    Label(L("Watch party indítása"), systemImage: "person.2")
-                        .padding(.vertical, 6)
-                        .contentShape(.rect)
+                HStack(spacing: 20) {
+                    Button { Haptic.tap.play(); model.startParty(t) } label: {
+                        Label(L("Watch party indítása"), systemImage: "person.2")
+                            .padding(.vertical, 6)
+                            .contentShape(.rect)
+                    }
+                    .disabled(model.partyJoining)
+                    if current.kind == .movie || current.kind == .episode {
+                        Button { Haptic.tap.play(); subSearch = t } label: {
+                            Label(L("Felirat keresése"), systemImage: "text.magnifyingglass")
+                                .padding(.vertical, 6)
+                                .contentShape(.rect)
+                        }
+                    }
                 }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.plaster)
-                .disabled(model.partyJoining)
             }
             if let t = playTarget, let p = t.progress {
                 HStack(spacing: 10) {
@@ -162,6 +193,38 @@ struct ItemDetailView: View {
         // On an iPad the play button and the toggles stay together, not stretched across the screen.
         .frame(maxWidth: metrics.regular ? 600 : nil, alignment: .leading)
         .padding(.horizontal, metrics.gutter)
+    }
+
+    /// Which version Play starts; each row names the cut, the picture and the sound.
+    private func versionPicker(_ chosen: FilmVersion) -> some View {
+        Menu {
+            ForEach(versions) { v in
+                Toggle(isOn: Binding(get: { v.id == chosen.id },
+                                     set: { if $0 { Haptic.select.play(); selectedVersion = v.id } })) {
+                    Text(v.title)
+                    Text(v.details)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "square.stack.3d.up")
+                Text(L("Változat:"))
+                    .foregroundStyle(Theme.muted)
+                Text(chosen.title)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.muted)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .background(Color.white.opacity(0.08), in: .capsule)
+            .contentShape(.capsule)
+        }
+        .foregroundStyle(Theme.plaster)
+        .accessibilityLabel(L("Változat: {0}", chosen.title))
+        .accessibilityHint(L("{0} változat közül választhatsz", versions.count))
     }
 
     private var playLabel: String {

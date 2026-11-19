@@ -306,6 +306,20 @@ final class PlayerModel: NSObject {
         }
     }
 
+    /// A subtitle just downloaded on the server joins the tracks and shows at once.
+    func addDownloadedSubtitle(_ s: MediaStream) {
+        guard var info, !isOffline else { return }
+        let path = "/api/items/\(item.id)/subtitles/\(s.typeIndex)"
+        let url = info.streamToken.map { path + "?st=" + ($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0) } ?? path
+        let track = SubtitleTrack(idx: s.typeIndex, lang: s.lang, title: s.title, forced: s.forced, textBased: true, url: url)
+        var subs = info.subtitles ?? []
+        subs.removeAll { $0.idx == track.idx }
+        subs.append(track)
+        info.subtitles = subs
+        self.info = info
+        selectSubtitle(track)
+    }
+
     /// The series starts with these languages next time.
     private func rememberLanguages() {
         guard let series = item.seriesId else { return }

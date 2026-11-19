@@ -12,6 +12,8 @@ struct PlayerView: View {
     /// Double-tap seeking: which side and how far, shown briefly.
     @State private var seekFlash: SeekFlash?
     @State private var flashTask: Task<Void, Never>?
+    /// The subtitle search sheet is open.
+    @State private var subSearch = false
     /// With VoiceOver the controls stay up: a hidden control can't be found by swiping.
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
@@ -64,6 +66,10 @@ struct PlayerView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.partyError ?? "")
+        }
+        .sheet(isPresented: $subSearch, onDismiss: { scheduleHide() }) {
+            SubtitleSearchView(item: player.item) { player.addDownloadedSubtitle($0) }
+                .foregroundStyle(.primary)
         }
         .background { keyboardShortcuts }
         .foregroundStyle(.white)
@@ -135,7 +141,7 @@ struct PlayerView: View {
                     .accessibilityLabel(party.unread > 0 ? L("Watch party, {0} új üzenet", party.unread) : L("Watch party"))
                 }
                 ChaptersMenu(player: player)
-                OptionsMenu(player: player)
+                OptionsMenu(player: player, subSearch: $subSearch)
                 AirPlayButton().frame(width: 44, height: 44)
                 if player.pipSupported {
                     RoundIcon("pip.enter", label: L("Kép a képben")) { player.startPiP() }
@@ -479,6 +485,7 @@ private struct CaptionView: View {
 private struct OptionsMenu: View {
     @Environment(AppModel.self) private var model
     var player: PlayerModel
+    @Binding var subSearch: Bool
 
     var body: some View {
         let audio = player.info?.audioTracks ?? []
@@ -517,6 +524,12 @@ private struct OptionsMenu: View {
                     Text(PlayerView.delayLabel(player.subtitleDelay))
                 }
                 .menuActionDismissBehavior(.disabled)
+            }
+            if !player.isOffline {
+                Button(L("Felirat keresése…"), systemImage: "text.magnifyingglass") {
+                    Haptic.select.play()
+                    subSearch = true
+                }
             }
             // In a party the room's clock sets the speed.
             if player.party == nil {

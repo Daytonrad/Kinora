@@ -120,6 +120,72 @@ public struct ItemDetail: Codable, Sendable {
     public var seasons: [Item]?
     public var playNext: Item?
     public var similar: [Item]?
+    /// Every file of a film that exists in several versions (same IMDb id); nil for one.
+    public var versions: [FilmVersion]?
+    /// The version the profile played last.
+    public var preferredVersion: Int?
+}
+
+/// One file of a film with several versions, as the detail page lists it.
+public struct FilmVersion: Codable, Sendable, Identifiable, Hashable {
+    public var id: Int
+    /// "Director's Cut" etc. from the file name; nil for the plain version.
+    public var edition: String?
+    public var resolution: String?
+    public var hdr: String?
+    public var videoCodec: String?
+    public var audioCodec: String?
+    public var channels: Int?
+    public var size: Int64?
+    public var runtimeSec: Double?
+    public var container: String?
+    public var library: String?
+    public var position: Double?
+
+    public init(id: Int, edition: String? = nil, resolution: String? = nil) {
+        self.id = id; self.edition = edition; self.resolution = resolution
+    }
+
+    /// "Director's Cut · 4K" — the name of the version.
+    public var title: String {
+        [edition, resolution.flatMap { $0.isEmpty ? nil : $0 }].compactMap { $0 }.joined(separator: " · ")
+            .nilIfEmpty ?? L("Változat")
+    }
+
+    /// "HDR10 · HEVC · EAC3 5.1 · 12,3 GB · Filmek 4K"
+    public var details: String {
+        var parts: [String] = []
+        if let hdr, !hdr.isEmpty { parts.append(hdr) }
+        if let videoCodec, !videoCodec.isEmpty { parts.append(videoCodec.uppercased()) }
+        if let audioCodec, !audioCodec.isEmpty {
+            var a = audioCodec.uppercased()
+            switch channels {
+            case 6?: a += " 5.1"
+            case 8?: a += " 7.1"
+            case 2?: a += " " + L("sztereó")
+            default: break
+            }
+            parts.append(a)
+        }
+        if let size, size > 0 { parts.append(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)) }
+        if let library, !library.isEmpty { parts.append(library) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// The same film as `base`, pointed at this file (its id, length and resume point).
+    public func item(from base: Item) -> Item {
+        var it = base
+        it.id = id
+        if let runtimeSec, runtimeSec > 0 { it.runtimeSec = runtimeSec }
+        var ud = base.userData ?? UserData()
+        ud.position = position ?? 0
+        it.userData = ud
+        return it
+    }
+}
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 public enum ItemSort: String, CaseIterable, Sendable, Identifiable {
