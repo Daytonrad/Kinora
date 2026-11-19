@@ -188,6 +188,16 @@ func (s *Server) handleItem(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 		if n, _ := s.st.NextEpisode(p, it); n != nil {
 			resp["next"] = n
 		}
+	case "movie":
+		if vs := s.versionsOf(p, it); vs != nil {
+			resp["versions"] = vs
+			pref := s.st.VersionPref(p.ID, it.ImdbID)
+			for _, v := range vs {
+				if v.ID == pref {
+					resp["preferred_version"] = pref
+				}
+			}
+		}
 	}
 	simID := it.ID
 	if it.Kind != "movie" && it.SeriesID != nil {

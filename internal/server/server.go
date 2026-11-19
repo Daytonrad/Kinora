@@ -77,6 +77,7 @@ type Deps struct {
 	Party     *party.Hub
 	Meta      *meta.Fetcher
 	Intro     *intro.Analyzer // skip intro / credits detection (nil = off)
+	OpenSubs  *meta.OpenSubtitles // subtitle search and download (created by New when nil)
 }
 
 // New builds the server and its routes.
@@ -85,6 +86,9 @@ func New(cfg Config, st *store.Store, log *slog.Logger, deps Deps) *Server {
 		qc: newQuickConnect(), updates: newReleaseChecker(), extraOrigins: parseOrigins(cfg.CORSOrigins)}
 	if s.bgCtx == nil {
 		s.bgCtx = context.Background()
+	}
+	if s.OpenSubs == nil {
+		s.OpenSubs = meta.NewOpenSubtitles(st, "Kinora v"+Version)
 	}
 	s.routes()
 	return s

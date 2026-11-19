@@ -865,3 +865,34 @@ label.switch-row > span { color: var(--t0); }
   .lang-tbl tr { display: grid; gap: var(--s1); padding: var(--s3) 0; border-bottom: var(--hair) solid var(--rule); }
   .lang-tbl td, .lang-tbl td:nth-child(1), .lang-tbl td:nth-child(2) { width: auto; padding: 0; border: 0; }
 }
+
+/* ---- film versions (same IMDb id) */
+.card .vcount { position: absolute; right: var(--s2); bottom: var(--s2); padding: 0 var(--s2); border-radius: var(--r1); background: rgb(var(--scrim) / .82); color: var(--t0); font-family: var(--text); font-size: var(--f0); font-weight: 700; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.versions-wrap { margin-bottom: var(--s4); }
+.versions-wrap .vhead { font-family: var(--text); font-size: var(--f0); font-weight: 700; color: var(--t2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: var(--s2); }
+.versions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.version { position: relative; overflow: hidden; display: grid; gap: 2px; text-align: left; min-height: var(--hit); min-width: var(--col-xs); max-width: var(--entry-min); padding: var(--s2) var(--s3); background: var(--g2); color: var(--t1); border: var(--hair) solid var(--rule-hi); border-radius: var(--r2); cursor: pointer; font-family: var(--text); transition: border-color var(--t-out) var(--ease), background var(--t-out) var(--ease); }
+.version:hover { border-color: var(--t2); background: var(--g3); }
+.version b { font-size: var(--f1); color: var(--t0); display: flex; gap: var(--s2); align-items: baseline; }
+.version .vres { font-size: var(--f0); color: var(--t2); font-weight: 700; }
+.version > span { font-size: var(--f0); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.version.on { border-color: var(--amber-dim); background: color-mix(in srgb, var(--amber) 12%, var(--g2)); cursor: default; }
+.version.on b, .version.on .vres { color: var(--amber); }
+.version .vprog { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--rule); }
+.version .vprog i { display: block; height: 100%; background: var(--amber); }
+
+/* ---- subtitle search */
+.sub-search { display: grid; gap: var(--s3); min-width: 0; }
+.modal.wide { width: min(calc(var(--sheet-w) + var(--s9) + var(--s8)), 100%); }
+.sub-search .sub-langs { padding-top: 0; }
+.sub-results { display: grid; gap: var(--s1); max-height: var(--pop-h); overflow-y: auto; }
+.sub-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s3); align-items: center; padding: var(--s2) var(--s2); border-radius: var(--r1); }
+.sub-row:hover { background: var(--g3); }
+.sub-lang { font-family: var(--text); font-size: var(--f0); font-weight: 700; color: var(--t2); min-width: 3.2em; }
+.sub-main { min-width: 0; display: grid; gap: var(--s1); }
+.sub-main b { font-size: var(--f1); color: var(--t0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: break-all; }
+.sub-meta { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s2); align-items: center; }
+.badge.warn { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.sub-credit { margin-top: var(--s2); }
+.p-pop .sub-results { max-height: none; overflow: visible; }
+.p-pop .sub-row { gap: var(--s2); padding: var(--s2) 0; }

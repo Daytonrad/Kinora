@@ -316,6 +316,7 @@ func (s *Store) Browse(p *Profile, rs RuleSet, offset, limit int) ([]*Item, int,
 	if err != nil {
 		return nil, 0, err
 	}
+	where += NotAltVersion
 	rf, rargs := RatingSQL(p, "i")
 	var total int
 	cq := `SELECT COUNT(*) FROM items i LEFT JOIN user_data ud ON ud.item_id=i.id AND ud.profile_id=? WHERE 1=1` + where + rf

@@ -40,6 +40,7 @@ type Fetcher struct {
 	status Status
 	langs  map[string]bool // viewer languages (metadata_langs), loaded on first use
 	again  bool            // a Kick arrived while a refresh ran: run once more
+	noImdb map[int64]bool  // TMDB movies without an IMDb id (asked once per process)
 }
 
 // Status is the progress of a refresh.
@@ -146,6 +147,7 @@ type genre struct {
 
 type movieDetails struct {
 	ID           int64   `json:"id"`
+	ImdbID       string  `json:"imdb_id"`
 	Title        string  `json:"title"`
 	ReleaseDate  string  `json:"release_date"`
 	Overview     string  `json:"overview"`
@@ -329,6 +331,9 @@ func (f *Fetcher) Refresh(ctx context.Context, retryNoMatch bool) error {
 		if err := f.translateAll(ctx); err != nil {
 			return err
 		}
+		if err := f.imdbBackfill(ctx); err != nil {
+			return err
+		}
 		f.mu.Lock()
 		again := f.again
 		f.again = false
@@ -507,6 +512,9 @@ func (f *Fetcher) applyMovie(ctx context.Context, t target, id int64) error {
 	if err := f.st.ApplyOnline(t.id, m); err != nil {
 		return err
 	}
+	if err := f.st.SetImdbID(t.id, d.ImdbID); err != nil {
+		return err
+	}
 	f.artwork(ctx, t.id, d.PosterPath, d.BackdropPath)
 	return nil
 }
@@ -608,4 +616,64 @@ func (f *Fetcher) image(ctx context.Context, size, path, dst string) bool {
 		return false
 	}
 	return os.Rename(tmp, dst) == nil
+}
+
+// imdbBackfill fetches the IMDb id of matched movies that have none yet (matched before
+// Kinora stored it, or matched through an NFO tmdbid). The versions of a film are grouped by it.
+func (f *Fetcher) imdbBackfill(ctx context.Context) error {
+	rows, err := f.st.DB.Query(`SELECT id,tmdb_id FROM items WHERE kind='movie' AND missing=0 AND tmdb_id>0 AND imdb_id=''`)
+	if err != nil {
+		return err
+	}
+	type row struct{ id, tmdb int64 }
+	var todo []row
+	for rows.Next() {
+		var r row
+		rows.Scan(&r.id, &r.tmdb)
+		todo = append(todo, r)
+	}
+	rows.Close()
+	known := map[int64]string{}
+	for _, r := range todo {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		f.mu.Lock()
+		skip := f.noImdb[r.tmdb]
+		f.mu.Unlock()
+		if skip {
+			continue
+		}
+		imdb, ok := known[r.tmdb]
+		if !ok {
+			var d struct {
+				ImdbID string `json:"imdb_id"`
+			}
+			if err := f.get(ctx, fmt.Sprintf("/movie/%d", r.tmdb), url.Values{}, &d); err != nil {
+				if errors.Is(err, errNotFound) {
+					continue
+				}
+				if errors.Is(err, ErrNoKey) || strings.Contains(err.Error(), "401") {
+					return err
+				}
+				f.log.Warn("tmdb imdb id", "tmdb", r.tmdb, "err", err)
+				continue
+			}
+			imdb = store.NormalizeImdbID(d.ImdbID)
+			known[r.tmdb] = imdb
+		}
+		if imdb == "" {
+			f.mu.Lock()
+			if f.noImdb == nil {
+				f.noImdb = map[int64]bool{}
+			}
+			f.noImdb[r.tmdb] = true
+			f.mu.Unlock()
+			continue
+		}
+		if err := f.st.SetImdbID(r.id, imdb); err != nil {
+			return err
+		}
+	}
+	return nil
 }

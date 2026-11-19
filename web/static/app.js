@@ -625,6 +625,7 @@ function card(it, style = 'poster', opts = {}) {
   if (style === 'landscape' && ud.position > 0 && it.runtime_sec) art.append(h('div.prog', null, h('i', { style: { width: Math.min(100, ud.position / it.runtime_sec * 100) + '%' } })));
   if (ud.played && it.kind !== 'season') art.append(h('span.tick', { title: T.watched }, icon('check')));
   else if (it.kind === 'series' && it.unplayed_count) art.append(h('span.count', { title: T.unwatchedTitle }, it.unplayed_count));
+  if (it.version_count > 1 && style === 'poster') art.append(h('span.vcount', { title: T.versionsN(it.version_count) }, T.versionsShort(it.version_count)));
   const href = '#/item/' + it.id;
   const el = h('div.card.' + style, { tabindex: 0, role: 'link', 'aria-label': it.title, onclick: e => { if (!e.target.closest('.more')) location.hash = opts.playOnClick ? '#/play/' + it.id : href; }, onkeydown: e => { if (e.key === 'Enter') location.hash = opts.playOnClick ? '#/play/' + it.id : href; } },
     art, h('div.cap', null, h('b', null, it.title), h('span', null, itemSub(it)), opts.reason && h('span.why', null, opts.reason)));
@@ -836,10 +837,41 @@ async function viewLibrary(libId, q) {
 }
 
 // ===================================================================== item detail
+// the version of a film the profile picked or played last; the detail page opens on it
+const versionPick = {};
+const chLabel = c => c === 1 ? '1.0' : c === 2 ? '2.0' : c === 6 ? '5.1' : c === 8 ? '7.1' : c > 0 ? c + 'ch' : '';
+const editionLabel = e => (T.editions && T.editions[e]) || e;
+function versionPicker(it, versions) {
+  const group = h('div.versions', { role: 'radiogroup', 'aria-label': T.versionsHead });
+  for (const v of versions) {
+    const cur = v.id === it.id;
+    const label = v.edition ? editionLabel(v.edition) : [v.resolution, v.hdr].filter(Boolean).join(' ') || T.versionPlain;
+    const top = v.edition ? [v.resolution, v.hdr].filter(Boolean).join(' ') : '';
+    const sub = [v.video_codec && v.video_codec.toUpperCase(), v.audio_codec && [v.audio_codec.toUpperCase(), chLabel(v.channels)].filter(Boolean).join(' '), v.size && fmtBytes(v.size), v.library].filter(Boolean).join(' · ');
+    group.append(h('button.version' + (cur ? '.on' : ''), { role: 'radio', 'aria-checked': cur ? 'true' : 'false', onclick: () => {
+      if (cur) return;
+      versionPick[it.imdb_id] = v.id;
+      history.replaceState(null, '', '#/item/' + v.id);
+      viewItem(v.id);
+    } }, h('b', null, label, top && h('span.vres', null, top)), sub && h('span', null, sub),
+      v.position > 0 && v.runtime_sec ? h('i.vprog', null, h('i', { style: { width: Math.min(100, v.position / v.runtime_sec * 100) + '%' } })) : null));
+  }
+  return group;
+}
 async function viewItem(id) {
   const main = shell('item');
   const d = await GET('/api/items/' + id);
   const it = d.item, ud = it.user_data || {};
+  if (d.versions && it.imdb_id) {
+    // open on the picked / last played version unless the URL already points at it
+    const want = versionPick[it.imdb_id] ?? d.preferred_version;
+    if (want && want !== it.id && d.versions.some(v => v.id === want)) {
+      versionPick[it.imdb_id] = want;
+      history.replaceState(null, '', '#/item/' + want);
+      return viewItem(want);
+    }
+    versionPick[it.imdb_id] = it.id;
+  }
   document.title = it.title + ' – ' + T.appName;
   const kidsP = state.me.profile.is_kids;
   const bg = h('div.hero-img');
@@ -883,6 +915,7 @@ async function viewItem(id) {
   const moreBtn = h('button.btn', { 'aria-haspopup': 'menu', onclick: e => popMenu(e.currentTarget, [
     !kidsP && [T.addToCollection, () => addToCollectionMenu(it, moreBtn)],
     canParty && [T.startParty, async () => { const r = await POST('/api/party', { item_id: (playTarget || it).id, everyone: false }); go(`#/play/${(playTarget || it).id}?party=${r.code}`); }],
+    canDl && [T.subSearch + '…', () => subSearchDialog(it)],
     canDl && [T.download + '…', () => modal(T.download, h('div', null, h('p.muted', null, T.dlKept), downloadWidget(it)), close => [h('button.btn', { onclick: close }, T.close)])],
     state.me.user.is_admin && (it.kind === 'movie' || it.kind === 'series') && [T.fixMatch, () => fixMatchDialog(it)],
     state.me.user.is_admin && (it.kind === 'series' || it.kind === 'season') && [T.segAnalyze, async () => { const r = await POST('/api/admin/segments/analyze', { item_id: it.id }); toast(T.segQueued(r.seasons)); }],
@@ -903,6 +936,7 @@ async function viewItem(id) {
   main.append(h('section.detail-hero', null, bg, h('div.detail', null,
     h('div.poster', null, artImg(it, it.kind === 'episode' ? 'thumb' : 'poster', it.title)),
     h('div', null, titleBlock, facts, it.overview && h('p.overview', null, it.overview),
+      d.versions && h('div.versions-wrap', null, h('div.vhead', null, T.versionsN(d.versions.length)), versionPicker(it, d.versions)),
       h('div.actions', null,
         playTarget && h('button.btn.primary.big', { onclick: () => go('#/play/' + playTarget.id) }, icon('play'), playLabel),
         playedBtn, favBtn, hideBtn, stars, moreBtn)))));
@@ -933,6 +967,63 @@ async function viewItem(id) {
   if (it.kind === 'season' && d.episodes) main.append(h('h2', { class: 'mt7 mb3' }, T.episodes), h('div.episodes', null, d.episodes.map(episodeRow)));
   if (it.kind === 'episode' && d.next) main.append(shelf(T.nextEp, [d.next], 'landscape', { playOnClick: true }));
   if (d.similar && d.similar.length) main.append(shelf(T.similar, d.similar, 'poster'));
+}
+
+// Subtitle search (OpenSubtitles). onPicked gets the new subtitle stream after a download.
+// It lives in an element of its own so the player can show it in its popover (a modal would
+// stay hidden behind a fullscreen player).
+function subSearchPanel(item, onPicked) {
+  const profileLangs = (state.me.profile.sub_langs || '').split(',').filter(Boolean);
+  const pool = [...new Set([...profileLangs, 'hun', 'eng', 'ger'])];
+  let langs = profileLangs.length ? profileLangs.slice() : ['hun', 'eng'];
+  const chips = h('div.chips.sub-langs', { role: 'group', 'aria-label': T.subSearchLangs });
+  const list = h('div.sub-results', { 'aria-live': 'polite' });
+  const root = h('div.sub-search', null, chips, list);
+  let gen = 0;
+  const paintChips = () => put(chips, ...pool.map(l => h('button.chip' + (langs.includes(l) ? '.on' : ''), { 'aria-pressed': langs.includes(l) ? 'true' : 'false', onclick: () => {
+    langs = langs.includes(l) ? langs.filter(x => x !== l) : [...langs, l];
+    if (!langs.length) langs = [l];
+    paintChips(); load();
+  } }, langName(l))));
+  const row = r => {
+    const flags = [
+      r.hash_match && h('span.badge.hot', { title: T.subHashHint }, T.subHash),
+      r.trusted && h('span.badge', null, T.subTrusted),
+      r.hearing_impaired && h('span.badge', { title: T.subHIHint }, 'HI'),
+      r.forced && h('span.badge', null, T.forced),
+      r.machine_made && h('span.badge.warn', null, T.subMachine),
+    ];
+    const btn = h('button.btn' + (r.have ? '' : '.primary'), { disabled: !!r.have, onclick: async () => {
+      btn.disabled = true; put(btn, T.subDownloading);
+      try {
+        const res = await POST(`/api/items/${item.id}/subtitles/download`, { file_id: r.file_id, lang: r.lang, release: r.release || r.file_name || '', hearing_impaired: !!r.hearing_impaired, forced: !!r.forced });
+        r.have = true; put(btn, icon('check'), T.subHave); btn.classList.remove('primary');
+        toast(res.remaining >= 0 ? T.subDownloadedLeft(res.remaining) : T.subDownloaded);
+        onPicked && onPicked(res.stream);
+      } catch { btn.disabled = false; put(btn, T.download); }
+    } }, r.have ? [icon('check'), T.subHave] : T.download);
+    return h('div.sub-row', null,
+      h('span.sub-lang', null, (r.lang || '?').toUpperCase()),
+      h('div.sub-main', null, h('b', { title: r.file_name || r.release }, r.release || r.file_name || T.unknownLang),
+        h('div.sub-meta', null, ...flags.filter(Boolean), h('span.muted.small', null, [T.subDownloads(r.downloads), r.uploader].filter(Boolean).join(' · ')))),
+      btn);
+  };
+  async function load() {
+    const my = ++gen;
+    put(list, h('p.muted', null, T.subSearching));
+    let res;
+    try { res = await GET(`/api/items/${item.id}/subtitles/search?langs=${encodeURIComponent(langs.join(','))}`, { quiet: true }); }
+    catch (e) { if (my === gen) put(list, h('p.bad', null, e.message || T.netErr)); return; }
+    if (my !== gen) return;
+    if (!res.enabled) { chips.remove(); put(list, h('p.note-off', null, state.me.user.is_admin ? T.subNotConfiguredAdmin : T.subNotConfigured)); return; }
+    if (!res.results.length) { put(list, h('p.muted', null, T.subNone)); return; }
+    put(list, ...res.results.map(row), h('p.muted.small.sub-credit', null, T.subCredit));
+  }
+  paintChips(); load();
+  return root;
+}
+function subSearchDialog(item) {
+  modal(T.subSearch, subSearchPanel(item, null), close => [h('button.btn', { onclick: close }, T.close)]).box.classList.add('wide');
 }
 
 function episodeRow(e) {
@@ -1469,6 +1560,9 @@ async function viewPlayer(id, q) {
       ...visS.map(s => s.text_based
         ? opt(`${langName(s.lang)}${s.forced ? ` (${T.forced})` : ''}${s.external ? ' · ' + T.external : ''}`, s.type_index === subIdx, () => { subIdx = s.type_index; if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); })
         : opt(`${langName(s.lang)} · ${T.burnIn} (${s.codec})`, s.type_index === burnIdx, () => { subIdx = -1; burnIdx = s.type_index; applySubtitle(); start(pos()); })),
+      h('button.opt', { onclick: () => { pop._b = null; put(pop, h('h3', null, T.subSearch), subSearchPanel(item, st => {
+        info.streams.push(st); subIdx = st.type_index; subCache = null; applySubtitle(); pop.classList.add('hidden');
+      })); pop.classList.remove('hidden'); } }, h('span', { class: 'opt-gap' }), T.subSearch + '…'),
       (hiddenCount > 0 || showAllLangs) && h('label.check', { class: 'mt3' }, h('input', { type: 'checkbox', checked: showAllLangs, onchange: e => { showAllLangs = e.target.checked; pop._b = null; openPop(buildTracks); } }), T.showAll),
       subIdx >= 0 && delayControl(),
     ];
@@ -1761,6 +1855,7 @@ async function viewPlayer(id, q) {
     return;
   }
   item = detail.item;
+  if (item.imdb_id) versionPick[item.imdb_id] = item.id; // back on the detail page, show the version just played
   nextItem = detail.next || null;
   nextBtn.classList.toggle('hidden', !nextItem);
   nextBtn.onclick = playNext;
@@ -2170,6 +2265,8 @@ async function adminMeta(body) {
   put(body, aHead(T.aMeta, T.aLedeMeta),
     aSplit('TMDB', T.metaHint,
       settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]], T.metaLangHint]], () => setTimeout(() => adminMeta(body), 400))),
+    aSplit('OpenSubtitles', T.osHint,
+      settingsForm(s.values, s.env, [['opensubtitles_key', T.osKey, 'password', null, T.osKeyHint], ['opensubtitles_user', T.osUser, 'text', null, T.osUserHint], ['opensubtitles_pass', T.osPass, 'password']])),
     aSplit(T.refreshMeta, T.refreshMetaHint,
       h('label.check', null, retry, T.retryNoMatch),
       h('div.a-form-foot', null, h('button.btn.primary', { disabled: !m.enabled, onclick: async () => { await POST('/api/admin/metadata/refresh', { retry_no_match: retry.checked }); adminMeta(body); } }, T.refreshMeta)),
@@ -2376,7 +2473,7 @@ function langEditor(body, code) {
       if (!v.other) v.other = Object.values(v).find(Boolean);
     }
     if (isObj(out.app)) for (const [k, v] of Object.entries(out.app)) if (isObj(v) && !Object.keys(v).length) delete out.app[k];
-    for (const k of ['srv', 'app', 'sortLabels', 'ruleFields', 'kindOpts', 'langNames', 'platforms']) if (isObj(out[k]) && !Object.keys(out[k]).length) delete out[k];
+    for (const k of ['srv', 'app', 'sortLabels', 'ruleFields', 'kindOpts', 'langNames', 'platforms', 'editions']) if (isObj(out[k]) && !Object.keys(out[k]).length) delete out[k];
     return out;
   };
   put(body, h('div.a-crumb', null, h('button.btn.ghost', { onclick: () => adminLangs(body) }, '← ' + T.aLangs)),

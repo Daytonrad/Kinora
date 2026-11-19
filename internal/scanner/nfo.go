@@ -29,6 +29,8 @@ type nfoDoc struct {
 		Value   string `xml:"value"`
 	} `xml:"ratings>rating"`
 	TmdbID    string `xml:"tmdbid"`
+	ImdbID    string `xml:"imdbid"`
+	ID        string `xml:"id"`
 	UniqueIDs []struct {
 		Type  string `xml:"type,attr"`
 		Value string `xml:",chardata"`
@@ -99,6 +101,15 @@ func ReadNFO(path string) *store.LocalMeta {
 				m.TmdbID, _ = strconv.ParseInt(strings.TrimSpace(u.Value), 10, 64)
 			}
 		}
+	}
+	m.ImdbID = store.NormalizeImdbID(d.ImdbID)
+	for _, u := range d.UniqueIDs {
+		if m.ImdbID == "" && strings.EqualFold(u.Type, "imdb") {
+			m.ImdbID = store.NormalizeImdbID(u.Value)
+		}
+	}
+	if m.ImdbID == "" && strings.HasPrefix(strings.TrimSpace(d.ID), "tt") {
+		m.ImdbID = store.NormalizeImdbID(d.ID)
 	}
 	return m
 }

@@ -394,6 +394,9 @@ func (sc *Scanner) scan(ctx context.Context, libID int64) error {
 			changed = append(changed, f)
 		} else {
 			unchanged++
+			if f.parsed.Kind == "movie" && f.parsed.ImdbID != "" {
+				sc.st.SetImdbID(k.ID, f.parsed.ImdbID) // files scanned before Kinora read id tags
+			}
 		}
 	}
 	sc.update(libID, func(s *Status) {
@@ -764,6 +767,15 @@ func (sc *Scanner) processFile(ctx context.Context, lib *store.Library, f *fileE
 	id, err := sc.st.SaveFile(rec, SortTitle)
 	if err != nil {
 		return fmt.Errorf("mentés: %w", err)
+	}
+	if p.Kind == "movie" {
+		imdb := p.ImdbID
+		if rec.Meta != nil && rec.Meta.ImdbID != "" {
+			imdb = rec.Meta.ImdbID
+		}
+		if err := sc.st.SetImdbID(id, imdb); err != nil {
+			sc.log.Warn("imdb id", "path", f.abs, "err", err)
+		}
 	}
 
 	// artwork

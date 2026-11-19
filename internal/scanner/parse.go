@@ -20,6 +20,7 @@ type Parsed struct {
 	Season     int
 	Episode    int // 0 = unknown
 	EpisodeEnd int // last episode of a multi-episode file (0 = single)
+	ImdbID     string // from an "[imdbid-tt0133093]" / "{imdb-tt0133093}" tag in the file or folder name
 }
 
 var (
@@ -34,7 +35,18 @@ var (
 	}
 	reSpecialsDir = regexp.MustCompile(`(?i)^(?:specials?|extras|különkiadások|bonus)$`)
 	reYear        = regexp.MustCompile(`^(19\d\d|20\d\d)$`)
+	// reIDTag matches an id tag token: imdbid-tt0133093, imdb-tt0133093, tt0133093, tmdbid-603.
+	reIDTag  = regexp.MustCompile(`(?i)^(?:(?:imdb(?:id)?-)?tt\d{7,10}|tmdb(?:id)?-\d+)$`)
+	reImdbIn = regexp.MustCompile(`(?i)(?:^|[\[{( ._-])(?:imdb(?:id)?-)?(tt\d{7,10})(?:$|[\]}) ._-])`)
 )
+
+// ImdbFromName finds an IMDb id tag in a file or folder name.
+func ImdbFromName(name string) string {
+	if m := reImdbIn.FindStringSubmatch(name); m != nil {
+		return strings.ToLower(m[1])
+	}
+	return ""
+}
 
 // junk tokens mark the end of a title (release group noise).
 var junk = map[string]bool{}
@@ -61,7 +73,7 @@ func tokenize(s string) []string {
 	var out []string
 	for _, t := range strings.FieldsFunc(s, f) {
 		t = strings.Trim(t, "-")
-		if t != "" {
+		if t != "" && !reIDTag.MatchString(t) {
 			out = append(out, t)
 		}
 	}
@@ -175,7 +187,11 @@ func parseMovie(dirs []string, base string) Parsed {
 	if title == "" {
 		title = base
 	}
-	return Parsed{Kind: "movie", Title: title, Year: year}
+	imdb := ImdbFromName(base)
+	if imdb == "" && len(dirs) > 0 {
+		imdb = ImdbFromName(dirs[len(dirs)-1])
+	}
+	return Parsed{Kind: "movie", Title: title, Year: year, ImdbID: imdb}
 }
 
 func parseEpisode(dirs []string, base string, force bool) (Parsed, bool) {

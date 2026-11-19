@@ -69,6 +69,7 @@ type LocalMeta struct {
 	Genres        []string
 	Tags          []string
 	TmdbID        int64
+	ImdbID        string // read by the scanner, stored through SetImdbID
 }
 
 // StreamRow is a stream to persist.

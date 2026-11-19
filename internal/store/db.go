@@ -272,6 +272,31 @@ CREATE TABLE genre_i18n(
   PRIMARY KEY(lang, genre)
 );
 `,
+	// 5: versions of a film grouped by IMDb id, the profile's chosen version, downloaded subtitles
+	`
+ALTER TABLE items ADD COLUMN imdb_id TEXT NOT NULL DEFAULT '';
+CREATE INDEX items_imdb ON items(imdb_id) WHERE imdb_id<>'';
+CREATE TABLE version_prefs(
+  profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  imdb_id TEXT NOT NULL,
+  item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(profile_id, imdb_id)
+);
+CREATE TABLE item_subtitles(
+  id INTEGER PRIMARY KEY,
+  item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  lang TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  file_id TEXT NOT NULL,
+  hearing_impaired INTEGER NOT NULL DEFAULT 0,
+  forced INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  UNIQUE(item_id, provider, file_id)
+);
+`,
 }
 
 func (s *Store) migrate() error {
@@ -330,6 +355,9 @@ var SettingDefaults = map[string]string{
 	"brand_accent":         "",
 	"intro_detection":      "1",
 	"intro_window_min":     "10",
+	"opensubtitles_key":    "",
+	"opensubtitles_user":   "",
+	"opensubtitles_pass":   "",
 }
 
 // SetOverride forces a setting from the environment (shown as locked in the admin UI).

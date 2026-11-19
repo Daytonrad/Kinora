@@ -123,3 +123,16 @@ func TestNormalizeLang(t *testing.T) {
 		}
 	}
 }
+
+func TestImdbFromName(t *testing.T) {
+	for in, want := range map[string]string{
+		"The Matrix (1999) {imdb-tt0133093}.mkv": "tt0133093",
+		"The Matrix (1999) [imdbid-tt0133093]":   "tt0133093",
+		"Matrix.tt0133093.1080p.mkv":             "tt0133093",
+		"The Matrix (1999).mkv":                  "",
+	} {
+		if got := ImdbFromName(in); got != want {
+			t.Errorf("ImdbFromName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

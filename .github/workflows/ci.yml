@@ -200,8 +200,14 @@ jobs:
           if ($LASTEXITCODE) { exit 1 }
           $exe = "kinora-setup.exe"
           (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower() + "  $exe" | Out-File -Encoding ascii "$exe.sha256"
+      # bilingual release notes from docs/releases/<tag>.md, when the file exists
+      - name: Release notes
+        run: |
+          f="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ -f "$f" ]; then cp "$f" release-notes.md; else : > release-notes.md; fi
       - uses: softprops/action-gh-release@v2
         with:
+          body_path: release-notes.md
           files: |
             kinora-windows-amd64.zip
             kinora-windows-amd64.zip.sha256

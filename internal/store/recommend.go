@@ -59,7 +59,7 @@ func (s *Store) candidates(p *Profile) (map[int64]*candidate, error) {
 		  LEFT JOIN items he ON he.id=hu.item_id
 		  WHERE hp.user_id=? AND (hu.position>0 OR hu.played=1) AND (hu.item_id=i.id OR he.series_id=i.id))
 		FROM items i LEFT JOIN user_data ud ON ud.item_id=i.id AND ud.profile_id=?
-		WHERE i.kind IN ('movie','series') AND i.missing=0`+rf, append([]any{p.ID, p.UserID, p.ID}, rargs...)...)
+		WHERE i.kind IN ('movie','series') AND i.missing=0`+NotAltVersion+rf, append([]any{p.ID, p.UserID, p.ID}, rargs...)...)
 	if err != nil {
 		return nil, err
 	}

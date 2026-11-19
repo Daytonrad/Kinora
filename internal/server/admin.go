@@ -151,7 +151,11 @@ func (s *Server) handleInviteDelete(w http.ResponseWriter, r *http.Request, c *r
 // ------------------------------------------------------------------ settings
 
 var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder", "video_codec",
-	"quickconnect_enabled", "discovery_enabled", "brand_accent", "intro_detection", "intro_window_min"}
+	"quickconnect_enabled", "discovery_enabled", "brand_accent", "intro_detection", "intro_window_min",
+	"opensubtitles_key", "opensubtitles_user", "opensubtitles_pass"}
+
+// secretSettings are shown masked and kept when the masked value comes back.
+var secretSettings = map[string]bool{"tmdb_key": true, "opensubtitles_key": true, "opensubtitles_pass": true}
 
 // SettingEnv maps settings to the environment variables that can force them.
 var SettingEnv = map[string]string{
@@ -167,6 +171,9 @@ var SettingEnv = map[string]string{
 	"brand_accent":         "KINORA_ACCENT",
 	"intro_detection":      "KINORA_INTRO_DETECTION",
 	"intro_window_min":     "KINORA_INTRO_WINDOW_MIN",
+	"opensubtitles_key":    "KINORA_OPENSUBTITLES_KEY",
+	"opensubtitles_user":   "KINORA_OPENSUBTITLES_USER",
+	"opensubtitles_pass":   "KINORA_OPENSUBTITLES_PASS",
 }
 
 const maskChar = "•"
@@ -186,7 +193,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request, c *reqCt
 	env := map[string]string{}
 	for _, k := range settingKeys {
 		v := s.st.Setting(k)
-		if k == "tmdb_key" {
+		if secretSettings[k] {
 			v = maskSecret(v)
 		}
 		vals[k] = v
@@ -214,7 +221,7 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 			continue // environment wins; the UI shows the field as locked
 		}
 		switch k {
-		case "tmdb_key":
+		case "tmdb_key", "opensubtitles_key", "opensubtitles_pass":
 			if strings.Contains(v, maskChar) {
 				continue // masked value echoed back: keep the stored key
 			}

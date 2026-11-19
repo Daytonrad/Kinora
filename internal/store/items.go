@@ -35,6 +35,7 @@ type Item struct {
 	HDR             string   `json:"hdr,omitempty"`
 	CreditsStart    *float64 `json:"credits_start,omitempty"`
 	TmdbID          *int64   `json:"tmdb_id,omitempty"`
+	ImdbID          string   `json:"imdb_id,omitempty"`
 	HasPoster       bool     `json:"has_poster"`
 	HasBackdrop     bool     `json:"has_backdrop"`
 	Missing         bool     `json:"missing,omitempty"`
@@ -46,6 +47,8 @@ type Item struct {
 	// Series/season aggregates (filled by list queries)
 	EpisodeCount  int `json:"episode_count,omitempty"`
 	UnplayedCount int `json:"unplayed_count,omitempty"`
+	// VersionCount is the number of present files of the same film (same IMDb id), 0 when it has none.
+	VersionCount int `json:"version_count,omitempty"`
 
 	Genres   []string     `json:"genres,omitempty"`
 	Tags     []string     `json:"tags,omitempty"`
@@ -67,6 +70,9 @@ type StreamInfo struct {
 	External     bool   `json:"external"`
 	ExternalPath string `json:"-"`
 	TextBased    bool   `json:"text_based"`
+	// DownloadID is set on a subtitle fetched from a subtitle service (item_subtitles.id).
+	DownloadID int64  `json:"download_id,omitempty"`
+	Provider   string `json:"provider,omitempty"`
 }
 
 // TextSubtitleCodecs can be converted to WebVTT.
@@ -82,12 +88,13 @@ const (
 
 const itemSelect = `SELECT i.id,i.library_id,i.kind,i.parent_id,i.series_id,` + locTitle + `,` + locSort + `,i.year,i.season_num,i.episode_num,i.episode_end,
  ` + locOverview + `,i.content_rating,i.rating_level,i.community_rating,i.runtime_sec,i.path,i.size,i.container,i.video_codec,i.audio_codec,
- i.width,i.height,i.bitrate,i.hdr,i.credits_start,i.tmdb_id,i.has_poster,i.has_backdrop,i.missing,i.added_at,i.updated_at,
+ i.width,i.height,i.bitrate,i.hdr,i.credits_start,i.tmdb_id,i.imdb_id,i.has_poster,i.has_backdrop,i.missing,i.added_at,i.updated_at,
  COALESCE(NULLIF(srt.title,''),sr.title,''),
  COALESCE(ud.position,0),COALESCE(ud.played,0),COALESCE(ud.play_count,0),ud.last_played_at,COALESCE(ud.favorite,0),ud.stars,COALESCE(ud.hidden,0),
  CASE WHEN i.kind IN ('series','season') THEN (SELECT COUNT(*) FROM items e WHERE e.kind='episode' AND e.missing=0 AND (e.series_id=i.id OR e.parent_id=i.id) AND COALESCE(e.season_num,1)<>0) ELSE 0 END,
  CASE WHEN i.kind IN ('series','season') THEN (SELECT COUNT(*) FROM items e LEFT JOIN user_data eu ON eu.item_id=e.id AND eu.profile_id=?
-   WHERE e.kind='episode' AND e.missing=0 AND (e.series_id=i.id OR e.parent_id=i.id) AND COALESCE(e.season_num,1)<>0 AND COALESCE(eu.played,0)=0) ELSE 0 END
+   WHERE e.kind='episode' AND e.missing=0 AND (e.series_id=i.id OR e.parent_id=i.id) AND COALESCE(e.season_num,1)<>0 AND COALESCE(eu.played,0)=0) ELSE 0 END,
+ CASE WHEN i.kind='movie' AND i.imdb_id<>'' THEN (SELECT COUNT(*) FROM items v WHERE v.imdb_id=i.imdb_id AND v.kind='movie' AND v.missing=0) ELSE 0 END
 FROM items i
 LEFT JOIN items sr ON sr.id=i.series_id AND i.kind IN ('season','episode')
 LEFT JOIN item_i18n tr ON tr.item_id=i.id AND tr.lang=? AND COALESCE(i.tmdb_id,0)>=0
@@ -101,10 +108,10 @@ func scanItem(row interface{ Scan(...any) error }) (*Item, error) {
 	var cr, credits sql.NullFloat64
 	err := row.Scan(&it.ID, &it.LibraryID, &it.Kind, &parent, &series, &it.Title, &it.SortTitle, &year, &season, &ep, &epEnd,
 		&it.Overview, &it.ContentRating, &lvl, &cr, &it.RuntimeSec, &it.Path, &it.Size, &it.Container, &it.VideoCodec, &it.AudioCodec,
-		&it.Width, &it.Height, &it.Bitrate, &it.HDR, &credits, &tmdb, &it.HasPoster, &it.HasBackdrop, &it.Missing, &it.AddedAt, &it.UpdatedAt,
+		&it.Width, &it.Height, &it.Bitrate, &it.HDR, &credits, &tmdb, &it.ImdbID, &it.HasPoster, &it.HasBackdrop, &it.Missing, &it.AddedAt, &it.UpdatedAt,
 		&it.SeriesTitle,
 		&it.UserData.Position, &it.UserData.Played, &it.UserData.PlayCount, &last, &it.UserData.Favorite, &stars, &it.UserData.Hidden,
-		&it.EpisodeCount, &it.UnplayedCount)
+		&it.EpisodeCount, &it.UnplayedCount, &it.VersionCount)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -226,7 +233,11 @@ func (s *Store) Streams(id int64) ([]StreamInfo, error) {
 		st.TextBased = st.Type == "subtitle" && TextSubtitleCodecs[st.Codec]
 		out = append(out, st)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	return s.appendDownloadedSubs(id, out)
 }
 
 // fillGenresTags loads genres and tags for a batch of items; genres are shown in the profile's metadata language.

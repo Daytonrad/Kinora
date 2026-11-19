@@ -79,7 +79,7 @@ func (s *Store) PlayNext(p *Profile, seriesID int64) (*Item, error) {
 func (s *Store) ContinueWatching(p *Profile, limit int) ([]*Item, error) {
 	return s.QueryItems(p, ` AND i.kind IN ('movie','episode') AND i.missing=0 AND ud.position>0 AND COALESCE(ud.played,0)=0
 		AND COALESCE(ud.hidden,0)=0
-		AND NOT EXISTS(SELECT 1 FROM user_data su WHERE su.item_id=i.series_id AND su.profile_id=ud.profile_id AND su.hidden=1)`,
+		AND NOT EXISTS(SELECT 1 FROM user_data su WHERE su.item_id=i.series_id AND su.profile_id=ud.profile_id AND su.hidden=1)`+NotAltVersion,
 		nil, `ORDER BY ud.last_played_at DESC LIMIT ?`, limit)
 }
 
@@ -139,7 +139,7 @@ func (s *Store) NextUp(p *Profile, limit int) ([]*Item, error) {
 
 // RecentlyAdded lists the newest movies/series of a library (series by newest episode).
 func (s *Store) RecentlyAdded(p *Profile, libID int64, limit int) ([]*Item, error) {
-	return s.QueryItems(p, ` AND i.library_id=? AND i.kind IN ('movie','series') AND i.missing=0`, []any{libID},
+	return s.QueryItems(p, ` AND i.library_id=? AND i.kind IN ('movie','series') AND i.missing=0`+NotAltVersion, []any{libID},
 		`ORDER BY i.added_at DESC, i.id DESC LIMIT ?`, limit)
 }
 
@@ -153,7 +153,7 @@ func (s *Store) Search(p *Profile, q string, limit int) ([]*Item, error) {
 	prefix := likeEscape(q) + "%"
 	items, err := s.QueryItems(p, ` AND i.kind IN ('movie','series','episode') AND i.missing=0 AND (
 		i.title LIKE ? ESCAPE '\' OR i.overview LIKE ? ESCAPE '\' OR tr.title LIKE ? ESCAPE '\' OR tr.overview LIKE ? ESCAPE '\' OR
-		EXISTS(SELECT 1 FROM item_tags t WHERE t.item_id=i.id AND t.tag LIKE ? ESCAPE '\'))`,
+		EXISTS(SELECT 1 FROM item_tags t WHERE t.item_id=i.id AND t.tag LIKE ? ESCAPE '\'))`+NotAltVersion,
 		[]any{like, like, like, like, like},
 		`ORDER BY CASE WHEN `+locTitle+` LIKE ? ESCAPE '\' THEN 0 WHEN `+locTitle+` LIKE ? ESCAPE '\' THEN 1 ELSE 2 END,
 		 CASE i.kind WHEN 'episode' THEN 1 ELSE 0 END, `+locSort+` LIMIT ?`, prefix, like, limit)

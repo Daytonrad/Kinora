@@ -87,6 +87,13 @@ func (s *Store) ReportProgress(profileID int64, it *Item, position float64, ende
 	if it.SeriesID != nil {
 		tx.Exec(`UPDATE user_data SET hidden=0 WHERE profile_id=? AND item_id=?`, profileID, *it.SeriesID)
 	}
+	if it.Kind == "movie" && it.ImdbID != "" {
+		if err := mirrorUserData(tx, profileID, it.ID); err != nil {
+			return false, err
+		}
+		tx.Exec(`INSERT INTO version_prefs(profile_id,imdb_id,item_id,updated_at) VALUES(?,?,?,?)
+			ON CONFLICT(profile_id,imdb_id) DO UPDATE SET item_id=excluded.item_id, updated_at=excluded.updated_at`, profileID, it.ImdbID, it.ID, t)
+	}
 	return done, tx.Commit()
 }
 
@@ -137,6 +144,11 @@ func (s *Store) SetPlayed(profileID int64, it *Item, played bool) error {
 			return err
 		}
 	}
+	if it.Kind == "movie" {
+		if err := mirrorUserData(tx, profileID, it.ID); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 
@@ -149,8 +161,10 @@ func (s *Store) SetFlag(profileID, itemID int64, flag string, v bool) error {
 	if err := ensureUD(s.DB, profileID, itemID); err != nil {
 		return err
 	}
-	_, err := s.DB.Exec(`UPDATE user_data SET `+col+`=? WHERE profile_id=? AND item_id=?`, v, profileID, itemID)
-	return err
+	if _, err := s.DB.Exec(`UPDATE user_data SET `+col+`=? WHERE profile_id=? AND item_id=?`, v, profileID, itemID); err != nil {
+		return err
+	}
+	return mirrorUserData(s.DB, profileID, itemID)
 }
 
 // SetStars sets a 1..5 rating (nil clears it).
@@ -158,8 +172,10 @@ func (s *Store) SetStars(profileID, itemID int64, stars *int) error {
 	if err := ensureUD(s.DB, profileID, itemID); err != nil {
 		return err
 	}
-	_, err := s.DB.Exec(`UPDATE user_data SET stars=? WHERE profile_id=? AND item_id=?`, stars, profileID, itemID)
-	return err
+	if _, err := s.DB.Exec(`UPDATE user_data SET stars=? WHERE profile_id=? AND item_id=?`, stars, profileID, itemID); err != nil {
+		return err
+	}
+	return mirrorUserData(s.DB, profileID, itemID)
 }
 
 // SetTags replaces the tags of an item.
