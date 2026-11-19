@@ -110,7 +110,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 	if !decode(w, r, &in) {
 		return
 	}
-	if !s.limiter.allow("login:"+clientIP(r), 10, 5*time.Minute) {
+	if !s.loginAllowed(r) {
 		writeErr(w, http.StatusTooManyRequests, "túl sok bejelentkezési kísérlet, próbáld újra pár perc múlva")
 		return
 	}
@@ -120,6 +120,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 		return
 	}
 	s.startSession(w, r, u, in.DeviceInfo)
+}
+
+// loginAllowed rate-limits password attempts per client IP, and also per TCP peer: behind a
+// reverse proxy every remote client shares the proxy's peer address, so the peer budget caps
+// what a client that forges its forwarding headers could still try.
+func (s *Server) loginAllowed(r *http.Request) bool {
+	return s.limiter.allow("login:"+clientIP(r), 10, 5*time.Minute) &&
+		s.limiter.allow("login-peer:"+peerIP(r), 60, 5*time.Minute)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, c *reqCtx) {
@@ -204,7 +212,7 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request, c *reqCt
 	if !decode(w, r, &in) {
 		return
 	}
-	if !s.limiter.allow("login:"+clientIP(r), 10, 5*time.Minute) {
+	if !s.loginAllowed(r) {
 		writeErr(w, http.StatusTooManyRequests, "túl sok próbálkozás")
 		return
 	}
@@ -316,7 +324,8 @@ func (s *Server) handleProfileSelect(w http.ResponseWriter, r *http.Request, c *
 		return
 	}
 	if p.HasPIN {
-		if !s.limiter.allow("pin:"+clientIP(r)+":"+r.PathValue("id"), 5, 5*time.Minute) {
+		if !s.limiter.allow("pin:"+clientIP(r)+":"+r.PathValue("id"), 5, 5*time.Minute) ||
+			!s.limiter.allow("pin-profile:"+r.PathValue("id"), 15, 5*time.Minute) {
 			writeErr(w, http.StatusTooManyRequests, "túl sok hibás PIN, várj pár percet")
 			return
 		}

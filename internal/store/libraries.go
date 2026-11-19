@@ -67,6 +67,18 @@ func (s *Store) CreateLibrary(name, path, kind string) (*Library, error) {
 	return s.Library(id)
 }
 
+// UpdateLibrary renames a library or changes its folder; items are kept.
+func (s *Store) UpdateLibrary(id int64, name, path string) error {
+	res, err := s.DB.Exec(`UPDATE libraries SET name=?, path=? WHERE id=?`, name, path, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // DeleteLibrary removes a library and (by cascade) its items; returns removed item ids for image cleanup.
 func (s *Store) DeleteLibrary(id int64) ([]int64, error) {
 	rows, err := s.DB.Query(`SELECT id FROM items WHERE library_id=?`, id)

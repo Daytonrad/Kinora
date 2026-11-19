@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ScotyLucas/kinora/internal/scanner"
 )
@@ -32,20 +33,8 @@ func (s *Server) handleLibraryCreate(w http.ResponseWriter, r *http.Request, c *
 		writeErr(w, http.StatusBadRequest, "a könyvtár típusa movies, shows vagy mixed lehet")
 		return
 	}
-	if in.Path == "" || !filepath.IsAbs(in.Path) {
-		writeErr(w, http.StatusBadRequest, "adj meg egy abszolút mappaútvonalat")
-		return
-	}
-	p := filepath.Clean(in.Path)
-	st, err := os.Stat(p)
-	if err != nil && !isPerm(err) || err == nil && !st.IsDir() {
-		writeErr(w, http.StatusBadRequest, "a mappa nem létezik: "+p)
-		return
-	}
-	// an unreadable folder would just scan empty: say why and how to fix it
-	// (on Windows the server first grants itself the rights)
-	if rep, err := s.fixPerms(p); err == nil && !rep.OK {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": rep.Message, "perm": rep})
+	p, ok := s.libraryFolder(w, in.Path)
+	if !ok {
 		return
 	}
 	if in.Name == "" {
@@ -59,6 +48,79 @@ func (s *Server) handleLibraryCreate(w http.ResponseWriter, r *http.Request, c *
 	s.log.Info("library added", "name", lib.Name, "path", lib.Path, "kind", lib.Kind)
 	s.Scanner.Trigger(s.bgCtx, lib.ID)
 	writeJSON(w, http.StatusCreated, lib)
+}
+
+// libraryFolder validates a library folder: absolute, an existing directory, readable by the
+// server. It answers the request itself and returns false when the folder is not usable.
+func (s *Server) libraryFolder(w http.ResponseWriter, path string) (string, bool) {
+	if path == "" || !filepath.IsAbs(path) {
+		writeErr(w, http.StatusBadRequest, "adj meg egy abszolút mappaútvonalat")
+		return "", false
+	}
+	p := filepath.Clean(path)
+	st, err := os.Stat(p)
+	if err != nil && !isPerm(err) || err == nil && !st.IsDir() {
+		writeErr(w, http.StatusBadRequest, "a mappa nem létezik: "+p)
+		return "", false
+	}
+	// an unreadable folder would just scan empty: say why and how to fix it
+	// (on Windows the server first grants itself the rights)
+	if rep, err := s.fixPerms(p); err == nil && !rep.OK {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": rep.Message, "perm": rep})
+		return "", false
+	}
+	return p, true
+}
+
+// handleLibraryUpdate renames a library or points it at another folder. Its items stay: on the
+// next scan files found again in the new folder (same size) keep their id and watch state.
+func (s *Server) handleLibraryUpdate(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	id := pathID(r, "id")
+	lib, err := s.st.Library(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "a könyvtár nem található")
+		return
+	}
+	var in struct {
+		Name *string `json:"name"`
+		Path *string `json:"path"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	name, path := lib.Name, lib.Path
+	if in.Name != nil {
+		if name = strings.TrimSpace(*in.Name); name == "" || len([]rune(name)) > 60 {
+			writeErr(w, http.StatusBadRequest, "a könyvtár neve 1–60 karakter lehet")
+			return
+		}
+	}
+	if in.Path != nil && filepath.Clean(*in.Path) != lib.Path {
+		p, ok := s.libraryFolder(w, *in.Path)
+		if !ok {
+			return
+		}
+		path = p
+	}
+	if err := s.st.UpdateLibrary(id, name, path); err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	if path != lib.Path {
+		s.log.Info("library folder changed", "name", name, "from", lib.Path, "to", path)
+		s.Scanner.Cancel(id)
+		go func() { // a cancelled scan of the old folder needs a moment to let go of the library
+			for i := 0; i < 300 && !s.Scanner.Trigger(s.bgCtx, id); i++ {
+				time.Sleep(100 * time.Millisecond)
+			}
+		}()
+	}
+	updated, err := s.st.Library(id)
+	if err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (s *Server) handleLibraryDelete(w http.ResponseWriter, r *http.Request, c *reqCtx) {

@@ -1039,6 +1039,7 @@
    "a jelenlegi jelszó hibás": "the current password is wrong",
    "a kapcsoló értéke 0 vagy 1 lehet": "the switch must be 0 or 1",
    "a kérés túl nagy (max. 1 MB)": "the request is too large (max. 1 MB)",
+   "a könyvtár neve 1–60 karakter lehet": "the library name must be 1–60 characters",
    "a könyvtár nem található": "library not found",
    "a könyvtár típusa movies, shows vagy mixed lehet": "the library type must be movies, shows or mixed",
    "a lejátszási munkamenet lejárt – indítsd újra a lejátszást": "the playback session has expired – start playback again",
@@ -1442,6 +1443,16 @@
   "setNetworkHint": "Signing in with a code on another device (such as a TV), and finding the server on the local network.",
   "encSettingHint": "The encoder used for transcoding. Only encoders that passed the self-test can be picked.",
   "segHint": "Finds the intro and credits of episodes so they can be skipped.",
-  "refreshMetaHint": "Fetches the data from TMDB again for every title in the library."
+  "refreshMetaHint": "Fetches the data from TMDB again for every title in the library.",
+  "notFoundTitle": "Not found",
+  "notFoundLede": "This title doesn’t exist, was removed, or isn’t available on this profile.",
+  "backHome": "Back to home",
+  "apply": "Apply",
+  "speed": "Speed",
+  "pip": "Picture in picture",
+  "chapters": "Chapters",
+  "subDelay": "Subtitle delay",
+  "editLibrary": "Edit library",
+  "libEditHint": "With a new folder Kinora rescans the library. Files found there again with the same size keep their watch history."
  }
 };

@@ -254,22 +254,35 @@ func queryInt(r *http.Request, name string, def int) int {
 	return def
 }
 
-// clientIP returns the caller IP; X-Forwarded-For is trusted only from private/loopback peers.
+// clientIP returns the caller IP; forwarding headers are trusted only from private/loopback peers.
+// X-Forwarded-For is read from the right: each proxy appends the address it saw, so the rightmost
+// public entry was written by our own proxy, while entries left of it come from the client and can
+// be forged (a forged leftmost entry would otherwise reset every per-IP rate limit).
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	ip := net.ParseIP(host)
-	if ip != nil && (ip.IsLoopback() || ip.IsPrivate()) {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			return strings.TrimSpace(strings.Split(xff, ",")[0])
+	if trustedHop(host) {
+		if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
+			hops := strings.Split(strings.Join(xff, ","), ",")
+			for i := len(hops) - 1; i >= 0; i-- {
+				if h := strings.TrimSpace(hops[i]); h != "" && (!trustedHop(h) || i == 0) {
+					return h
+				}
+			}
 		}
 		if xr := r.Header.Get("X-Real-IP"); xr != "" {
 			return strings.TrimSpace(xr)
 		}
 	}
 	return host
+}
+
+// trustedHop reports whether an address is loopback or private: a local proxy, or a LAN hop.
+func trustedHop(addr string) bool {
+	ip := net.ParseIP(addr)
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
 }
 
 // peerIP is the TCP peer address, ignoring forwarding headers.

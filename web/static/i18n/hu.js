@@ -604,6 +604,16 @@
   "setNetworkHint": "Belépés kóddal egy másik eszközön (pl. tévén), és a szerver felderítése a helyi hálózaton.",
   "encSettingHint": "Az átkódoláshoz használt encoder. Csak a próbán átment encoderek választhatók.",
   "segHint": "Felismeri a sorozatok főcímét és stáblistáját, hogy át lehessen ugrani őket.",
-  "refreshMetaHint": "Újra lekéri az adatokat a TMDB-ről a könyvtár összes címéhez."
+  "refreshMetaHint": "Újra lekéri az adatokat a TMDB-ről a könyvtár összes címéhez.",
+  "notFoundTitle": "Nem található",
+  "notFoundLede": "Ez a tartalom nem létezik, törölték, vagy ebből a profilból nem érhető el.",
+  "backHome": "Vissza a kezdőlapra",
+  "apply": "Alkalmazás",
+  "speed": "Sebesség",
+  "pip": "Kép a képben",
+  "chapters": "Fejezetek",
+  "subDelay": "Feliratkésleltetés",
+  "editLibrary": "Könyvtár szerkesztése",
+  "libEditHint": "Új mappánál a Kinora újraszkenneli a könyvtárat. Az ott újra megtalált, azonos méretű fájlok megtartják a megnézési előzményeiket."
  }
 };

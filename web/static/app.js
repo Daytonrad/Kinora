@@ -145,6 +145,7 @@ const ICONS = {
   info: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 11v6M12 7.5v.5', next: 'M6 6l8 6-8 6zM17 6v12', chat: 'M4 5h16v11H9l-5 4z', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z',
   eyeOff: 'M3 3l18 18M10.6 6.1A10 10 0 0112 6c6 0 10 6 10 6a17 17 0 01-3 3.5M6.6 7.6C3.8 9.3 2 12 2 12s4 7 10 7a9.5 9.5 0 004.4-1.1', plus: 'M12 5v14M5 12h14', dl: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   lock: 'M7 11V8a5 5 0 0110 0v3M5 11h14v10H5z', people: 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2 20c0-4 3-6 7-6s7 2 7 6M16 4.5a3.5 3.5 0 010 6.5M18 14c2.5.6 4 2.6 4 6', tag: 'M3 12V4h8l10 10-8 8z M7.5 8.5h.01',
+  pip: 'M3 5h18v14H3zM12 12h7v5h-7z', list: 'M4 6h16M4 12h16M4 18h10', pencil: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   x: 'M6 6l12 12M18 6L6 18', filter: 'M4 5h16l-6 8v6l-4-2v-4z',
   search: 'M10.5 4a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM20 20l-4.8-4.8', sortAsc: 'M4 7h5M4 12h8M4 17h11M18 19V5M15 8l3-3 3 3', sortDesc: 'M4 7h11M4 12h8M4 17h5M18 5v14M15 16l3 3 3-3',
 };
@@ -235,7 +236,7 @@ const GET = (p, o) => api('GET', p, undefined, o);
 const POST = (p, b = {}, o) => api('POST', p, b, o);
 
 // ===================================================================== state & router
-const state = { status: null, me: null, facets: null, libs: null, cleanup: [] };
+const state = { status: null, me: null, facets: null, libs: null, cleanup: [], gen: 0 };
 function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
 function onCleanup(f) { state.cleanup.push(f); }
 function parseHash() {
@@ -259,6 +260,7 @@ async function loadMe() {
 }
 
 async function route() {
+  const gen = ++state.gen;
   for (const f of state.cleanup.splice(0)) { try { f(); } catch { /* ignore */ } }
   document.querySelectorAll('.modal-back').forEach(m => m.remove());
   const { parts, q } = parseHash();
@@ -296,7 +298,13 @@ async function route() {
     }
   } catch (e) {
     if (!(e instanceof HTTPError)) console.error(e);
+    else if (e.status === 404 && gen === state.gen) notFoundView(); // a removed title, or one this profile may not see
   }
+}
+function notFoundView() {
+  const main = shell('');
+  main.append(h('div.page-head', null, h('h1', null, T.notFoundTitle)), h('p.empty', null, T.notFoundLede),
+    h('p', null, h('a.btn.primary', { href: '#/home' }, T.backHome)));
 }
 // D-pad / arrow-key navigation: move focus to the nearest focusable element in that direction.
 function spatialNav(e) {
@@ -341,11 +349,17 @@ function shell(active, ...content) {
   put(root);
   const libsNav = h('span');
   const searchInput = h('input', { type: 'search', placeholder: T.searchPh, 'aria-label': T.searchPh, value: active === 'search' ? (parseHash().q.get('q') || '') : '' });
+  // the first search adds one history entry; refining it replaces that entry, so Back leaves the search
+  const goSearch = v => {
+    const hash = '#/search?q=' + encodeURIComponent(v);
+    if (location.hash === hash) return;
+    if (active === 'search') { history.replaceState(history.state, '', hash); route(); } else location.hash = hash;
+  };
   searchInput.addEventListener('input', debounce(() => {
     const v = searchInput.value.trim();
-    if (v.length >= 2) location.hash = '#/search?q=' + encodeURIComponent(v);
+    if (v.length >= 2) goSearch(v);
   }, 300));
-  searchInput.addEventListener('keydown', e => { if (e.key === 'Enter' && searchInput.value.trim()) location.hash = '#/search?q=' + encodeURIComponent(searchInput.value.trim()); });
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Enter' && searchInput.value.trim()) goSearch(searchInput.value.trim()); });
   const menuPop = h('div.menu-pop.hidden', { role: 'menu' },
     h('button', { role: 'menuitem', onclick: () => POST('/api/profiles/leave').then(() => { state.me.profile = null; go('#/profiles'); }) }, T.switchProfile),
     h('a', { role: 'menuitem', href: '#/party' }, T.joinParty),
@@ -383,9 +397,11 @@ function shell(active, ...content) {
   return main;
 }
 
-function modal(title, body, actions) {
+function modal(title, body, actions, onClose) {
   const back = h('div.modal-back', { role: 'dialog', 'aria-modal': 'true', 'aria-label': title });
-  const close = () => { back.remove(); document.removeEventListener('keydown', esc); };
+  let closed = false;
+  const close = () => { if (closed) return; closed = true; back.remove(); document.removeEventListener('keydown', esc); onClose?.(); };
+  onCleanup(close); // leaving the page closes it too
   const esc = e => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', esc);
   back.addEventListener('mousedown', e => { if (e.target === back) close(); });
@@ -395,9 +411,9 @@ function modal(title, body, actions) {
   setTimeout(() => (box.querySelector('input,select,button') || box).focus(), 30);
   return { close, box };
 }
-function confirmBox(text) {
+function confirmBox(text, yesLabel = T.delete) {
   return new Promise(res => {
-    modal(text, null, close => [h('button.btn', { onclick: () => { close(); res(false); } }, T.cancel), h('button.btn.primary', { onclick: () => { close(); res(true); } }, T.delete)]);
+    modal(text, null, close => [h('button.btn', { onclick: () => { res(false); close(); } }, T.cancel), h('button.btn.primary', { onclick: () => { res(true); close(); } }, yesLabel)], () => res(false));
   });
 }
 
@@ -596,6 +612,8 @@ function itemSub(it) {
 function artImg(it, kind, alt) {
   const wrap = h('div.art');
   const ph = h('div.ph', null, it.kind === 'episode' && it.series_title ? it.series_title : it.title, it.year && it.kind !== 'episode' ? h('small', null, it.year) : null);
+  // a movie or series poster has no fallback on the server, so a known-missing one would only 404
+  if (kind === 'poster' && it.has_poster === false && (it.kind === 'movie' || it.kind === 'series')) { wrap.classList.add('noart'); wrap.append(ph); return wrap; }
   const img = h('img', { src: imgURL(it, kind), alt: alt || '', loading: 'lazy', decoding: 'async' });
   img.addEventListener('error', () => { img.replaceWith(ph); wrap.classList.add('noart'); });
   wrap.append(img);
@@ -706,9 +724,10 @@ function fillHero(sec, it, reason) {
 async function viewSearch(q) {
   const main = shell('search');
   main.append(h('div.page-head', null, h('h1', null, T.searchTitle(q))));
+  const s = $('.search-box input'); // focus before the fetch, so keys typed meanwhile land in the field
+  if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
   const items = await GET('/api/search?group=1&q=' + encodeURIComponent(q)); // one card per series
   main.append(items.length ? h('div.grid', null, items.map(it => card(it, 'poster'))) : h('p.empty', null, T.searchEmpty));
-  setTimeout(() => { const s = $('.search-box input'); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 0);
 }
 
 // ===================================================================== library browser
@@ -847,13 +866,13 @@ async function viewItem(id) {
     await POST(`/api/items/${it.id}/played`, { played: !ud.played }); viewItem(id);
   } }, icon('check'));
   const favBtn = h('button.btn.icon' + (ud.favorite ? '.on' : ''), { 'aria-pressed': ud.favorite ? 'true' : 'false', title: T.favorite, 'aria-label': T.favorite, onclick: async () => {
-    ud.favorite = !ud.favorite; await POST(`/api/items/${it.id}/favorite`, { favorite: ud.favorite });
+    const v = !ud.favorite; await POST(`/api/items/${it.id}/favorite`, { favorite: v }); ud.favorite = v;
     favBtn.classList.toggle('on', ud.favorite); favBtn.setAttribute('aria-pressed', ud.favorite);
   } }, icon('heart', ud.favorite));
   const stars = h('div.stars', { role: 'radiogroup', 'aria-label': T.myRating });
   const paintStars = v => stars.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', v != null && i < v));
   for (let i = 1; i <= 5; i++) stars.append(h('button', { 'aria-label': T.starsN(i), onclick: async () => {
-    const v = ud.stars === i ? null : i; ud.stars = v; await POST(`/api/items/${it.id}/stars`, { stars: v }); paintStars(v);
+    const v = ud.stars === i ? null : i; await POST(`/api/items/${it.id}/stars`, { stars: v }); ud.stars = v; paintStars(v);
   } }, icon('star')));
   paintStars(ud.stars);
   const hideBtn = h('button.btn.icon', { title: ud.hidden ? T.unhide : T.hide, 'aria-label': ud.hidden ? T.unhide : T.hide, onclick: async () => {
@@ -894,11 +913,13 @@ async function viewItem(id) {
   if (it.kind === 'series' && d.seasons) {
     const tabs = h('div.tabs', { role: 'tablist' });
     const list = h('div.episodes');
+    let seasonGen = 0;
     const showSeason = async (s, btn) => {
+      const my = ++seasonGen;
       tabs.querySelectorAll('.chip').forEach(c => { c.classList.remove('on'); c.setAttribute('aria-selected', 'false'); });
       btn.classList.add('on'); btn.setAttribute('aria-selected', 'true');
       const eps = await GET(`/api/items/${s.id}/children`);
-      put(list, ...eps.map(episodeRow));
+      if (my === seasonGen) put(list, ...eps.map(episodeRow));
     };
     let first = null;
     d.seasons.forEach(s => {
@@ -1000,8 +1021,10 @@ async function viewCollections() {
   main.append(h('div.page-head', null, h('h1', null, T.collections), !kids && h('div.row-gap', null,
     h('button.btn', { onclick: newManual }, icon('plus'), T.newManual), h('a.btn.primary', { href: '#/collections/new?smart=1' }, icon('plus'), T.newSmart))));
   if (!cols.length) { main.append(h('p.empty', null, T.collEmpty)); return; }
-  for (const c of cols) {
-    const r = await GET(`/api/collections/${c.id}?limit=20`);
+  const shelves = await Promise.all(cols.map(c => GET(`/api/collections/${c.id}?limit=20`, { quiet: true }).catch(() => null)));
+  for (const [i, c] of cols.entries()) {
+    const r = shelves[i];
+    if (!r) continue;
     const head = [c.name, c.kind === 'smart' ? ' · smart' : '', c.shared ? ' · ' + T.sharedShort : ''].join('');
     main.append(shelf(head, r.items, 'poster', { more: '#/collections/' + c.id }));
   }
@@ -1125,9 +1148,10 @@ async function viewDownloads() {
   main.append(h('div.page-head', null, h('div', null, h('h1', null, T.downloads), h('span.muted', null, T.dlKept))));
   const box = h('div');
   main.append(box);
-  let timer;
+  let timer, dead = false;
   const render = async () => {
     const r = await GET('/api/downloads');
+    if (dead) return; // left while the request was out: start no new timer
     if (!r.jobs.length) { put(box, h('p.empty', null, T.dlEmpty)); return; }
     put(box, h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.title), h('th', null, T.quality), h('th', null, T.status), h('th', null, ''))),
       h('tbody', null, r.jobs.map(j => h('tr', null,
@@ -1137,7 +1161,7 @@ async function viewDownloads() {
         h('td', null, j.status === 'done' && h('a.btn.primary', { href: `/api/downloads/${j.key}/file`, download: j.file_name }, icon('dl'), T.saveFile))))))));
     if (r.jobs.some(j => j.status === 'running' || j.status === 'queued')) timer = setTimeout(render, 2000);
   };
-  onCleanup(() => clearTimeout(timer));
+  onCleanup(() => { dead = true; clearTimeout(timer); });
   await render();
 }
 
@@ -1264,6 +1288,8 @@ async function viewPlayer(id, q) {
   const favBtn = h('button.p-btn', { 'aria-label': T.favorite, title: T.favorite }, icon('heart'));
   const moreBtn = h('button.p-btn', { 'aria-label': T.moreActions, title: T.moreActions }, icon('more', true));
   const fsBtn = h('button.p-btn', { 'aria-label': T.fullscreen, title: T.fullscreen + ' (F)' }, icon('fs'));
+  const chapBtn = h('button.p-btn.hidden', { 'aria-label': T.chapters, title: T.chapters }, icon('list'));
+  const pipBtn = document.pictureInPictureEnabled ? h('button.p-btn', { 'aria-label': T.pip, title: T.pip + ' (P)' }, icon('pip')) : null;
   const pop = h('div.p-pop.hidden');
   const upnext = h('div.upnext.hidden');
   const skipBtn = h('button.btn.primary.big.skip-seg.hidden', { onclick: () => doSkip() });
@@ -1272,7 +1298,7 @@ async function viewPlayer(id, q) {
     mid,
     h('div.p-bottom', null, timeline, h('div.p-bar', null,
       playBtn, h('button.p-btn', { 'aria-label': T.rewind, title: T.rewind, onclick: () => seekBy(-10) }, icon('rw')), h('button.p-btn', { 'aria-label': T.forward, title: T.forward, onclick: () => seekBy(10) }, icon('ff')),
-      volBtn, vol, timeEl, h('span.grow'), nextBtn, favBtn, moreBtn, whyBtn, ccBtn, gearBtn, fsBtn)));
+      volBtn, vol, timeEl, h('span.grow'), nextBtn, favBtn, moreBtn, whyBtn, chapBtn, ccBtn, gearBtn, pipBtn, fsBtn)));
   const stage = h('div.stage', null, video, ui, pop, upnext, skipBtn);
   const player = h('div.player', null, stage);
   root.append(player);
@@ -1283,6 +1309,8 @@ async function viewPlayer(id, q) {
   let duration = 0, credits = null, nextItem = null, nextShown = false, nextTimer = null, lastReport = 0, exiting = false;
   let dragging = false, dead = false;
   let segments = [], shownSeg = null, markStart = null;
+  let subDelay = 0, subCache = null; // seconds added to every cue (+ = later); parsed cues of the current track
+  const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
   const skipped = new Set();
   const caps = detectCaps();
   const partyCode = q.get('party');
@@ -1310,6 +1338,8 @@ async function viewPlayer(id, q) {
     try { r = await POST(`/api/items/${id}/playback`, body, { quiet: true }); }
     catch (e) { return showError(e.message, e.body && e.body.reasons); }
     if (dead) { if (r.session) fetch('/api/hls/' + r.session, { method: 'DELETE', credentials: 'same-origin' }); return; }
+    // the server sends chapters with Go field names (Start, Title)
+    r.chapters = (r.chapters || []).map(c => ({ start: c.start ?? c.Start ?? 0, title: c.title ?? c.Title ?? '' }));
     info = r; mode = r.mode; session = r.session || null; offset = r.start_offset || 0;
     duration = r.duration || 0; credits = r.credits_start ?? null;
     segments = r.segments || [];
@@ -1374,14 +1404,18 @@ async function viewPlayer(id, q) {
     const st = info.streams.find(s => s.type === 'subtitle' && s.type_index === subIdx);
     if (!st || !st.text_based) return;
     try {
-      const res = await fetch(`/api/items/${id}/subtitles/${subIdx}`, { credentials: 'same-origin' });
-      if (!res.ok) throw new Error(srv((await res.json().catch(() => ({}))).error) || res.status);
-      const cues = parseVTT(await res.text());
-      if (my !== subGen) return;
+      let cues = subCache && subCache.idx === subIdx ? subCache.cues : null;
+      if (!cues) {
+        const res = await fetch(`/api/items/${id}/subtitles/${subIdx}`, { credentials: 'same-origin' });
+        if (!res.ok) throw new Error(srv((await res.json().catch(() => ({}))).error) || res.status);
+        cues = parseVTT(await res.text());
+        if (my !== subGen) return;
+        subCache = { idx: subIdx, cues };
+      }
       clearCues();
       if (!subTrack) subTrack = video.addTextTrack('subtitles', 'Kinora', st.lang || 'und');
       for (const c of cues) {
-        const s = c.start - offset, e = c.end - offset;
+        const s = c.start + subDelay - offset, e = c.end + subDelay - offset;
         if (e <= 0) continue;
         try { const cue = new VTTCue(Math.max(0, s), e, c.text); cue.line = -3; subTrack.addCue(cue); } catch { /* ignore */ }
       }
@@ -1436,11 +1470,41 @@ async function viewPlayer(id, q) {
         ? opt(`${langName(s.lang)}${s.forced ? ` (${T.forced})` : ''}${s.external ? ' · ' + T.external : ''}`, s.type_index === subIdx, () => { subIdx = s.type_index; if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); })
         : opt(`${langName(s.lang)} · ${T.burnIn} (${s.codec})`, s.type_index === burnIdx, () => { subIdx = -1; burnIdx = s.type_index; applySubtitle(); start(pos()); })),
       (hiddenCount > 0 || showAllLangs) && h('label.check', { class: 'mt3' }, h('input', { type: 'checkbox', checked: showAllLangs, onchange: e => { showAllLangs = e.target.checked; pop._b = null; openPop(buildTracks); } }), T.showAll),
+      subIdx >= 0 && delayControl(),
     ];
+  }
+  const fmtDelay = () => (subDelay > 0 ? '+' : subDelay < 0 ? '−' : '') + num(Math.abs(subDelay), 1) + ' s';
+  function shiftSub(d) {
+    subDelay = d === 0 ? 0 : Math.round((subDelay + d) * 10) / 10;
+    applySubtitle();
+    pop.querySelector('.sub-delay')?.replaceChildren(fmtDelay());
+  }
+  function delayControl() {
+    return h('div', null, h('h3', null, T.subDelay + ' (G / H)'),
+      h('div.row-gap', null, h('button.btn', { onclick: () => shiftSub(-0.5) }, '−' + num(0.5, 1)), h('b.sub-delay', { 'aria-live': 'polite' }, fmtDelay()),
+        h('button.btn', { onclick: () => shiftSub(0.5) }, '+' + num(0.5, 1)), h('button.btn.ghost', { onclick: () => shiftSub(0) }, '0')));
   }
   function buildQuality() {
     const q = [[0, T.qAuto], [8000, '8 Mbps'], [4000, '4 Mbps'], [2000, '2 Mbps'], [1000, '1 Mbps']];
-    return [h('h3', null, T.quality), ...q.map(([v, l]) => opt(l, maxBitrate === v, () => { maxBitrate = v; force = v ? 'transcode' : ''; start(pos()); }))];
+    return [h('h3', null, T.quality), ...q.map(([v, l]) => opt(l, maxBitrate === v, () => { maxBitrate = v; force = v ? 'transcode' : ''; start(pos()); })),
+      ...(party ? [] : [h('h3', null, T.speed + ' (< / >)'), ...SPEEDS.map(r => opt(num(r, r % 0.5 ? 2 : 1).replace(/[.,]0+$/, '') + '×', video.playbackRate === r, () => setSpeed(r)))])];
+  }
+  // the party keeps everyone at 1× (its sync nudges the rate), so speed is a solo feature
+  function setSpeed(r) {
+    if (party) return;
+    video.defaultPlaybackRate = video.playbackRate = r; // the default survives a restarted stream
+    toast(T.speed + ': ' + num(r, 2).replace(/[.,]?0+$/, '') + '×');
+  }
+  function stepSpeed(d) { const i = SPEEDS.indexOf(video.playbackRate); setSpeed(SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, (i < 0 ? 2 : i) + d))]); }
+  function buildChapters() {
+    const p = pos(), chs = info.chapters || [];
+    const cur = chs.filter(c => c.start <= p).pop();
+    return [h('h3', null, T.chapters), ...chs.map((c, i) => opt(`${fmtTime(c.start)}  ${c.title || T.chapters + ' ' + (i + 1)}`, c === cur, () => userSeek(c.start)))];
+  }
+  function togglePiP() {
+    if (!pipBtn) return;
+    if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
+    else video.requestPictureInPicture().catch(() => {});
   }
   function buildWhy() {
     const src = info.source || {};
@@ -1471,10 +1535,13 @@ async function viewPlayer(id, q) {
   gearBtn.onclick = () => info && openPop(buildQuality);
   whyBtn.onclick = () => info && openPop(buildWhy);
   moreBtn.onclick = () => item && openPop(buildMore);
+  chapBtn.onclick = () => info && openPop(buildChapters);
+  if (pipBtn) pipBtn.onclick = togglePiP;
   favBtn.onclick = async () => {
-    if (!item) return; item.user_data.favorite = !item.user_data.favorite;
-    await POST(`/api/items/${id}/favorite`, { favorite: item.user_data.favorite });
-    favBtn.classList.toggle('on', item.user_data.favorite); put(favBtn, icon('heart', item.user_data.favorite));
+    if (!item) return;
+    const v = !item.user_data.favorite;
+    await POST(`/api/items/${id}/favorite`, { favorite: v }); // on failure nothing changes
+    item.user_data.favorite = v; favBtn.classList.toggle('on', v); put(favBtn, icon('heart', v));
   };
 
   // ---------------------------------------------------------------- timeline & controls
@@ -1513,16 +1580,42 @@ async function viewPlayer(id, q) {
   vol.oninput = () => { video.volume = +vol.value; video.muted = false; localStorage.setItem('kinora-vol', vol.value); paintVol(); };
   volBtn.onclick = () => { video.muted = !video.muted; paintVol(); };
   const paintVol = () => put(volBtn, icon(video.muted || video.volume === 0 ? 'mute' : 'vol'));
+  const setVol = v => { // keys behave like the slider: unmute, remember
+    video.volume = Math.round(Math.max(0, Math.min(1, v)) * 100) / 100; video.muted = false;
+    vol.value = video.volume; localStorage.setItem('kinora-vol', video.volume); paintVol();
+  };
   fsBtn.onclick = toggleFS;
   function toggleFS() { if (document.fullscreenElement) document.exitFullscreen(); else player.requestFullscreen?.().catch(() => {}); }
-  video.addEventListener('play', () => { put(playBtn, icon('pause')); playBtn.setAttribute('aria-label', T.pause); });
-  video.addEventListener('pause', () => { put(playBtn, icon('play')); playBtn.setAttribute('aria-label', T.play); report(); });
+  video.addEventListener('play', () => { put(playBtn, icon('pause')); playBtn.setAttribute('aria-label', T.pause); if (ms) ms.playbackState = 'playing'; });
+  video.addEventListener('pause', () => { put(playBtn, icon('play')); playBtn.setAttribute('aria-label', T.play); if (ms) ms.playbackState = 'paused'; report(); });
+  const ms = navigator.mediaSession;
+  const msAction = (a, f) => { try { ms.setActionHandler(a, f); } catch { /* action not supported here */ } };
+  let lastPosState = 0;
+  function setupMediaSession() {
+    if (!ms || !window.MediaMetadata) return;
+    const art = imgURL(item, item.kind === 'episode' ? 'thumb' : item.has_poster === false ? 'backdrop' : 'poster');
+    ms.metadata = new MediaMetadata({ title: item.title, album: (state.status && state.status.server_name) || T.appName,
+      artist: item.kind === 'episode' ? `${item.series_title} · ${T.ep(item.season_num, item.episode_num)}` : String(item.year || ''),
+      artwork: [{ src: new URL(art, location.href).href, type: 'image/jpeg' }] });
+    msAction('play', () => { if (video.paused) togglePlay(); });
+    msAction('pause', () => { if (!video.paused) togglePlay(); });
+    msAction('seekbackward', d => seekBy(-((d && d.seekOffset) || 10)));
+    msAction('seekforward', d => seekBy((d && d.seekOffset) || 10));
+    msAction('seekto', d => { if (d && d.seekTime != null) userSeek(d.seekTime); });
+    msAction('nexttrack', nextItem ? () => playNext() : null);
+  }
+  function paintPositionState() {
+    if (!ms || !ms.setPositionState || !duration || Date.now() - lastPosState < 1000) return;
+    lastPosState = Date.now();
+    try { ms.setPositionState({ duration, position: Math.min(duration, Math.max(0, pos())), playbackRate: video.playbackRate || 1 }); } catch { /* ignore */ }
+  }
   video.addEventListener('waiting', () => { put(mid, spinner); party?.buffering(true); });
   video.addEventListener('playing', () => { if (mid.firstChild === spinner) put(mid); party?.buffering(false); });
   video.addEventListener('canplay', () => { if (mid.firstChild === spinner && !video.paused) put(mid); party?.buffering(false); });
   video.addEventListener('loadeddata', () => { if (video.paused && mid.firstChild === spinner) put(mid); });
   video.addEventListener('timeupdate', () => {
     if (!dragging) paintTimeline();
+    paintPositionState();
     const now = Date.now();
     if (now - lastReport > 10000 && !video.paused) { lastReport = now; report(); }
     checkUpNext();
@@ -1551,8 +1644,13 @@ async function viewPlayer(id, q) {
       case ' ': case 'k': e.preventDefault(); togglePlay(); break;
       case 'ArrowLeft': if (e.target !== timeline) { e.preventDefault(); seekBy(-10); } break;
       case 'ArrowRight': if (e.target !== timeline) { e.preventDefault(); seekBy(10); } break;
-      case 'ArrowUp': e.preventDefault(); video.volume = Math.min(1, video.volume + 0.05); vol.value = video.volume; paintVol(); break;
-      case 'ArrowDown': e.preventDefault(); video.volume = Math.max(0, video.volume - 0.05); vol.value = video.volume; paintVol(); break;
+      case 'ArrowUp': e.preventDefault(); setVol(video.volume + 0.05); break;
+      case 'ArrowDown': e.preventDefault(); setVol(video.volume - 0.05); break;
+      case 'p': case 'P': togglePiP(); break;
+      case 'g': case 'G': if (subIdx >= 0) { shiftSub(-0.1); toast(T.subDelay + ': ' + fmtDelay()); } break;
+      case 'h': case 'H': if (subIdx >= 0) { shiftSub(0.1); toast(T.subDelay + ': ' + fmtDelay()); } break;
+      case '<': stepSpeed(-1); break;
+      case '>': stepSpeed(1); break;
       case 'f': case 'F': toggleFS(); break;
       case 'm': case 'M': video.muted = !video.muted; paintVol(); break;
       case 'c': case 'C': if (info) openPop(buildTracks); break;
@@ -1600,7 +1698,7 @@ async function viewPlayer(id, q) {
     toast(T.markSaved);
     const fresh = await GET(`/api/items/${id}/segments`).catch(() => null);
     if (fresh) segments = fresh.segments;
-    if (r.can_propagate && await confirmBox(T.propagateAsk)) {
+    if (r.can_propagate && await confirmBox(T.propagateAsk, T.apply)) {
       const p = await POST(`/api/items/${id}/segments/${type}/propagate`, {});
       toast(T.propagated(p.updated));
     }
@@ -1650,12 +1748,18 @@ async function viewPlayer(id, q) {
     if (session) fetch('/api/hls/' + session, { method: 'DELETE', credentials: 'same-origin', keepalive: true }).catch(() => {});
     if (party) party.close();
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    if (document.pictureInPictureElement === video) document.exitPictureInPicture().catch(() => {});
+    if (ms) { ms.metadata = null; ms.playbackState = 'none'; for (const a of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto', 'nexttrack']) msAction(a, null); }
   });
 
   // ---------------------------------------------------------------- go
   let detail;
-  try { detail = await GET('/api/items/' + id); }
-  catch { return; }
+  try { detail = await GET('/api/items/' + id, { quiet: true }); }
+  catch (e) {
+    if (!dead) put(mid, h('div.p-error', { role: 'alert' }, h('h2', null, e.status === 404 ? T.notFoundTitle : T.playErr), h('p', null, e.status === 404 ? T.notFoundLede : e.message),
+      h('div.row-gap', null, h('button.btn.primary', { onclick: () => go('#/home') }, T.backHome))));
+    return;
+  }
   item = detail.item;
   nextItem = detail.next || null;
   nextBtn.classList.toggle('hidden', !nextItem);
@@ -1667,9 +1771,11 @@ async function viewPlayer(id, q) {
   const resumeAt = q.has('t') ? +q.get('t') : (item.user_data.position || 0);
   if (partyCode) party = partyClient(partyCode, player, stage, { video, pos, seekTo, getItemId: () => id, leave: () => exit(),
     onItem: nid => { exiting = true; location.replace(`#/play/${nid}?party=${partyCode}`); } });
+  setupMediaSession();
   await start(partyCode ? 0 : resumeAt, { paused: !!partyCode });
   if (info) {
     chooseInitialSubtitle(); applySubtitle(); chapterMarks();
+    chapBtn.classList.toggle('hidden', (info.chapters || []).length < 2);
     if (mode === 'transcode') toast(`${T.whyTitle[mode]}: ${srv((info.reasons || [])[0]) || ''} – ${T.whyDetails}`);
   }
 }
@@ -1802,9 +1908,12 @@ const aSkeleton = () => h('div.a-skel', { role: 'status', 'aria-label': T.loadin
 const emptyNote = (title, hint, action) => h('div.empty-note', null, h('p', null, title), hint && h('p.muted.small', null, hint), action);
 
 async function adminDash(body) {
-  let t;
-  const render = async () => {
-    const d = await GET('/api/admin/dashboard');
+  let t, dead = false;
+  const render = async first => {
+    let d;
+    try { d = await GET('/api/admin/dashboard', { quiet: !first }); }
+    catch (e) { if (first) throw e; if (!dead) t = setTimeout(render, 5000); return; } // a blip (restart, Wi-Fi) only delays the refresh
+    if (dead) return;
     const up = d.uptime_sec, uptime = up < 60 ? T.uptimeUnder1 : up < 3600 ? T.min(Math.floor(up / 60)) : up > 86400 ? T.uptimeDH(Math.floor(up / 86400), Math.floor(up / 3600) % 24) : T.uptimeHM(Math.floor(up / 3600), Math.floor(up / 60) % 60);
     const stat = (v, l) => h('div.stat', null, h('b', { title: String(v) }, v), h('span', null, l));
     const group = (title, stats, foot) => h('div.a-ledger-g', null, h('h2.a-eyebrow', null, title), h('div.a-stats', null, stats), foot);
@@ -1822,8 +1931,8 @@ async function adminDash(body) {
         h('p', null, h('b', null, srv(d.encoder_selected.label))), h('p.muted.small', null, T.tonemap + ': ' + (d.tonemap ? T.yes : T.no))));
     t = setTimeout(render, 5000);
   };
-  onCleanup(() => clearTimeout(t));
-  await render();
+  onCleanup(() => { dead = true; clearTimeout(t); });
+  await render(true);
 }
 // The version footer of the dashboard: the running version, and next to it whether GitHub has a newer release.
 function verLine(version, u) {
@@ -1851,10 +1960,11 @@ function scanTable(scans) {
 }
 
 async function adminLibs(body) {
-  let t;
+  let t, dead = false;
   if (!state.installMode) state.installMode = (await GET('/api/admin/browse?path=/').catch(() => ({}))).mode || '';
   const render = async () => {
     const [libs, scans] = await Promise.all([GET('/api/libraries'), GET('/api/admin/scan')]);
+    if (dead) return;
     state.libs = libs;
     const scanOf = id => scans.find(s => s.library_id === id);
     put(body, aHead(T.aLibs, T.aLedeLibs, libs.length > 0 && h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary)),
@@ -1865,14 +1975,28 @@ async function adminLibs(body) {
             : s && s.error ? h('span.bad', null, srv(s.error)) : l.last_scan_at ? ago(Date.now() / 1000 - l.last_scan_at) : T.never,
             s && s.errors ? h('div.small.bad', { title: srv(s.last_error) }, `${T.badFiles(s.errors)}: ${srv(s.last_error)}`) : null),
           h('td.acts', null, h('div.row-gap', null, h('button.btn', { disabled: !!(s && s.running), onclick: async () => { await POST(`/api/libraries/${l.id}/scan`); render(); } }, T.scan),
+            h('button.btn', { onclick: () => editLib(l) }, T.edit),
             h('button.btn', { onclick: async () => permDialog(await GET('/api/admin/permcheck?library=' + l.id)) }, T.permCheck),
             h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(l.name))) { await api('DELETE', '/api/libraries/' + l.id); state.libs = null; render(); } } }, T.delete))));
       }), '.a-stack') : emptyNote(T.homeEmptyAdmin, null, h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary)));
     clearTimeout(t);
     if (scans.some(s => s.running)) t = setTimeout(render, 1500);
   };
-  onCleanup(() => clearTimeout(t));
+  onCleanup(() => { dead = true; clearTimeout(t); });
   await render();
+
+  // rename, or point at another folder; items and watch state stay (moved files are matched by size)
+  function editLib(l) {
+    const name = h('input', { type: 'text', value: l.name });
+    const path = h('input', { type: 'text', value: l.path });
+    modal(T.editLibrary, h('div', null, field(T.libName, name), h('label.field', null, h('span', null, T.libPath), h('div.row-gap', { class: 'nowrap' }, path, h('button.btn', { type: 'button', onclick: () => folderPicker(path.value, p => { path.value = p; }) }, T.choose))),
+      h('div.hint', { class: 'mt0' }, T.libEditHint)), close => [h('button.btn', { onclick: close }, T.cancel),
+      h('button.btn.primary', { onclick: async () => {
+        try { await api('PATCH', '/api/libraries/' + l.id, { name: name.value, path: path.value }, { quiet: true }); }
+        catch (e) { if (e.body && e.body.perm) permDialog(e.body.perm); else toast(e.message, true); return; }
+        close(); state.libs = null; toast(T.saved); render();
+      } }, T.save)]);
+  }
 
   function addLib() {
     const name = h('input', { type: 'text' });

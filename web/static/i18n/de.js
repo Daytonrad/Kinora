@@ -1033,6 +1033,7 @@
    "a jelenlegi jelszó hibás": "das aktuelle Passwort ist falsch",
    "a kapcsoló értéke 0 vagy 1 lehet": "der Schalter muss 0 oder 1 sein",
    "a kérés túl nagy (max. 1 MB)": "die Anfrage ist zu groß (max. 1 MB)",
+   "a könyvtár neve 1–60 karakter lehet": "Der Name der Mediathek muss 1–60 Zeichen lang sein",
    "a könyvtár nem található": "Mediathek nicht gefunden",
    "a könyvtár típusa movies, shows vagy mixed lehet": "der Mediathekstyp muss movies, shows oder mixed sein",
    "a lejátszási munkamenet lejárt – indítsd újra a lejátszást": "die Wiedergabesitzung ist abgelaufen – starte die Wiedergabe neu",
@@ -1436,6 +1437,16 @@
   "setNetworkHint": "Anmeldung per Code auf einem anderen Gerät (etwa dem Fernseher) und Auffinden des Servers im lokalen Netzwerk.",
   "encSettingHint": "Der Encoder für die Umwandlung. Nur Encoder, die den Selbsttest bestanden haben, sind wählbar.",
   "segHint": "Erkennt Vorspann und Abspann von Folgen, damit man sie überspringen kann.",
-  "refreshMetaHint": "Lädt die Daten für alle Titel der Bibliothek erneut von TMDB."
+  "refreshMetaHint": "Lädt die Daten für alle Titel der Bibliothek erneut von TMDB.",
+  "notFoundTitle": "Nicht gefunden",
+  "notFoundLede": "Dieser Titel existiert nicht, wurde entfernt oder ist in diesem Profil nicht verfügbar.",
+  "backHome": "Zurück zur Startseite",
+  "apply": "Anwenden",
+  "speed": "Geschwindigkeit",
+  "pip": "Bild-in-Bild",
+  "chapters": "Kapitel",
+  "subDelay": "Untertitelverzögerung",
+  "editLibrary": "Mediathek bearbeiten",
+  "libEditHint": "Bei einem neuen Ordner scannt Kinora die Mediathek neu. Dort wiedergefundene Dateien gleicher Größe behalten ihren Wiedergabeverlauf."
  }
 };

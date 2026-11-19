@@ -15,7 +15,11 @@ func (s *Server) handlePartyCreate(w http.ResponseWriter, r *http.Request, c *re
 		return
 	}
 	it, err := s.st.Item(in.ItemID, c.Profile)
-	if err != nil || (it.Kind != "movie" && it.Kind != "episode") {
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "az elem nem található")
+		return
+	}
+	if it.Kind != "movie" && it.Kind != "episode" {
 		writeErr(w, http.StatusBadRequest, "watch partyt csak filmhez vagy epizódhoz lehet indítani")
 		return
 	}
