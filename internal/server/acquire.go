@@ -58,31 +58,50 @@ func (s *Server) handleAcqSettings(w http.ResponseWriter, r *http.Request, c *re
 	for i, x := range cls {
 		outC[i] = maskClient(x)
 	}
+	profiles, _ := s.st.AcqProfiles()
 	libs, _ := s.st.Libraries()
-	movieLibs := []*store.Library{}
+	movieLibs, tvLibs := []*store.Library{}, []*store.Library{}
 	for _, l := range libs {
 		if l.Kind != "shows" {
 			movieLibs = append(movieLibs, l)
 		}
+		if l.Kind != "movies" {
+			tvLibs = append(tvLibs, l)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"enabled":     s.st.Setting("acq_enabled") == "1",
-		"profile":     acquire.ParseProfile(s.st.Setting("acq_profile")),
-		"import_mode": s.st.Setting("acq_import_mode"),
-		"indexers":    outI,
-		"clients":     outC,
-		"libraries":   movieLibs,
-		"tmdb":        strings.TrimSpace(s.st.Setting("tmdb_key")) != "",
+		"enabled":      s.st.Setting("acq_enabled") == "1",
+		"profile":      acquire.ParseProfile(s.st.Setting("acq_profile")),
+		"import_mode":  s.st.Setting("acq_import_mode"),
+		"auto_approve": s.st.Setting("acq_auto_approve"),
+		"quota_week":   s.st.SettingInt("acq_quota_week", 0),
+		"library_id":   s.st.SettingInt("acq_library", 0),
+		"retry_hours":  s.st.SettingInt("acq_retry_hours", 6),
+		"library_tv":   s.st.SettingInt("acq_library_tv", 0),
+		"tv_libraries": tvLibs,
+		"profiles":     profiles,
+		"indexers":     outI,
+		"clients":      outC,
+		"libraries":    movieLibs,
+		"tmdb":         strings.TrimSpace(s.st.Setting("tmdb_key")) != "",
 	})
 }
 
 func (s *Server) handleAcqSettingsPut(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	var in struct {
-		Enabled    *bool            `json:"enabled"`
-		Profile    *acquire.Profile `json:"profile"`
-		ImportMode *string          `json:"import_mode"`
+		Enabled     *bool            `json:"enabled"`
+		Profile     *acquire.Profile `json:"profile"`
+		ImportMode  *string          `json:"import_mode"`
+		AutoApprove *string          `json:"auto_approve"`
+		QuotaWeek   *int             `json:"quota_week"`
+		LibraryID   *int             `json:"library_id"`
+		RetryHours  *int             `json:"retry_hours"`
+		LibraryTV   *int             `json:"library_tv"`
 	}
 	if !decode(w, r, &in) {
+		return
+	}
+	if !s.saveRequestSettings(w, in.AutoApprove, in.QuotaWeek, in.LibraryID, in.RetryHours, in.LibraryTV) {
 		return
 	}
 	if in.Enabled != nil {
@@ -124,6 +143,12 @@ func validIndexer(x *store.AcqIndexer) string {
 	}
 	if !strings.HasPrefix(x.URL, "http://") && !strings.HasPrefix(x.URL, "https://") {
 		return "az indexer címe http:// vagy https:// kezdetű legyen"
+	}
+	if x.Kind == "" {
+		x.Kind = "torznab"
+	}
+	if x.Kind != "torznab" && x.Kind != "newznab" {
+		return "az indexer típusa torznab vagy newznab lehet"
 	}
 	if x.Priority <= 0 {
 		x.Priority = 25
@@ -198,14 +223,18 @@ func (s *Server) handleAcqIndexerTest(w http.ResponseWriter, r *http.Request, c 
 
 func validClient(x *store.AcqClient) string {
 	x.Name, x.URL = strings.TrimSpace(x.Name), strings.TrimSpace(x.URL)
-	if x.Name == "" {
-		x.Name = "qBittorrent"
-	}
 	if x.Kind == "" {
 		x.Kind = "qbittorrent"
 	}
-	if x.Kind != "qbittorrent" {
-		return "egyelőre csak a qBittorrent támogatott"
+	name, known := clientNames[x.Kind]
+	if !known {
+		return "ismeretlen letöltőkliens"
+	}
+	if x.Name == "" {
+		x.Name = name
+	}
+	if (x.Kind == "sabnzbd" || x.Kind == "deluge") && x.Password == "" {
+		return "add meg a jelszót (SABnzbd-nél az API-kulcsot)"
 	}
 	if !strings.HasPrefix(x.URL, "http://") && !strings.HasPrefix(x.URL, "https://") {
 		return "a letöltőkliens címe http:// vagy https:// kezdetű legyen"
@@ -217,6 +246,8 @@ func validClient(x *store.AcqClient) string {
 	}
 	return ""
 }
+
+var clientNames = map[string]string{"qbittorrent": "qBittorrent", "transmission": "Transmission", "deluge": "Deluge", "sabnzbd": "SABnzbd", "nzbget": "NZBGet"}
 
 func clientConfig(x *store.AcqClient) acquire.ClientConfig {
 	return acquire.ClientConfig{ID: x.ID, Kind: x.Kind, URL: x.URL, Username: x.Username, Password: x.Password, Category: x.Category,
@@ -303,6 +334,15 @@ func (s *Server) handleAcqLookup(w http.ResponseWriter, r *http.Request, c *reqC
 		writeJSON(w, http.StatusOK, []any{})
 		return
 	}
+	if r.URL.Query().Get("kind") == "series" {
+		res, err := m.LookupSeries(r.Context(), q)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+		return
+	}
 	res, err := m.Lookup(r.Context(), q, queryInt(r, "year", 0))
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
@@ -321,7 +361,7 @@ func (s *Server) handleAcqReleases(w http.ResponseWriter, r *http.Request, c *re
 		writeErr(w, http.StatusBadRequest, "hiányzik a tmdb_id")
 		return
 	}
-	res, err := m.Releases(r.Context(), id)
+	res, err := m.ReleasesProfile(r.Context(), id, int64(queryInt(r, "profile_id", 0)))
 	if err != nil {
 		code := http.StatusBadGateway
 		if errors.Is(err, acquire.ErrNoIndex) {
@@ -342,6 +382,8 @@ func (s *Server) handleAcqGrab(w http.ResponseWriter, r *http.Request, c *reqCtx
 		TmdbID    int64           `json:"tmdb_id"`
 		LibraryID int64           `json:"library_id"`
 		Release   *acquire.Result `json:"release"`
+		RequestID int64           `json:"request_id"` // the film request this download is for (interactive search from Kérések)
+		ProfileID int64           `json:"profile_id"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -350,7 +392,7 @@ func (s *Server) handleAcqGrab(w http.ResponseWriter, r *http.Request, c *reqCtx
 		writeErr(w, http.StatusBadRequest, "hiányzik a tmdb_id")
 		return
 	}
-	g, err := m.Grab(r.Context(), acquire.GrabInput{TmdbID: in.TmdbID, LibraryID: in.LibraryID, Release: in.Release, UserID: c.User.ID})
+	g, err := m.Grab(r.Context(), acquire.GrabInput{TmdbID: in.TmdbID, LibraryID: in.LibraryID, Release: in.Release, UserID: c.User.ID, RequestID: in.RequestID, ProfileID: in.ProfileID})
 	if err != nil {
 		code := http.StatusBadGateway
 		if errors.Is(err, acquire.ErrNoClient) || errors.Is(err, acquire.ErrNoIndex) || errors.Is(err, acquire.ErrDisabled) {
@@ -397,4 +439,204 @@ func (s *Server) handleAcqRemove(w http.ResponseWriter, r *http.Request, c *reqC
 		return
 	}
 	ok(w)
+}
+
+// ------------------------------------------------------------------ series (M3)
+
+func (s *Server) handleAcqSeriesList(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	list, err := s.st.AcqSeriesList()
+	if err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+type seriesBody struct {
+	TmdbID    int64  `json:"tmdb_id"`
+	ProfileID *int64 `json:"profile_id"`
+	LibraryID int64  `json:"library_id"`
+	Monitor   string `json:"monitor"`
+	Seasons   []int  `json:"seasons"`
+}
+
+func (s *Server) handleAcqSeriesAdd(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acqReady(w)
+	if m == nil {
+		return
+	}
+	var in seriesBody
+	if !decode(w, r, &in) {
+		return
+	}
+	if in.TmdbID <= 0 {
+		writeErr(w, http.StatusBadRequest, "hiányzik a tmdb_id")
+		return
+	}
+	x, err := m.AddSeries(r.Context(), acquire.SeriesInput{TmdbID: in.TmdbID, LibraryID: in.LibraryID, Monitor: in.Monitor, Seasons: in.Seasons, UserID: c.User.ID})
+	if err != nil {
+		writeErr(w, acqErrStatus(err), err.Error())
+		return
+	}
+	if in.ProfileID != nil {
+		s.st.SetSeriesProfile(x.ID, *in.ProfileID)
+	}
+	writeJSON(w, http.StatusOK, x)
+}
+
+func (s *Server) handleAcqSeriesGet(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	x, err := s.st.AcqSeriesByID(pathID(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "nincs ilyen figyelt sorozat")
+		return
+	}
+	eps, err := s.st.Episodes(x.ID)
+	if err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"series": x, "episodes": eps})
+}
+
+func (s *Server) handleAcqSeriesPatch(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acqReady(w)
+	if m == nil {
+		return
+	}
+	var in seriesBody
+	if !decode(w, r, &in) {
+		return
+	}
+	x, err := m.SetSeriesMonitor(r.Context(), pathID(r, "id"), in.Monitor, in.Seasons, in.LibraryID)
+	if err != nil {
+		writeErr(w, acqErrStatus(err), err.Error())
+		return
+	}
+	if in.ProfileID != nil {
+		s.st.SetSeriesProfile(x.ID, *in.ProfileID)
+	}
+	writeJSON(w, http.StatusOK, x)
+}
+
+func (s *Server) handleAcqSeriesSearch(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acqReady(w)
+	if m == nil {
+		return
+	}
+	if err := m.SearchSeriesNow(pathID(r, "id")); err != nil {
+		writeErr(w, acqErrStatus(err), err.Error())
+		return
+	}
+	ok(w)
+}
+
+func (s *Server) handleAcqSeriesDelete(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	s.st.DeleteAcqSeries(pathID(r, "id"))
+	ok(w)
+}
+
+// handleAcqSeriesReleases is the interactive search of a season (episode omitted) or of one episode.
+func (s *Server) handleAcqSeriesReleases(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acqReady(w)
+	if m == nil {
+		return
+	}
+	season := queryInt(r, "season", -1)
+	if season < 0 {
+		writeErr(w, http.StatusBadRequest, "hiányzik az évad")
+		return
+	}
+	x, res, err := m.SeriesReleases(r.Context(), pathID(r, "id"), season, queryInt(r, "episode", -1))
+	if err != nil {
+		code := acqErrStatus(err)
+		if errors.Is(err, acquire.ErrNoIndex) {
+			code = http.StatusConflict
+		}
+		writeErr(w, code, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"series": x, "results": res})
+}
+
+func (s *Server) handleAcqSeriesGrab(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acqReady(w)
+	if m == nil {
+		return
+	}
+	var in struct {
+		Season  int             `json:"season"`
+		Release *acquire.Result `json:"release"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if in.Release == nil || in.Season < 0 {
+		writeErr(w, http.StatusBadRequest, "hiányzik a kiadás vagy az évad")
+		return
+	}
+	if err := m.GrabSeriesRelease(r.Context(), pathID(r, "id"), in.Season, *in.Release); err != nil {
+		writeErr(w, acqErrStatus(err), err.Error())
+		return
+	}
+	ok(w)
+}
+
+func (s *Server) handleAcqSeasonSearch(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acqReady(w)
+	if m == nil {
+		return
+	}
+	if err := m.SearchSeason(pathID(r, "id"), queryInt(r, "season", -1)); err != nil {
+		writeErr(w, acqErrStatus(err), err.Error())
+		return
+	}
+	ok(w)
+}
+
+// ------------------------------------------------------------------ quality profiles, statistics (M4)
+
+func (s *Server) handleAcqProfileSave(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	var in struct {
+		Name      string          `json:"name"`
+		IsDefault bool            `json:"is_default"`
+		Profile   acquire.Profile `json:"profile"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" {
+		writeErr(w, http.StatusBadRequest, "add meg a profil nevét")
+		return
+	}
+	if len(in.Profile.Resolutions) == 0 {
+		writeErr(w, http.StatusBadRequest, "legalább egy felbontást engedélyezz")
+		return
+	}
+	p := &store.AcqProfile{ID: pathID(r, "id"), Name: in.Name, IsDefault: in.IsDefault, JSON: acquire.ProfileJSON(in.Profile)}
+	if p.ID > 0 {
+		if _, err := s.st.AcqProfileByID(p.ID); err != nil {
+			writeErr(w, http.StatusNotFound, "nincs ilyen profil")
+			return
+		}
+	}
+	if err := s.st.SaveAcqProfile(p); err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+func (s *Server) handleAcqProfileDelete(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	s.st.DeleteAcqProfile(pathID(r, "id"))
+	ok(w)
+}
+
+func (s *Server) handleAcqStats(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	st, err := s.st.AcqStatistics()
+	if err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
 }

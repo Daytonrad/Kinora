@@ -41,15 +41,27 @@ type TorrentStatus struct {
 // DownloadClient is a torrent client Kinora drives (qBittorrent first; Transmission, Deluge later).
 type DownloadClient interface {
 	Test(ctx context.Context) (string, error)
-	Add(ctx context.Context, r AddRequest) error
-	Status(ctx context.Context, hashes []string) (map[string]TorrentStatus, error)
-	Remove(ctx context.Context, hash string, deleteFiles bool) error
+	// Add starts a download and returns the client's id for it (a torrent's info hash, a Usenet job id).
+	Add(ctx context.Context, r AddRequest) (string, error)
+	// Status reports the downloads with these ids; an id missing from the map is gone from the client.
+	Status(ctx context.Context, ids []string) (map[string]TorrentStatus, error)
+	Remove(ctx context.Context, id string, deleteFiles bool) error
+	Protocol() string // torrent | usenet
+}
+
+// ClientProtocol is the protocol of a client kind.
+func ClientProtocol(kind string) string {
+	switch kind {
+	case "sabnzbd", "nzbget":
+		return "usenet"
+	}
+	return "torrent"
 }
 
 // ClientConfig is a stored download client.
 type ClientConfig struct {
 	ID         int64
-	Kind       string // "qbittorrent"
+	Kind       string // qbittorrent | transmission | deluge | sabnzbd | nzbget
 	URL        string
 	Username   string
 	Password   string
@@ -64,6 +76,14 @@ func NewClient(cfg ClientConfig, hc *http.Client) (DownloadClient, error) {
 	switch cfg.Kind {
 	case "qbittorrent", "":
 		return NewQBittorrent(cfg, hc)
+	case "transmission":
+		return NewTransmission(cfg, hc)
+	case "deluge":
+		return NewDeluge(cfg, hc)
+	case "sabnzbd":
+		return NewSABnzbd(cfg, hc)
+	case "nzbget":
+		return NewNZBGet(cfg, hc)
 	}
 	return nil, fmt.Errorf("ismeretlen letöltőkliens: %s", cfg.Kind)
 }
@@ -189,8 +209,14 @@ func (q *QBittorrent) ensureCategory(ctx context.Context, cat, path string) {
 	q.do(ctx, "POST", "/api/v2/torrents/createCategory", form(v)) // 409: exists – fine
 }
 
+// Protocol: qBittorrent downloads torrents.
+func (q *QBittorrent) Protocol() string { return "torrent" }
+
 // Add hands a magnet or .torrent file to qBittorrent.
-func (q *QBittorrent) Add(ctx context.Context, r AddRequest) error {
+func (q *QBittorrent) Add(ctx context.Context, r AddRequest) (string, error) {
+	if r.NZB != nil {
+		return "", errors.New("a qBittorrent nem tölt le Usenetről")
+	}
 	cat := r.Category
 	if cat == "" {
 		cat = q.category
@@ -227,16 +253,19 @@ func (q *QBittorrent) Add(ctx context.Context, r AddRequest) error {
 	}
 	b, st, err := q.do(ctx, "POST", "/api/v2/torrents/add", build)
 	if err != nil {
-		return err
+		return "", err
 	}
 	text := strings.TrimSpace(string(b))
+	if st == http.StatusConflict {
+		return r.InfoHash, nil // qBittorrent 5.x: the torrent is already in the list – Kinora follows it by its hash
+	}
 	if st == http.StatusUnsupportedMediaType || text == "Fails." {
-		return errors.New("a qBittorrent nem fogadta el a torrentet (érvénytelen, vagy már szerepel a listájában)")
+		return "", errors.New("a qBittorrent nem fogadta el a torrentet (érvénytelen, vagy már szerepel a listájában)")
 	}
 	if st < 200 || st > 299 {
-		return fmt.Errorf("qBittorrent: HTTP %d %s", st, text)
+		return "", fmt.Errorf("qBittorrent: HTTP %d %s", st, text)
 	}
-	return nil
+	return r.InfoHash, nil
 }
 
 type qbTorrent struct {

@@ -2,6 +2,8 @@ package acquire
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -17,6 +19,7 @@ import (
 // (Jackett, Prowlarr) standing in for several trackers.
 type Indexer struct {
 	ID         int64
+	Kind       string // torznab (torrents) | newznab (Usenet)
 	Name       string
 	URL        string
 	APIKey     string
@@ -38,6 +41,7 @@ type Result struct {
 	Peers     int       `json:"peers"`
 	Published time.Time `json:"published"`
 	Info      string    `json:"info_url,omitempty"`
+	Protocol  string    `json:"protocol"` // torrent | usenet
 	Release   Release   `json:"release"`
 	Quality   string    `json:"quality"`
 	Score     int       `json:"score"`
@@ -50,6 +54,11 @@ type Query struct {
 	IMDb  string
 	Title string
 	Year  int
+	// series: TV searches (t=tvsearch, categories 5000); Season/Episode -1 when not asked for
+	TV      bool
+	TVDB    int64
+	Season  int
+	Episode int
 }
 
 // Torznab is the client; one is enough for every indexer.
@@ -159,18 +168,32 @@ func (c *Torznab) Caps(ctx context.Context, ix Indexer) (string, error) {
 	return name, nil
 }
 
-func cats(ix Indexer) string {
-	if strings.TrimSpace(ix.Categories) == "" {
-		return "2000"
+// cats picks the indexer's categories for the kind of search: 2xxx films, 5xxx series.
+func cats(ix Indexer, tv bool) string {
+	want, def := "2", "2000"
+	if tv {
+		want, def = "5", "5000"
 	}
-	return strings.ReplaceAll(ix.Categories, " ", "")
+	var out []string
+	for _, c := range strings.Split(strings.ReplaceAll(ix.Categories, " ", ""), ",") {
+		if strings.HasPrefix(c, want) {
+			out = append(out, c)
+		}
+	}
+	if len(out) == 0 {
+		return def
+	}
+	return strings.Join(out, ",")
 }
 
 // Search asks one indexer for a film: by IMDb id first, then by title and year.
 func (c *Torznab) Search(ctx context.Context, ix Indexer, q Query) ([]Result, error) {
+	if q.TV {
+		return c.searchTV(ctx, ix, q)
+	}
 	var items []rssItem
 	if q.IMDb != "" {
-		r, err := c.call(ctx, ix, url.Values{"t": {"movie"}, "imdbid": {strings.TrimPrefix(q.IMDb, "tt")}, "cat": {cats(ix)}})
+		r, err := c.call(ctx, ix, url.Values{"t": {"movie"}, "imdbid": {strings.TrimPrefix(q.IMDb, "tt")}, "cat": {cats(ix, false)}})
 		if err == nil {
 			items = r.Channel.Items
 		} else if q.Title == "" {
@@ -182,17 +205,71 @@ func (c *Torznab) Search(ctx context.Context, ix Indexer, q Query) ([]Result, er
 		if q.Year > 0 {
 			text += " " + strconv.Itoa(q.Year)
 		}
-		r, err := c.call(ctx, ix, url.Values{"t": {"search"}, "q": {text}, "cat": {cats(ix)}})
+		r, err := c.call(ctx, ix, url.Values{"t": {"search"}, "q": {text}, "cat": {cats(ix, false)}})
 		if err != nil {
 			return nil, err
 		}
 		items = r.Channel.Items
 	}
+	return toResults(ix, items), nil
+}
+
+func toResults(ix Indexer, items []rssItem) []Result {
 	out := make([]Result, 0, len(items))
 	for _, it := range items {
 		out = append(out, toResult(ix, it))
 	}
-	return out, nil
+	return out
+}
+
+// searchTV asks for a series episode (Season and Episode set), a whole season (Episode -1) or the
+// series: by TVDB id first, then by text ("Title S01E02" / "Title S01").
+func (c *Torznab) searchTV(ctx context.Context, ix Indexer, q Query) ([]Result, error) {
+	v := url.Values{"t": {"tvsearch"}, "cat": {cats(ix, true)}}
+	if q.Season >= 0 {
+		v.Set("season", strconv.Itoa(q.Season))
+	}
+	if q.Episode >= 0 {
+		v.Set("ep", strconv.Itoa(q.Episode))
+	}
+	var items []rssItem
+	if q.TVDB > 0 {
+		vv := url.Values{}
+		for k, x := range v {
+			vv[k] = x
+		}
+		vv.Set("tvdbid", strconv.FormatInt(q.TVDB, 10))
+		r, err := c.call(ctx, ix, vv)
+		if err == nil {
+			items = r.Channel.Items
+		} else if q.Title == "" {
+			return nil, err
+		}
+	}
+	if len(items) == 0 && q.Title != "" {
+		text := q.Title
+		if q.Season >= 0 {
+			text += fmt.Sprintf(" S%02d", q.Season)
+			if q.Episode >= 0 {
+				text += fmt.Sprintf("E%02d", q.Episode)
+			}
+		}
+		r, err := c.call(ctx, ix, url.Values{"t": {"search"}, "q": {text}, "cat": {cats(ix, true)}})
+		if err != nil {
+			return nil, err
+		}
+		items = r.Channel.Items
+	}
+	return toResults(ix, items), nil
+}
+
+// Latest returns the indexer's newest releases (its RSS feed) for films or series.
+func (c *Torznab) Latest(ctx context.Context, ix Indexer, tv bool) ([]Result, error) {
+	r, err := c.call(ctx, ix, url.Values{"t": {"search"}, "cat": {cats(ix, tv)}})
+	if err != nil {
+		return nil, err
+	}
+	return toResults(ix, r.Channel.Items), nil
 }
 
 func toResult(ix Indexer, it rssItem) Result {
@@ -242,7 +319,17 @@ func toResult(ix Indexer, it rssItem) Result {
 			}
 		}
 	}
-	if r.InfoHash == "" && r.Magnet != "" {
+	r.Protocol = "torrent"
+	if ix.Kind == "newznab" {
+		// Usenet: no seeders, no info hash; the release is known by its guid (blocklist, duplicates)
+		r.Protocol, r.Seeders, r.Peers, r.Magnet = "usenet", -1, -1, ""
+		key := r.GUID
+		if key == "" {
+			key = r.Link
+		}
+		sum := sha1.Sum([]byte(key))
+		r.InfoHash = "nzb:" + hex.EncodeToString(sum[:10])
+	} else if r.InfoHash == "" && r.Magnet != "" {
 		r.InfoHash, _ = MagnetHash(r.Magnet)
 	}
 	r.Release = ParseRelease(r.Title)

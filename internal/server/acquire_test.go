@@ -98,3 +98,45 @@ func TestAcquireAdminAPI(t *testing.T) {
 		t.Errorf("delete %d", code)
 	}
 }
+
+func TestAcqProfilesAndStats(t *testing.T) {
+	c, _ := newTestServer(t)
+	var p map[string]any
+	if code := c.do("POST", "/api/admin/acquire/profiles", map[string]any{"name": "4K", "is_default": true,
+		"profile": map[string]any{"resolutions": []int{2160, 1080}, "upgrade": true, "cutoff_resolution": 2160, "cutoff_source": "remux"}}, &p); code != 200 {
+		t.Fatalf("create profile %d %v", code, p)
+	}
+	if code := c.do("POST", "/api/admin/acquire/profiles", map[string]any{"name": "", "profile": map[string]any{"resolutions": []int{720}}}, nil); code != 400 {
+		t.Errorf("nameless profile: %d", code)
+	}
+	var second map[string]any
+	c.do("POST", "/api/admin/acquire/profiles", map[string]any{"name": "Kicsi", "is_default": true, "profile": map[string]any{"resolutions": []int{720}}}, &second)
+	var set struct {
+		Profiles []map[string]any `json:"profiles"`
+	}
+	c.do("GET", "/api/admin/acquire/settings", nil, &set)
+	if len(set.Profiles) != 2 || set.Profiles[0]["name"] != "Kicsi" || set.Profiles[0]["is_default"] != true || set.Profiles[1]["is_default"] != false {
+		t.Errorf("profiles: %v", set.Profiles)
+	}
+	if code := c.do("DELETE", fmt.Sprintf("/api/admin/acquire/profiles/%d", int64(p["id"].(float64))), nil, nil); code != 200 {
+		t.Errorf("delete %d", code)
+	}
+	var stats map[string]any
+	if code := c.do("GET", "/api/admin/acquire/stats", nil, &stats); code != 200 || stats["downloads"] == nil || stats["requests"] == nil {
+		t.Errorf("stats: %d %v", code, stats)
+	}
+	// the new client kinds pass validation; Deluge needs its password
+	if code := c.do("POST", "/api/admin/acquire/clients", map[string]any{"kind": "deluge", "url": "http://d:8112"}, nil); code != 400 {
+		t.Errorf("deluge without password: %d", code)
+	}
+	var cl map[string]any
+	if code := c.do("POST", "/api/admin/acquire/clients", map[string]any{"kind": "sabnzbd", "url": "http://sab:8080", "password": "k"}, &cl); code != 200 || cl["name"] != "SABnzbd" {
+		t.Errorf("sabnzbd: %d %v", code, cl)
+	}
+	if code := c.do("POST", "/api/admin/acquire/clients", map[string]any{"kind": "rtorrent", "url": "http://r"}, nil); code != 400 {
+		t.Errorf("unknown kind: %d", code)
+	}
+	if code := c.do("POST", "/api/admin/acquire/indexers", map[string]any{"name": "NZB", "kind": "newznab", "url": "http://nzb/api"}, nil); code != 200 {
+		t.Errorf("newznab indexer: %d", code)
+	}
+}

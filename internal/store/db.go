@@ -355,6 +355,90 @@ CREATE TABLE acq_grabs(
 CREATE INDEX acq_grabs_status ON acq_grabs(status);
 CREATE INDEX acq_grabs_tmdb ON acq_grabs(kind, tmdb_id);
 `,
+	// 7: acquisition requests (anyone may ask for a film), the blocklist of failed releases
+	`
+CREATE TABLE acq_requests(
+  id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL DEFAULT 'movie',
+  tmdb_id INTEGER NOT NULL,
+  imdb_id TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  year INTEGER NOT NULL DEFAULT 0,
+  poster TEXT NOT NULL DEFAULT '',
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  profile_id INTEGER REFERENCES profiles(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  note TEXT NOT NULL DEFAULT '',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_try_at INTEGER NOT NULL DEFAULT 0,
+  decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  seen INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX acq_requests_status ON acq_requests(status);
+CREATE INDEX acq_requests_user ON acq_requests(user_id, created_at);
+CREATE INDEX acq_requests_tmdb ON acq_requests(kind, tmdb_id);
+ALTER TABLE acq_grabs ADD COLUMN request_id INTEGER REFERENCES acq_requests(id) ON DELETE SET NULL;
+CREATE TABLE acq_blocklist(
+  info_hash TEXT PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+`,
+	// 8: acquisition of series: monitored series, their episodes, season / episode downloads, season requests
+	`
+CREATE TABLE acq_series(
+  id INTEGER PRIMARY KEY,
+  tmdb_id INTEGER NOT NULL UNIQUE,
+  imdb_id TEXT NOT NULL DEFAULT '',
+  tvdb_id INTEGER NOT NULL DEFAULT 0,
+  title TEXT NOT NULL,
+  original_title TEXT NOT NULL DEFAULT '',
+  english_title TEXT NOT NULL DEFAULT '',
+  year INTEGER NOT NULL DEFAULT 0,
+  poster TEXT NOT NULL DEFAULT '',
+  library_id INTEGER REFERENCES libraries(id) ON DELETE SET NULL,
+  monitor TEXT NOT NULL DEFAULT 'all',
+  ended INTEGER NOT NULL DEFAULT 0,
+  refreshed_at INTEGER NOT NULL DEFAULT 0,
+  added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE acq_episodes(
+  series_id INTEGER NOT NULL REFERENCES acq_series(id) ON DELETE CASCADE,
+  season INTEGER NOT NULL,
+  episode INTEGER NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  air_date TEXT NOT NULL DEFAULT '',
+  monitored INTEGER NOT NULL DEFAULT 1,
+  have INTEGER NOT NULL DEFAULT 0,
+  grab_id INTEGER REFERENCES acq_grabs(id) ON DELETE SET NULL,
+  searched_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(series_id, season, episode)
+);
+ALTER TABLE acq_grabs ADD COLUMN series_id INTEGER REFERENCES acq_series(id) ON DELETE SET NULL;
+ALTER TABLE acq_grabs ADD COLUMN season INTEGER NOT NULL DEFAULT -1;
+ALTER TABLE acq_grabs ADD COLUMN episodes TEXT NOT NULL DEFAULT '';
+ALTER TABLE acq_requests ADD COLUMN seasons TEXT NOT NULL DEFAULT '';
+`,
+	// 9: download clients that name downloads themselves (Usenet), quality profiles, upgrades
+	`
+ALTER TABLE acq_grabs ADD COLUMN download_id TEXT NOT NULL DEFAULT '';
+UPDATE acq_grabs SET download_id=info_hash;
+CREATE TABLE acq_profiles(
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  json TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+ALTER TABLE acq_series ADD COLUMN profile_id INTEGER REFERENCES acq_profiles(id) ON DELETE SET NULL;
+ALTER TABLE acq_grabs ADD COLUMN profile_id INTEGER REFERENCES acq_profiles(id) ON DELETE SET NULL;
+ALTER TABLE acq_grabs ADD COLUMN replaces TEXT NOT NULL DEFAULT '';
+ALTER TABLE acq_grabs ADD COLUMN upgrade_checked_at INTEGER NOT NULL DEFAULT 0;
+`,
 }
 
 func (s *Store) migrate() error {
@@ -419,6 +503,11 @@ var SettingDefaults = map[string]string{
 	"acq_enabled":          "0",
 	"acq_profile":          "",
 	"acq_import_mode":      "hardlink",
+	"acq_auto_approve":     "admins",
+	"acq_quota_week":       "0",
+	"acq_library":          "",
+	"acq_retry_hours":      "6",
+	"acq_library_tv":       "",
 }
 
 // SetOverride forces a setting from the environment (shown as locked in the admin UI).

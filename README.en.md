@@ -214,7 +214,7 @@ Because `<video>` and `<img>` elements cannot send authorization headers, playba
 ## Built-in acquisition (instead of Radarr/Prowlarr/Jellyseerr)
 
 **Admin → Acquisition:** look up a film, pick a release (or let Kinora pick by the quality profile), qBittorrent downloads it, and Kinora hardlinks it into the movie library (`Title (Year) {imdb-tt…}/Title (Year) - 1080p BluRay.mkv`) and scans it. Off by default, with no tracker or indexer included: the admin adds the Torznab sources (a tracker's own API, Jackett or Prowlarr).
-Kinora and qBittorrent should see the same `/data` folder (with `downloads/` and `media/` in it) so hardlinks work and the torrent keeps seeding. If qBittorrent sees the downloads under another path, set a path mapping in the admin. Full plan and milestones (Hungarian): [docs/BESZERZES.md](docs/BESZERZES.md).
+Kinora and qBittorrent should see the same `/data` folder (with `downloads/` and `media/` in it) so hardlinks work and the torrent keeps seeding. If qBittorrent sees the downloads under another path, set a path mapping in the admin. **Discover:** users (except kids profiles) can request films and series (by season); an admin approves (or every request is approved automatically), the server downloads them on its own and says when they arrived. Download clients: qBittorrent, Transmission, Deluge, SABnzbd or NZBGet; indexers: Torznab or Newznab. Interactive search, own quality profiles and upgrades to better quality too. **Series:** missing episodes of followed series (also as season packs) and new episodes are downloaded on their own. Full plan and milestones (Hungarian): [docs/BESZERZES.md](docs/BESZERZES.md).
 
 ## Backup and restore
 

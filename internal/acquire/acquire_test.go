@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ScotyLucas/kinora/internal/meta"
 	"github.com/ScotyLucas/kinora/internal/store"
@@ -389,10 +390,10 @@ func testQBittorrent(t *testing.T, v5 bool) {
 		t.Fatalf("test: %q %v", v, err)
 	}
 	tor, hash := bencodeTorrent("x.mkv")
-	if err := q.Add(ctx, AddRequest{Fetched: Fetched{Torrent: tor, InfoHash: hash}}); err != nil {
+	if _, err := q.Add(ctx, AddRequest{Fetched: Fetched{Torrent: tor, InfoHash: hash}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := q.Add(ctx, AddRequest{Fetched: Fetched{Magnet: "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c"}}); err != nil {
+	if _, err := q.Add(ctx, AddRequest{Fetched: Fetched{Magnet: "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c"}}); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.added) != 2 || f.added[0] != hash || len(f.cats) == 0 || f.cats[0] != "kinora" {
@@ -512,7 +513,29 @@ func (fakeMovies) Search(ctx context.Context, kind, q string, year int) ([]meta.
 	return []meta.SearchResult{{ID: 603, Title: "Mátrix", Year: 1999}, {ID: 604, Title: "Mátrix – Újratöltve", Year: 2003}}, nil
 }
 func (fakeMovies) Movie(ctx context.Context, id int64) (meta.MovieInfo, error) {
+	if id != 603 { // a film no indexer has
+		return meta.MovieInfo{ID: id, IMDb: "tt9999999", Title: "Nincs Ilyen Film", OriginalTitle: "No Such Film", EnglishTitle: "No Such Film", Year: 2031}, nil
+	}
 	return meta.MovieInfo{ID: 603, IMDb: "tt0133093", Title: "Mátrix", OriginalTitle: "The Matrix", EnglishTitle: "The Matrix", Year: 1999}, nil
+}
+func (fakeMovies) TV(ctx context.Context, id int64) (meta.TVInfo, error) {
+	return meta.TVInfo{ID: 1399, IMDb: "tt0944947", TVDB: 121361, Title: "Trónok harca", OriginalTitle: "Game of Thrones", EnglishTitle: "Game of Thrones",
+		Year: 2011, Seasons: []meta.TVSeason{{Number: 0, EpisodeCount: 1}, {Number: 1, EpisodeCount: 3}, {Number: 2, EpisodeCount: 2}}}, nil
+}
+func (fakeMovies) TVSeasonEpisodes(ctx context.Context, id int64, season int) ([]meta.TVEpisode, error) {
+	switch season {
+	case 1:
+		return []meta.TVEpisode{{Season: 1, Episode: 1, AirDate: "2011-04-17"}, {Season: 1, Episode: 2, AirDate: "2011-04-24"}, {Season: 1, Episode: 3, AirDate: "2011-05-01"}}, nil
+	case 2:
+		return []meta.TVEpisode{{Season: 2, Episode: 1, AirDate: "2012-04-01"}, {Season: 2, Episode: 2, AirDate: "2099-01-01"}}, nil
+	}
+	return nil, nil
+}
+func (fakeMovies) TVList(ctx context.Context, list string, page int) ([]meta.SearchResult, error) {
+	return []meta.SearchResult{{ID: 1399, Title: "Trónok harca", Year: 2011}}, nil
+}
+func (fakeMovies) MovieList(ctx context.Context, list string, page int) ([]meta.SearchResult, error) {
+	return []meta.SearchResult{{ID: 603, Title: "Mátrix", Year: 1999}, {ID: 777, Title: "Nincs Ilyen Film", Year: 2031}}, nil
 }
 
 type memClient struct {
@@ -522,12 +545,13 @@ type memClient struct {
 }
 
 func (c *memClient) Test(ctx context.Context) (string, error) { return "mem", nil }
-func (c *memClient) Add(ctx context.Context, r AddRequest) error {
+func (c *memClient) Protocol() string                         { return "torrent" }
+func (c *memClient) Add(ctx context.Context, r AddRequest) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.adds++
 	c.st[r.InfoHash] = TorrentStatus{Hash: r.InfoHash, Progress: 0.1, State: "downloading", ETA: 60}
-	return nil
+	return r.InfoHash, nil
 }
 func (c *memClient) Status(ctx context.Context, hs []string) (map[string]TorrentStatus, error) {
 	c.mu.Lock()
@@ -629,6 +653,11 @@ func TestManagerFlow(t *testing.T) {
 	g3 := &store.AcqGrab{Kind: "movie", TmdbID: 604, Title: "X", ReleaseTitle: "X", InfoHash: "ffff", ClientID: g.ClientID, LibraryID: &libRow.ID}
 	st.AddAcqGrab(g3)
 	m.Poll(ctx)
+	if g3, _ = st.AcqGrab(g3.ID); g3.Status != store.GrabDownloading {
+		t.Fatalf("a just added download is not gone yet: %+v", g3)
+	}
+	st.DB.Exec(`UPDATE acq_grabs SET created_at=created_at-600 WHERE id=?`, g3.ID)
+	m.Poll(ctx)
 	g3, _ = st.AcqGrab(g3.ID)
 	if g3.Status != store.GrabFailed || g3.Error == "" {
 		t.Errorf("vanished: %+v", g3)
@@ -645,3 +674,373 @@ func TestManagerFlow(t *testing.T) {
 }
 
 func mustURL(s string) *url.URL { u, _ := url.Parse(s); return u }
+
+func TestRequests(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "k.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	idx := fakeIndexer(t, nil)
+	defer idx.Close()
+	lib := filepath.Join(dir, "Movies")
+	os.MkdirAll(lib, 0o755)
+	libRow, _ := st.CreateLibrary("Filmek", lib, "movies")
+	st.SaveAcqIndexer(&store.AcqIndexer{Name: "Fake", URL: idx.URL, APIKey: "secret", Enabled: true, Priority: 1})
+	st.SaveAcqClient(&store.AcqClient{Name: "qB", URL: "http://qb", Enabled: true, PathRemote: "/downloads", PathLocal: filepath.Join(dir, "dl")})
+	m := New(st, fakeMovies{}, func(int64) {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m.hc, m.tz = idx.Client(), &Torznab{HC: idx.Client()}
+	mem := &memClient{st: map[string]TorrentStatus{}}
+	m.NewClient = func(ClientConfig) (DownloadClient, error) { return mem, nil }
+	ctx := context.Background()
+	st.SetSetting("acq_enabled", "1")
+	mk := func(name string, admin bool) int64 {
+		u, err := st.CreateUser(name, "secret123", admin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u.ID
+	}
+	adminID, anna, bela, cili := mk("admin", true), mk("anna", false), mk("bela", false), mk("cili", false)
+	user := Requester{UserID: anna}
+
+	if _, err := m.Request(ctx, Requester{UserID: anna, Kids: true}, 603); err != ErrKids {
+		t.Errorf("kids: %v", err)
+	}
+	q, err := m.Request(ctx, user, 603)
+	if err != nil || q.Status != store.ReqPending || q.Title != "Mátrix" {
+		t.Fatalf("request: %+v %v", q, err)
+	}
+	if q2, _ := m.Request(ctx, Requester{UserID: bela}, 603); q2 == nil || q2.ID != q.ID {
+		t.Error("a second request for the same film should return the open one")
+	}
+	st.SetSetting("acq_quota_week", "1")
+	if _, err := m.Request(ctx, user, 777); err != ErrQuota {
+		t.Errorf("quota: %v", err)
+	}
+	if _, err := m.Request(ctx, Requester{UserID: adminID, IsAdmin: true}, 777); err != nil {
+		t.Errorf("admins have no quota: %v", err)
+	}
+	st.SetSetting("acq_quota_week", "0")
+	ds, err := m.Discover(ctx, "trending")
+	if err != nil || ds[0].Request != store.ReqPending || ds[1].Request != store.ReqApproved {
+		t.Errorf("discover marks: %+v %v", ds, err)
+	}
+
+	// pending: nothing happens until an admin approves
+	m.ProcessRequests(ctx)
+	if mem.adds != 0 {
+		t.Fatal("a pending request was downloaded")
+	}
+	if err := m.Decide(q.ID, adminID, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	m.ProcessRequests(ctx)
+	q, _ = st.AcqRequest(q.ID)
+	if q.Status != store.ReqDownloading || mem.adds != 1 {
+		t.Fatalf("approved request not grabbed: %+v adds %d", q, mem.adds)
+	}
+	other, _ := st.OpenRequestFor("movie", 777)
+	if other.Status != store.ReqWaiting || other.NextTryAt <= time.Now().Unix() || other.Note == "" {
+		t.Errorf("no release → waiting: %+v", other)
+	}
+	grabs, _ := st.AcqGrabs(10)
+	first := grabs[0]
+	if first.RequestID == nil || *first.RequestID != q.ID || !strings.Contains(first.ReleaseTitle, "HUN") {
+		t.Fatalf("grab: %+v", first)
+	}
+
+	// the client reports an error: blocklisted, the next best release goes
+	mem.st[first.InfoHash] = TorrentStatus{Hash: first.InfoHash, State: "error", Failed: true}
+	m.Poll(ctx)
+	if !st.Blocklisted([]string{first.InfoHash})[first.InfoHash] {
+		t.Error("failed release not blocklisted")
+	}
+	q, _ = st.AcqRequest(q.ID)
+	if q.Status != store.ReqApproved || q.Attempts != 1 {
+		t.Fatalf("after a failure: %+v", q)
+	}
+	m.ProcessRequests(ctx)
+	grabs, _ = st.AcqGrabs(10)
+	second := grabs[0]
+	if second.ID == first.ID || second.InfoHash == first.InfoHash || !strings.Contains(second.ReleaseTitle, "1080p") {
+		t.Fatalf("next release: %+v", second)
+	}
+
+	// finished: imported, the request is available and the requester is told once
+	write(t, filepath.Join(dir, "dl", "M", "matrix.mkv"), 4000)
+	mem.st[second.InfoHash] = TorrentStatus{Hash: second.InfoHash, Progress: 1, Done: true, State: "uploading", ContentPath: "/downloads/M"}
+	m.Poll(ctx)
+	q, _ = st.AcqRequest(q.ID)
+	if q.Status != store.ReqAvailable {
+		t.Fatalf("not available: %+v", q)
+	}
+	un, _ := st.UnseenAvailable(anna)
+	if len(un) != 1 {
+		t.Errorf("unseen: %d", len(un))
+	}
+	st.MarkRequestsSeen(anna)
+	if un, _ = st.UnseenAvailable(anna); len(un) != 0 {
+		t.Error("still unseen")
+	}
+
+	// cancel: only own, only before the download
+	r3, _ := m.Request(ctx, Requester{UserID: cili}, 778)
+	if err := m.CancelRequest(r3.ID, Requester{UserID: anna}); err != ErrNotYours {
+		t.Errorf("cancel someone else's: %v", err)
+	}
+	if err := m.CancelRequest(r3.ID, Requester{UserID: cili}); err != nil {
+		t.Errorf("cancel: %v", err)
+	}
+	_ = libRow
+}
+
+func TestParseEpisodes(t *testing.T) {
+	r := ParseRelease("Game.of.Thrones.S01E01E02.1080p.BluRay.x264-GRP")
+	if r.Season != 1 || fmt.Sprint(r.Episodes) != "[1 2]" || r.Title != "Game of Thrones" {
+		t.Errorf("multi: %+v", r)
+	}
+	if r := ParseRelease("Game.of.Thrones.S02.1080p.WEB-DL"); r.Season != 2 || r.Episode != -1 || len(r.Episodes) != 0 {
+		t.Errorf("pack: %+v", r)
+	}
+}
+
+// a fake TV indexer: a season 1 pack, single S02E01, and an RSS feed
+func fakeTVIndexer(t *testing.T) *httptest.Server {
+	item := func(title, magnetHash string, seeders int) string {
+		return fmt.Sprintf(`<item><title>%s</title><guid>%s</guid><link>magnet:?xt=urn:btih:%s</link><size>%d</size>
+<torznab:attr name="seeders" value="%d"/></item>`, title, magnetHash, magnetHash, int64(3)<<30, seeders)
+	}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		var items string
+		switch {
+		case q.Get("t") == "tvsearch" && q.Get("season") == "1" && q.Get("ep") == "":
+			items = item("Game.of.Thrones.S01.1080p.BluRay.x264-PACK", "1111111111111111111111111111111111111111", 50) +
+				item("Game.of.Thrones.S01E01.720p.HDTV.x264-ONE", "2222222222222222222222222222222222222222", 90)
+		case q.Get("t") == "tvsearch" && q.Get("season") == "2" && q.Get("ep") == "1":
+			items = item("Game.of.Thrones.S02E01.1080p.WEB.H264-EP", "3333333333333333333333333333333333333333", 40) +
+				item("House.of.the.Dragon.S02E01.1080p.WEB.H264-NOPE", "4444444444444444444444444444444444444444", 99)
+		}
+		fmt.Fprintf(w, `<?xml version="1.0"?><rss xmlns:torznab="http://torznab.com/schemas/2015/feed"><channel>%s</channel></rss>`, items)
+	}))
+}
+
+func TestSeries(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "k.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	idx := fakeTVIndexer(t)
+	defer idx.Close()
+	shows := filepath.Join(dir, "Shows")
+	os.MkdirAll(shows, 0o755)
+	lib, _ := st.CreateLibrary("Sorozatok", shows, "shows")
+	st.SaveAcqIndexer(&store.AcqIndexer{Name: "TV", URL: idx.URL, Enabled: true, Priority: 1})
+	st.SaveAcqClient(&store.AcqClient{Name: "qB", URL: "http://qb", Enabled: true, PathRemote: "/downloads", PathLocal: filepath.Join(dir, "dl")})
+	var scanned int
+	m := New(st, fakeMovies{}, func(int64) { scanned++ }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m.hc, m.tz = idx.Client(), &Torznab{HC: idx.Client()}
+	mem := &memClient{st: map[string]TorrentStatus{}}
+	m.NewClient = func(ClientConfig) (DownloadClient, error) { return mem, nil }
+	m.lastRSS = time.Now() // no RSS in this test
+	ctx := context.Background()
+	st.SetSetting("acq_enabled", "1")
+	admin, _ := st.CreateUser("admin", "secret123", true)
+
+	x, err := m.AddSeries(ctx, SeriesInput{TmdbID: 1399, Monitor: MonitorAll, UserID: admin.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x.Total != 5 || x.Wanted != 4 || *x.LibraryID != lib.ID || x.NextAir != "2099-01-01" {
+		t.Fatalf("followed: %+v", x)
+	}
+	m.ProcessSeries(ctx)
+	if mem.adds != 2 {
+		t.Fatalf("expected the season 1 pack and S02E01, got %d downloads", mem.adds)
+	}
+	grabs, _ := st.AcqGrabs(10)
+	var pack, single *store.AcqGrab
+	for _, g := range grabs {
+		switch g.Kind {
+		case "season":
+			pack = g
+		case "episode":
+			single = g
+		}
+	}
+	if pack == nil || pack.Season != 1 || pack.Episodes != "" || !strings.Contains(pack.ReleaseTitle, "PACK") {
+		t.Fatalf("pack: %+v", pack)
+	}
+	if single == nil || single.Season != 2 || single.Episodes != "1" || !strings.Contains(single.ReleaseTitle, "-EP") {
+		t.Fatalf("episode: %+v", single)
+	}
+	x, _ = st.AcqSeriesByID(x.ID)
+	if x.Wanted != 0 || x.Downloading != 4 {
+		t.Errorf("while downloading: %+v", x)
+	}
+	m.ProcessSeries(ctx) // nothing new to search
+	if mem.adds != 2 {
+		t.Errorf("searched again while downloading: %d", mem.adds)
+	}
+
+	// both finish: the pack holds three episodes (and a sample), the single one file
+	pd := filepath.Join(dir, "dl", "Game.of.Thrones.S01.1080p.BluRay.x264-PACK")
+	for i := 1; i <= 3; i++ {
+		write(t, filepath.Join(pd, fmt.Sprintf("Game.of.Thrones.S01E%02d.1080p.BluRay.x264-PACK.mkv", i)), 2000+i)
+	}
+	write(t, filepath.Join(pd, "Game.of.Thrones.S01E01.1080p.BluRay.x264-PACK.hun.srt"), 10)
+	write(t, filepath.Join(pd, "Sample", "sample.mkv"), 9000)
+	write(t, filepath.Join(dir, "dl", "got.s02e01.mkv"), 3000)
+	mem.st[pack.InfoHash] = TorrentStatus{Hash: pack.InfoHash, Progress: 1, Done: true, State: "uploading", ContentPath: "/downloads/Game.of.Thrones.S01.1080p.BluRay.x264-PACK"}
+	mem.st[single.InfoHash] = TorrentStatus{Hash: single.InfoHash, Progress: 1, Done: true, State: "uploading", ContentPath: "/downloads/got.s02e01.mkv"}
+	m.Poll(ctx)
+	show := filepath.Join(shows, "Trónok harca (2011)")
+	for _, f := range []string{
+		filepath.Join(show, "Season 01", "Trónok harca (2011) - S01E01 - 1080p BluRay.mkv"),
+		filepath.Join(show, "Season 01", "Trónok harca (2011) - S01E01 - 1080p BluRay.hun.srt"),
+		filepath.Join(show, "Season 01", "Trónok harca (2011) - S01E03 - 1080p BluRay.mkv"),
+		filepath.Join(show, "Season 02", "Trónok harca (2011) - S02E01 - 1080p WEBRip.mkv"),
+	} {
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("missing %s", f)
+		}
+	}
+	x, _ = st.AcqSeriesByID(x.ID)
+	if x.Have != 4 || x.Wanted != 0 || x.Downloading != 0 || scanned != 2 {
+		t.Fatalf("after import: %+v scans %d", x, scanned)
+	}
+
+	// a request for the series: followed already, everything aired is here → available
+	st.SetSetting("acq_auto_approve", "all")
+	anna, _ := st.CreateUser("anna", "secret123", false)
+	q, err := m.RequestSeries(ctx, Requester{UserID: anna.ID}, 1399, "1")
+	if err != nil || q.Status != store.ReqApproved || q.Seasons != "1" || q.Kind != "series" {
+		t.Fatalf("series request: %+v %v", q, err)
+	}
+	m.ProcessRequests(ctx)
+	if q, _ = st.AcqRequest(q.ID); q.Status != store.ReqDownloading {
+		t.Fatalf("request after follow: %+v", q)
+	}
+	x, _ = st.AcqSeriesByID(x.ID)
+	if x.Monitor != MonitorAll {
+		t.Errorf("a request must not narrow what is followed: %s", x.Monitor)
+	}
+	m.ProcessSeries(ctx)
+	if q, _ = st.AcqRequest(q.ID); q.Status != store.ReqAvailable {
+		t.Errorf("request not available: %+v", q)
+	}
+	if _, err := ValidSeasons("1,x"); err != nil {
+		t.Errorf("1,x keeps the valid part: %v", err)
+	}
+	if _, err := ValidSeasons("0"); err == nil {
+		t.Error("season 0 accepted")
+	}
+	// interactive search: a season lists packs and single episodes; one episode only matching releases
+	_, rs, err := m.SeriesReleases(ctx, x.ID, 1, -1)
+	if err != nil || len(rs) != 2 || rs[0].Rejected != "" || rs[1].Rejected != "" {
+		t.Fatalf("season interactive: %+v %v", rs, err)
+	}
+	_, rs, _ = m.SeriesReleases(ctx, x.ID, 2, 1)
+	var hod *Result
+	for i := range rs {
+		if strings.Contains(rs[i].Title, "House") {
+			hod = &rs[i]
+		}
+	}
+	if hod == nil || hod.Rejected != RejectTitle {
+		t.Errorf("another series' release not rejected: %+v", hod)
+	}
+	before := mem.adds
+	for _, r := range rs {
+		if strings.Contains(r.Title, "-EP") {
+			if err := m.GrabSeriesRelease(ctx, x.ID, 2, r); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if mem.adds != before+1 { // an admin may send a release again on purpose
+		t.Errorf("interactive grab: adds %d → %d", before, mem.adds)
+	}
+	ds, _ := m.Discover(ctx, "tv_trending")
+	if len(ds) != 1 || ds[0].Kind != "series" || !ds[0].Followed {
+		t.Errorf("tv discover: %+v", ds)
+	}
+}
+
+func TestUpgrade(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "k.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	idx := fakeIndexer(t, nil)
+	defer idx.Close()
+	lib := filepath.Join(dir, "Movies")
+	libRow, _ := st.CreateLibrary("Filmek", lib, "movies")
+	st.SaveAcqIndexer(&store.AcqIndexer{Name: "Fake", URL: idx.URL, APIKey: "secret", Enabled: true, Priority: 1})
+	st.SaveAcqClient(&store.AcqClient{Name: "qB", URL: "http://qb", Enabled: true, PathRemote: "/downloads", PathLocal: filepath.Join(dir, "dl")})
+	m := New(st, fakeMovies{}, func(int64) {}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	m.hc, m.tz = idx.Client(), &Torznab{HC: idx.Client()}
+	mem := &memClient{st: map[string]TorrentStatus{}}
+	m.NewClient = func(ClientConfig) (DownloadClient, error) { return mem, nil }
+	ctx := context.Background()
+	st.SetSetting("acq_enabled", "1")
+	prof := Profile{Resolutions: []int{1080, 720}, MinSeeders: 1, Upgrade: true, CutoffRes: 1080, CutoffSource: "bluray"}
+	pr := &store.AcqProfile{Name: "Upgrade", IsDefault: true, JSON: ProfileJSON(prof)}
+	if err := st.SaveAcqProfile(pr); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Profile(); !got.Upgrade || got.CutoffRank() != 108050 {
+		t.Fatalf("default profile: %+v", got)
+	}
+
+	// a 720p WEB copy Kinora imported earlier
+	old := filepath.Join(lib, "Mátrix (1999) {imdb-tt0133093}", "Mátrix (1999) - 720p WEBRip.mkv")
+	write(t, old, 1000)
+	write(t, strings.TrimSuffix(old, ".mkv")+".hun.srt", 10)
+	g0 := &store.AcqGrab{Kind: "movie", TmdbID: 603, ImdbID: "tt0133093", Title: "Mátrix", Year: 1999, LibraryID: &libRow.ID,
+		ReleaseTitle: "The.Matrix.1999.720p.WEB.HUN.x264-OTHER", InfoHash: "old", Status: store.GrabDone}
+	st.AddAcqGrab(g0)
+	st.SetAcqGrabStatus(g0.ID, store.GrabDone, "", old)
+
+	m.ProcessUpgrades(ctx)
+	grabs, _ := st.AcqGrabs(10)
+	up := grabs[0]
+	if mem.adds != 1 || up.ID == g0.ID || up.Replaces != old || !strings.Contains(up.ReleaseTitle, "1080p.BluRay") {
+		t.Fatalf("upgrade grab: adds %d %+v", mem.adds, up)
+	}
+	write(t, filepath.Join(dir, "dl", "M1080", "matrix.1080p.mkv"), 5000)
+	mem.st[up.InfoHash] = TorrentStatus{Hash: up.InfoHash, Progress: 1, Done: true, State: "uploading", ContentPath: "/downloads/M1080"}
+	m.Poll(ctx)
+	up, _ = st.AcqGrab(up.ID)
+	if up.Status != store.GrabDone {
+		t.Fatalf("upgrade import: %+v", up)
+	}
+	if _, err := os.Stat(old); err == nil {
+		t.Error("the replaced file is still there")
+	}
+	if _, err := os.Stat(strings.TrimSuffix(old, ".mkv") + ".hun.srt"); err == nil {
+		t.Error("the replaced file's subtitle is still there")
+	}
+	if _, err := os.Stat(up.TargetPath); err != nil {
+		t.Errorf("new file missing: %s", up.TargetPath)
+	}
+	// at the cutoff now: no more searches
+	st.DB.Exec(`UPDATE acq_grabs SET upgrade_checked_at=0`)
+	m.ProcessUpgrades(ctx)
+	if mem.adds != 1 {
+		t.Errorf("searched again above the cutoff: %d", mem.adds)
+	}
+	// never deletes outside the library
+	outside := filepath.Join(dir, "elsewhere.mkv")
+	write(t, outside, 10)
+	removeReplaced(lib, outside, "")
+	if _, err := os.Stat(outside); err != nil {
+		t.Error("a file outside the library was removed")
+	}
+}

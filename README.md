@@ -235,7 +235,7 @@ A `<video>`/`<img>` számára a lejátszási válasz rövid életű, aláírt st
 ## Beépített beszerzés (Radarr/Prowlarr/Jellyseerr helyett)
 
 **Admin → Beszerzés:** rákeresel egy filmre, kiválasztasz egy kiadást (vagy a Kinora választja ki a minőségprofil alapján), a qBittorrent letölti, a Kinora pedig hardlinkkel beteszi a filmkönyvtárba (`Cím (Év) {imdb-tt…}/Cím (Év) - 1080p BluRay.mkv`) és beolvassa. Alapból ki van kapcsolva, és nem tartalmaz trackert vagy indexert: a Torznab-forrásokat (egy tracker saját API-ja, Jackett vagy Prowlarr) az admin adja meg.
-A Kinora és a qBittorrent ugyanazt a `/data` mappát lássa (benne `downloads/` és `media/`), így a hardlink működik, és a torrent tovább seedelhet. Ha a qBittorrent más útvonalon látja a letöltéseket, az adminban útvonal-leképezés állítható. A teljes terv és a mérföldkövek: [docs/BESZERZES.md](docs/BESZERZES.md).
+A Kinora és a qBittorrent ugyanazt a `/data` mappát lássa (benne `downloads/` és `media/`), így a hardlink működik, és a torrent tovább seedelhet. Ha a qBittorrent más útvonalon látja a letöltéseket, az adminban útvonal-leképezés állítható. **Felfedezés:** a felhasználók (gyerekprofil kivételével) filmet és sorozatot (évadonként) kérhetnek; az admin jóváhagyja (vagy minden kérés automatikus), a szerver pedig magától letölti, és szól, ha megérkezett. Letöltőkliens: qBittorrent, Transmission, Deluge, SABnzbd vagy NZBGet; indexer: Torznab vagy Newznab. Interaktív keresés, saját minőségprofilok és csere jobb minőségre is van. **Sorozatok:** a figyelt sorozatok hiányzó részeit (évadcsomagként is) és az új részeket magától letölti. A teljes terv és a mérföldkövek: [docs/BESZERZES.md](docs/BESZERZES.md).
 
 ## Mentés és visszaállítás
 

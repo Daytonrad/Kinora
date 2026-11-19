@@ -129,12 +129,49 @@ func bskip(b []byte, i, depth int) (int, error) {
 type Fetched struct {
 	Torrent  []byte
 	Magnet   string
-	InfoHash string
+	InfoHash string // the release's identity: the torrent's info hash, or "nzb:…" for Usenet
+	NZB      []byte // a Usenet release
+	Name     string // the release name (Usenet clients name the job after it)
+}
+
+// maxNZBSize bounds a downloaded .nzb file.
+const maxNZBSize = 32 << 20
+
+func fetchNZB(ctx context.Context, hc *http.Client, r Result) (Fetched, error) {
+	if u, err := url.Parse(r.Link); err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return Fetched{}, errors.New("a letöltési link http(s) legyen")
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", r.Link, nil)
+	if err != nil {
+		return Fetched{}, err
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return Fetched{}, fmt.Errorf("az NZB letöltése nem sikerült: %w", stripURL(err))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return Fetched{}, fmt.Errorf("az NZB letöltése nem sikerült: HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxNZBSize+1))
+	if err != nil {
+		return Fetched{}, err
+	}
+	if len(body) > maxNZBSize {
+		return Fetched{}, errors.New("az NZB fájl túl nagy")
+	}
+	if !strings.Contains(string(body[:min(len(body), 4096)]), "<nzb") {
+		return Fetched{}, errors.New("a letöltött fájl nem NZB")
+	}
+	return Fetched{NZB: body, InfoHash: r.InfoHash, Name: r.Title}, nil
 }
 
 // FetchRelease resolves a result to something a download client can take, and learns its info hash
 // so the download can be followed. The indexer's link (with its API key) never reaches the client.
 func FetchRelease(ctx context.Context, hc *http.Client, r Result) (Fetched, error) {
+	if r.Protocol == "usenet" {
+		return fetchNZB(ctx, hc, r)
+	}
 	if r.Magnet != "" {
 		h, ok := MagnetHash(r.Magnet)
 		if !ok {

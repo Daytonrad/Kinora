@@ -20,6 +20,10 @@ type Profile struct {
 	RequireHungarian bool     `json:"require_hun"`
 	BlockedSources   []string `json:"blocked_sources"`
 	PreferHEVC       bool     `json:"prefer_hevc"`
+	// Upgrade: a film below the cutoff (CutoffRes + CutoffSource, e.g. 1080 + bluray) is replaced by a better release.
+	Upgrade      bool   `json:"upgrade"`
+	CutoffRes    int    `json:"cutoff_resolution"`
+	CutoffSource string `json:"cutoff_source"`
 }
 
 // DefaultProfile: 1080p first, then 2160p and 720p; no cams; Hungarian preferred.
@@ -62,6 +66,8 @@ const (
 	RejectLanguage   = "language"
 	RejectTitle      = "title"
 	Reject3D         = "3d"
+	// RejectBlocklisted: an earlier download of this release failed
+	RejectBlocklisted = "blocklisted"
 )
 
 var sourceScore = map[string]int{"remux": 60, "bluray": 50, "webdl": 45, "webrip": 35, "hdtv": 15, "dvd": 5}

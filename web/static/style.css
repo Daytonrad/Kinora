@@ -1020,3 +1020,54 @@ p.bad, span.bad, div.bad { color: var(--danger); }
   .acq-mhead { flex-direction: column; }
   .acq-mposter { width: calc(var(--col-xs) * .8); }
 }
+
+/* ---- Felfedezés and requests */
+.disc-lede { margin: calc(-1 * var(--s3)) 0 var(--s4); max-width: var(--measure); }
+.disc-search { max-width: var(--measure-s); }
+.disc-sec { margin-top: var(--s6); }
+.disc-sec h2 { margin-bottom: var(--s4); }
+.disc-detail { display: flex; gap: var(--s5); align-items: flex-start; }
+.disc-detail .acq-mposter { width: var(--col-xs); }
+.req-list .entry { align-items: center; }
+.req-list .entry > div:first-of-type { flex: 1; }
+@media (max-width: 760px) { .disc-detail { flex-direction: column; } }
+.req-list .entry > .row-gap { flex: none; min-width: 0; }
+
+/* ---- series */
+.season-picks { display: flex; flex-direction: column; margin: var(--s2) 0 var(--s3); }
+.season-table { display: grid; gap: var(--s2); margin-bottom: var(--s3); max-height: var(--pop-h); overflow-y: auto; }
+.season-row { display: grid; grid-template-columns: minmax(10rem, auto) 1fr; gap: var(--s3); align-items: start; }
+.ep-chips { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.ep-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 2em; height: 1.8em; padding: 0 var(--s1); border-radius: var(--r1); font-size: var(--f0); font-variant-numeric: tabular-nums; border: var(--hair) solid var(--rule-hi); color: var(--t1); }
+.ep-chip.have { background: color-mix(in srgb, var(--ok) 22%, transparent); border-color: var(--ok); color: var(--t0); }
+.ep-chip.downloading { border-color: var(--amber); color: var(--amber); }
+.ep-chip.wanted { border-color: var(--danger); color: var(--danger); }
+.ep-chip.future { color: var(--t2); border-style: dashed; }
+.ep-chip.skipped { color: var(--t2); opacity: .5; }
+.ep-legend { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin-bottom: var(--s4); }
+.ep-legend > span { display: inline-flex; align-items: center; gap: var(--s1); }
+.ep-legend .ep-chip { min-width: 1.2em; height: 1.2em; }
+
+/* ---- interactive search */
+.modal.is-modal { width: min(calc(100vw - var(--s6)), 78rem); }
+.is-bar { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); align-items: center; justify-content: space-between; margin-bottom: var(--s3); }
+.isearch .scroll-x { max-height: calc(100vh - 16rem); overflow: auto; }
+.is-tbl th { white-space: nowrap; position: sticky; top: 0; background: var(--g2); z-index: 1; }
+.is-tbl td { vertical-align: top; }
+.is-tbl .acq-rel { min-width: 18rem; max-width: 36rem; }
+.is-tbl .is-num, .is-tbl .is-age { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.is-sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.is-sort.on { color: var(--t0); }
+.season-row .season-acts { margin-top: var(--s1); }
+.btn.small { min-height: calc(var(--hit) * .75); padding: 0 var(--s3); font-size: var(--f0); }
+button.ep-chip { cursor: pointer; background: transparent; font-family: inherit; }
+button.ep-chip:hover, button.ep-chip:focus-visible { border-color: var(--t0); color: var(--t0); }
+
+/* ---- acquisition statistics */
+.acq-stats { margin-bottom: var(--s5); }
+.acq-stat-row { display: flex; flex-wrap: wrap; gap: var(--s3); margin-bottom: var(--s3); }
+.acq-stat { display: flex; flex-direction: column; min-width: 8rem; padding: var(--s3) var(--s4); background: var(--g1); border: var(--hair) solid var(--rule); border-radius: var(--r2); }
+.acq-stat b { font-family: var(--display); font-size: var(--f4); color: var(--t0); line-height: 1.1; }
+.acq-stat-lists { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s7); }
+.acq-stat-lists ol { margin: var(--s1) 0 0; padding-left: 1.4em; }
+.ml2 { margin-left: var(--s2); }

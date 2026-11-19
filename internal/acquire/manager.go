@@ -20,6 +20,10 @@ import (
 type Movies interface {
 	Search(ctx context.Context, kind, query string, year int) ([]meta.SearchResult, error)
 	Movie(ctx context.Context, id int64) (meta.MovieInfo, error)
+	MovieList(ctx context.Context, list string, page int) ([]meta.SearchResult, error)
+	TV(ctx context.Context, id int64) (meta.TVInfo, error)
+	TVSeasonEpisodes(ctx context.Context, id int64, season int) ([]meta.TVEpisode, error)
+	TVList(ctx context.Context, list string, page int) ([]meta.SearchResult, error)
 }
 
 // Manager runs the acquisition: search, grab, follow, import.
@@ -40,6 +44,10 @@ type Manager struct {
 	clients map[int64]cachedClient
 	wake    chan struct{}
 	pollMu  sync.Mutex
+	reqMu   sync.Mutex
+
+	seriesMu sync.Mutex
+	lastRSS  time.Time
 }
 
 type cachedClient struct {
@@ -61,13 +69,15 @@ var (
 	ErrDisabled = errors.New("a beszerzés ki van kapcsolva (Admin → Beszerzés → Beállítások)")
 	ErrNoClient = errors.New("nincs bekapcsolt letöltőkliens (Admin → Beszerzés → Beállítások)")
 	ErrNoIndex  = errors.New("nincs bekapcsolt indexer (Admin → Beszerzés → Beállítások)")
+	// ErrNoUsenetClient: a Usenet release needs SABnzbd or NZBGet.
+	ErrNoUsenetClient = errors.New("Usenet-kiadáshoz SABnzbd vagy NZBGet kell (Admin → Beszerzés → Források és kliens)")
 )
 
 // Enabled reports the acq_enabled setting.
 func (m *Manager) Enabled() bool { return m.st.Setting("acq_enabled") == "1" }
 
-// Profile is the stored quality profile.
-func (m *Manager) Profile() Profile { return ParseProfile(m.st.Setting("acq_profile")) }
+// Profile is the default quality profile.
+func (m *Manager) Profile() Profile { return m.ProfileFor(0) }
 
 // ------------------------------------------------------------------ lookup
 
@@ -92,7 +102,7 @@ func (m *Manager) Lookup(ctx context.Context, q string, year int) ([]LookupItem,
 	grabs, _ := m.st.GrabbedTmdbIDs(ids)
 	out := make([]LookupItem, len(res))
 	for i, r := range res {
-		out[i] = LookupItem{SearchResult: r, InLibrary: have[r.ID], Grab: grabs[r.ID]}
+		out[i] = LookupItem{SearchResult: r, InLibrary: have[r.ID] > 0, Grab: grabs[r.ID]}
 	}
 	return out, nil
 }
@@ -118,14 +128,23 @@ func (m *Manager) indexers() []Indexer {
 	var out []Indexer
 	for _, x := range list {
 		if x.Enabled {
-			out = append(out, Indexer{ID: x.ID, Name: x.Name, URL: x.URL, APIKey: x.APIKey, Categories: x.Categories})
+			out = append(out, Indexer{ID: x.ID, Kind: x.Kind, Name: x.Name, URL: x.URL, APIKey: x.APIKey, Categories: x.Categories})
 		}
 	}
 	return out
 }
 
-// Releases searches every enabled indexer for a film and scores what they return, best first.
+// Releases searches every enabled indexer for a film and scores what they return (default profile), best first.
 func (m *Manager) Releases(ctx context.Context, tmdbID int64) (*Releases, error) {
+	return m.releasesWith(ctx, tmdbID, m.Profile())
+}
+
+// ReleasesProfile is Releases scored by a stored profile (0 = default).
+func (m *Manager) ReleasesProfile(ctx context.Context, tmdbID, profileID int64) (*Releases, error) {
+	return m.releasesWith(ctx, tmdbID, m.ProfileFor(profileID))
+}
+
+func (m *Manager) releasesWith(ctx context.Context, tmdbID int64, prof Profile) (*Releases, error) {
 	mv, err := m.movies.Movie(ctx, tmdbID)
 	if err != nil {
 		return nil, err
@@ -161,7 +180,17 @@ func (m *Manager) Releases(ctx context.Context, tmdbID int64) (*Releases, error)
 		}(ix)
 	}
 	wg.Wait()
-	out.Results = rank(dedupe(out.Results), m.Profile(), mv)
+	out.Results = rank(dedupe(out.Results), prof, mv)
+	var hashes []string
+	for _, r := range out.Results {
+		hashes = append(hashes, r.InfoHash)
+	}
+	bad := m.st.Blocklisted(hashes)
+	for i := range out.Results {
+		if r := &out.Results[i]; r.Rejected == "" && bad[r.InfoHash] {
+			r.Rejected = RejectBlocklisted
+		}
+	}
 	return out, nil
 }
 
@@ -221,8 +250,11 @@ func rank(rs []Result, p Profile, mv meta.MovieInfo) []Result {
 type GrabInput struct {
 	TmdbID    int64
 	LibraryID int64
-	Release   *Result // nil: the best acceptable release
+	Release   *Result // nil: the best acceptable release (not on the blocklist)
 	UserID    int64
+	RequestID int64  // the request this download fulfils, if any
+	ProfileID int64  // the quality profile (0 = default)
+	Replaces  string // an upgrade: the library file to remove once the new one is imported
 }
 
 func (m *Manager) client(cfg *store.AcqClient) (DownloadClient, ClientConfig, error) {
@@ -241,17 +273,32 @@ func (m *Manager) client(cfg *store.AcqClient) (DownloadClient, ClientConfig, er
 	return c, cc, nil
 }
 
-func (m *Manager) firstClient() (*store.AcqClient, error) {
+// firstClient is the first enabled download client for a protocol (torrent, usenet).
+func (m *Manager) firstClient(protocol string) (*store.AcqClient, error) {
+	if protocol == "" {
+		protocol = "torrent"
+	}
 	list, err := m.st.AcqClients()
 	if err != nil {
 		return nil, err
 	}
 	for _, c := range list {
-		if c.Enabled {
+		if c.Enabled && ClientProtocol(c.Kind) == protocol {
 			return c, nil
 		}
 	}
+	if protocol == "usenet" {
+		return nil, ErrNoUsenetClient
+	}
 	return nil, ErrNoClient
+}
+
+// downloadID is how the client knows a download (old rows: the info hash).
+func downloadID(g *store.AcqGrab) string {
+	if g.DownloadID != "" {
+		return g.DownloadID
+	}
+	return g.InfoHash
 }
 
 // Grab starts a download.
@@ -266,30 +313,17 @@ func (m *Manager) Grab(ctx context.Context, in GrabInput) (*store.AcqGrab, error
 	if lib.Kind == "shows" {
 		return nil, errors.New("filmet filmkönyvtárba lehet letölteni")
 	}
-	cfg, err := m.firstClient()
-	if err != nil {
-		return nil, err
-	}
-	cl, _, err := m.client(cfg)
-	if err != nil {
-		return nil, err
-	}
 	mv, err := m.movies.Movie(ctx, in.TmdbID)
 	if err != nil {
 		return nil, err
 	}
 	rel := in.Release
 	if rel == nil {
-		rs, err := m.Releases(ctx, in.TmdbID)
+		rs, err := m.ReleasesProfile(ctx, in.TmdbID, in.ProfileID)
 		if err != nil {
 			return nil, err
 		}
-		for i := range rs.Results {
-			if rs.Results[i].Rejected == "" {
-				rel = &rs.Results[i]
-				break
-			}
-		}
+		rel = m.bestRelease(rs.Results)
 		if rel == nil {
 			return nil, errors.New("nincs a minőségprofilnak megfelelő kiadás")
 		}
@@ -300,7 +334,15 @@ func (m *Manager) Grab(ctx context.Context, in GrabInput) (*store.AcqGrab, error
 		// scored again on the server: the client only says which release it wants
 		r := ParseRelease(rel.Title)
 		rel.Release, rel.Quality = r, r.QualityLabel()
-		rel.Score, _ = m.Profile().Score(r, rel.Size, rel.Seeders)
+		rel.Score, _ = m.ProfileFor(in.ProfileID).Score(r, rel.Size, rel.Seeders)
+	}
+	cfg, err := m.firstClient(rel.Protocol)
+	if err != nil {
+		return nil, err
+	}
+	cl, _, err := m.client(cfg)
+	if err != nil {
+		return nil, err
 	}
 	f, err := FetchRelease(ctx, m.hc, *rel)
 	if err != nil {
@@ -309,17 +351,28 @@ func (m *Manager) Grab(ctx context.Context, in GrabInput) (*store.AcqGrab, error
 	if g, err := m.st.ActiveGrabForHash(f.InfoHash); err == nil {
 		return g, nil // already downloading
 	}
-	if err := cl.Add(ctx, AddRequest{Fetched: f, Tag: "kinora"}); err != nil {
+	dlID, err := cl.Add(ctx, AddRequest{Fetched: f, Tag: "kinora"})
+	if err != nil {
 		return nil, err
 	}
 	g := &store.AcqGrab{Kind: "movie", TmdbID: mv.ID, ImdbID: mv.IMDb, Title: mv.Title, Year: mv.Year, LibraryID: &lib.ID,
-		ReleaseTitle: rel.Title, IndexerID: &rel.IndexerID, IndexerName: rel.Indexer, ClientID: &cfg.ID, InfoHash: f.InfoHash,
+		ReleaseTitle: rel.Title, IndexerID: &rel.IndexerID, IndexerName: rel.Indexer, ClientID: &cfg.ID, InfoHash: f.InfoHash, DownloadID: dlID,
 		Size: rel.Size, Quality: rel.Quality, Score: rel.Score}
 	if in.UserID > 0 {
 		g.RequestedBy = &in.UserID
 	}
+	if in.RequestID > 0 {
+		g.RequestID = &in.RequestID
+	}
+	if in.ProfileID > 0 {
+		g.ProfileID = &in.ProfileID
+	}
+	g.Replaces = in.Replaces
 	if err := m.st.AddAcqGrab(g); err != nil {
 		return nil, err
+	}
+	if in.RequestID > 0 { // the automatic round must not grab it a second time
+		m.st.SetRequestStatus(in.RequestID, store.ReqDownloading, "", 0)
 	}
 	m.log.Info("acquire: download started", "title", mv.Title, "release", rel.Title, "hash", f.InfoHash)
 	m.Wake()
@@ -327,6 +380,9 @@ func (m *Manager) Grab(ctx context.Context, in GrabInput) (*store.AcqGrab, error
 }
 
 // ------------------------------------------------------------------ follow + import
+
+// AddGrace is how long a new download may be missing from the client's list before it counts as gone.
+const AddGrace = 2 * time.Minute
 
 // Wake makes the poller look now.
 func (m *Manager) Wake() {
@@ -341,6 +397,9 @@ func (m *Manager) Run(ctx context.Context) {
 	t := time.NewTicker(m.Interval)
 	defer t.Stop()
 	m.Poll(ctx)
+	m.ProcessRequests(ctx)
+	m.ProcessSeries(ctx)
+	m.ProcessUpgrades(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -349,6 +408,9 @@ func (m *Manager) Run(ctx context.Context) {
 		case <-m.wake:
 		}
 		m.Poll(ctx)
+		m.ProcessRequests(ctx)
+		m.ProcessSeries(ctx)
+		m.ProcessUpgrades(ctx)
 	}
 }
 
@@ -363,7 +425,7 @@ func (m *Manager) Poll(ctx context.Context) {
 	byClient := map[int64][]*store.AcqGrab{}
 	for _, g := range grabs {
 		if g.ClientID == nil {
-			m.st.SetAcqGrabStatus(g.ID, store.GrabFailed, "a letöltőkliens törölve lett", "")
+			m.grabFailed(g, "a letöltőkliens törölve lett", false)
 			continue
 		}
 		byClient[*g.ClientID] = append(byClient[*g.ClientID], g)
@@ -379,7 +441,7 @@ func (m *Manager) Poll(ctx context.Context) {
 		}
 		hashes := make([]string, len(gs))
 		for i, g := range gs {
-			hashes[i] = g.InfoHash
+			hashes[i] = downloadID(g)
 		}
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		st, err := cl.Status(cctx, hashes)
@@ -389,12 +451,14 @@ func (m *Manager) Poll(ctx context.Context) {
 			continue // try again on the next round
 		}
 		for _, g := range gs {
-			s, ok := st[g.InfoHash]
+			s, ok := st[downloadID(g)]
 			switch {
+			case !ok && time.Since(time.Unix(g.CreatedAt, 0)) < AddGrace:
+				// the client is still taking it in (a magnet may need its metadata first)
 			case !ok:
-				m.st.SetAcqGrabStatus(g.ID, store.GrabFailed, "a letöltés eltűnt a letöltőkliensből", "")
+				m.grabFailed(g, "a letöltés eltűnt a letöltőkliensből", true)
 			case s.Failed:
-				m.st.SetAcqGrabStatus(g.ID, store.GrabFailed, "a letöltőkliens hibát jelez: "+s.State, "")
+				m.grabFailed(g, "a letöltőkliens hibát jelez: "+s.State, true)
 			case s.Done:
 				m.importGrab(g, cc, s)
 			default:
@@ -419,13 +483,17 @@ func MapPath(p, remote, local string) string {
 }
 
 func (m *Manager) importGrab(g *store.AcqGrab, cc ClientConfig, s TorrentStatus) {
+	if g.Kind == "episode" || g.Kind == "season" {
+		m.importSeriesGrab(g, cc, s)
+		return
+	}
 	if g.LibraryID == nil {
-		m.st.SetAcqGrabStatus(g.ID, store.GrabFailed, "a célkönyvtár törölve lett", "")
+		m.grabFailed(g, "a célkönyvtár törölve lett", false)
 		return
 	}
 	lib, err := m.st.Library(*g.LibraryID)
 	if err != nil {
-		m.st.SetAcqGrabStatus(g.ID, store.GrabFailed, "a célkönyvtár törölve lett", "")
+		m.grabFailed(g, "a célkönyvtár törölve lett", false)
 		return
 	}
 	m.st.SetAcqGrabStatus(g.ID, store.GrabImporting, "", "")
@@ -437,11 +505,16 @@ func (m *Manager) importGrab(g *store.AcqGrab, cc ClientConfig, s TorrentStatus)
 		if cc.PathRemote == "" && strings.Contains(msg, "nem található") {
 			msg += " – ha a letöltőkliens máshol látja a fájlokat, állíts be útvonal-leképezést"
 		}
-		m.st.SetAcqGrabStatus(g.ID, store.GrabFailed, msg, "")
+		m.grabFailed(g, msg, false)
 		m.log.Warn("acquire: import failed", "title", g.Title, "src", src, "err", err)
 		return
 	}
 	m.st.SetAcqGrabStatus(g.ID, store.GrabDone, "", res.Path)
+	m.st.MarkFilmAvailable(g.Kind, g.TmdbID)
+	if g.Replaces != "" { // an upgrade: the better file is in, the old one goes
+		removeReplaced(lib.Path, g.Replaces, res.Path)
+		m.log.Info("acquire: upgraded", "title", g.Title, "old", g.Replaces, "new", res.Path)
+	}
 	m.log.Info("acquire: imported", "title", g.Title, "path", res.Path, "hardlink", res.Linked)
 	if m.scan != nil {
 		m.scan(lib.ID)
@@ -458,6 +531,9 @@ func (m *Manager) Retry(ctx context.Context, id int64) error {
 		return errors.New("csak sikertelen letöltés próbálható újra")
 	}
 	m.st.SetAcqGrabStatus(g.ID, store.GrabDownloading, "", "")
+	if g.RequestID != nil {
+		m.st.SetRequestStatus(*g.RequestID, store.ReqDownloading, "", 0)
+	}
 	m.Wake()
 	return nil
 }
@@ -471,11 +547,14 @@ func (m *Manager) Remove(ctx context.Context, id int64, deleteFiles bool) error 
 	if g.ClientID != nil && g.Status != store.GrabRemoved {
 		if cfg, err := m.st.AcqClient(*g.ClientID); err == nil {
 			if cl, _, err := m.client(cfg); err == nil {
-				if err := cl.Remove(ctx, g.InfoHash, deleteFiles); err != nil {
+				if err := cl.Remove(ctx, downloadID(g), deleteFiles); err != nil {
 					return fmt.Errorf("a letöltőkliens nem törölte: %w", err)
 				}
 			}
 		}
+	}
+	if g.RequestID != nil && g.Status != store.GrabDone {
+		m.st.SetRequestStatus(*g.RequestID, store.ReqFailed, "az admin megszakította a letöltést", 0)
 	}
 	return m.st.SetAcqGrabStatus(g.ID, store.GrabRemoved, "", "")
 }

@@ -298,6 +298,8 @@ async function route() {
       case 'search': return await viewSearch(q.get('q') || '');
       case 'collections': return p1 === 'new' ? await viewCollectionEdit(null, q) : p2 === 'edit' ? await viewCollectionEdit(+p1) : p1 ? await viewCollection(+p1) : await viewCollections();
       case 'downloads': return await viewDownloads();
+      case 'discover': return await viewDiscover(q.get('q') || '');
+      case 'requests': return await viewRequests();
       case 'party': return await viewPartyJoin(p1);
       case 'admin': return await viewAdmin(p1 || 'dash');
       case 'account': return await viewAccount();
@@ -384,6 +386,7 @@ function shell(active, ...content) {
     h('button', { role: 'menuitem', onclick: () => POST('/api/profiles/leave').then(() => { state.me.profile = null; go('#/profiles'); }) }, T.switchProfile),
     h('a', { role: 'menuitem', href: '#/party' }, T.joinParty),
     h('a', { role: 'menuitem', href: '#/account' }, T.account),
+    me.can_request && h('a', { role: 'menuitem', href: '#/requests' }, T.myRequests),
     !p.is_kids && !me.profile_locked && h('a', { role: 'menuitem', href: '#/quickconnect' }, T.connectDevice),
     h('hr'),
     langSwitch(),
@@ -400,6 +403,7 @@ function shell(active, ...content) {
       h('a' + (active === 'home' ? '.on' : ''), { href: '#/home' }, T.home),
       libsNav,
       h('a' + (active === 'collections' ? '.on' : ''), { href: '#/collections' }, T.collections),
+      me.can_request && h('a' + (active === 'discover' ? '.on' : ''), { href: '#/discover' }, T.discover),
       h('a' + (active === 'downloads' ? '.on' : ''), { href: '#/downloads' }, T.downloads),
       me.user.is_admin && h('a' + (active === 'admin' ? '.on' : ''), { href: '#/admin' }, T.admin)),
     searchField(searchInput, 'search-box'),
@@ -687,6 +691,7 @@ function shelf(title, items, style, opts = {}) {
 // ===================================================================== home
 async function viewHome() {
   const main = shell('home');
+  announceArrivals();
   const data = await GET('/api/home');
   const hideMenu = hideAs => (it, btn) => popMenu(btn, [
     [hideAs === 'series' ? T.hideSeries : T.hide, async () => {
@@ -2036,10 +2041,10 @@ function partyClient(code, player, stage, p) {
 async function viewAdmin(tab) {
   if (!state.me.user.is_admin) return go('#/home');
   const main = shell('admin');
-  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['languages', T.aLangs], ['settings', T.aSettings], ['acquire', T.aAcqFind], ['acqqueue', T.aAcqQueue], ['acqsettings', T.aAcqSettings]];
+  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['languages', T.aLangs], ['settings', T.aSettings], ['acquire', T.aAcqFind], ['acqseries', T.aAcqSeries], ['acqrequests', T.aAcqRequests], ['acqqueue', T.aAcqQueue], ['acqsettings', T.aAcqSettings]];
   const label = Object.fromEntries(tabs);
-  const groups = [[T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], [T.aGroupAccess, ['users', 'invites', 'devices', 'connect']], [T.aGroupAcquire, ['acquire', 'acqqueue', 'acqsettings']], [T.aGroupSystem, ['languages', 'settings']]];
-  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, languages: adminLangs, settings: adminSettings, acquire: adminAcqFind, acqqueue: adminAcqQueue, acqsettings: adminAcqSettings }[tab];
+  const groups = [[T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], [T.aGroupAccess, ['users', 'invites', 'devices', 'connect']], [T.aGroupAcquire, ['acqrequests', 'acquire', 'acqseries', 'acqqueue', 'acqsettings']], [T.aGroupSystem, ['languages', 'settings']]];
+  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, languages: adminLangs, settings: adminSettings, acquire: adminAcqFind, acqseries: adminAcqSeries, acqrequests: adminAcqRequests, acqqueue: adminAcqQueue, acqsettings: adminAcqSettings }[tab];
   if (!fn) return go('#/admin/dash');
   const body = h('div.a-body', { 'aria-busy': 'true' }, aSkeleton());
   main.append(h('div.admin', null,
@@ -2602,7 +2607,7 @@ async function adminSettings(body) {
 // The built-in acquisition module (internal/acquire): find a film on TMDB, pick a release from the
 // indexers, the download client fetches it, Kinora imports it into a library. Admin only (M1).
 const acqStateLabel = st => ({ downloading: T.acqDownloading, importing: T.acqImporting, done: T.acqDone, failed: T.acqFailed, removed: T.acqRemoved })[st] || st;
-const acqReject = code => ({ resolution: T.acqRejRes, source: T.acqRejSource, size: T.acqRejSize, seeders: T.acqRejSeeders, language: T.acqRejLang, title: T.acqRejTitle, '3d': T.acqRej3d })[code] || code;
+const acqReject = code => ({ resolution: T.acqRejRes, source: T.acqRejSource, size: T.acqRejSize, seeders: T.acqRejSeeders, language: T.acqRejLang, title: T.acqRejTitle, '3d': T.acqRej3d, blocklisted: T.acqRejBlock })[code] || code;
 const fmtSpeed = b => fmtBytes(b) + '/s';
 // a test button for an unsaved configuration: the result stays under the form
 function acqTestButton(url, body, out) {
@@ -2641,46 +2646,23 @@ async function adminAcqFind(body) {
   input.addEventListener('input', debounce(search, 350));
   input.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
 
-  async function openReleases(m) {
-    put(detail, h('div.acq-loading', null, h('div.spin'), h('p.muted', null, T.acqSearching)));
+  function openReleases(m) {
+    const lib = h('select', { 'aria-label': T.acqTargetLib }, s.libraries.map(l => h('option', { value: l.id, selected: s.library_id === l.id }, l.name)));
+    const prof = profileSelect(s);
+    const auto = h('button.btn.primary', { disabled: !s.libraries.length, onclick: async e => {
+      const b = e.currentTarget;
+      b.disabled = true;
+      try { await POST('/api/admin/acquire/grab', { tmdb_id: m.id, library_id: +lib.value, profile_id: +prof.value, release: null }); toast(T.acqStarted(m.title)); location.hash = '#/admin/acqqueue'; }
+      finally { b.disabled = false; }
+    } }, icon('dl'), T.isAuto);
+    const inter = h('button.btn', { disabled: !s.libraries.length, onclick: () => movieInteractive(m.id, m.title + (m.year ? ' (' + m.year + ')' : ''), +lib.value, 0, +prof.value) }, icon('search'), T.isInteractive);
+    put(detail, h('section.acq-movie', null, h('div.acq-mhead', null,
+      m.poster && h('img.acq-mposter', { src: m.poster, alt: '' }),
+      h('div.acq-mbody', null, h('h2', null, m.title, m.year ? h('span.muted', null, ' (' + m.year + ')') : null),
+        m.in_library && h('p', null, h('span.badge.acq-have', null, T.acqInLibrary)),
+        m.overview && h('p.acq-overview', null, m.overview),
+        s.libraries.length ? h('div.acq-actions', null, field(T.acqTargetLib, lib), (s.profiles || []).length > 0 && field(T.profile, prof), auto, inter) : h('p.bad', null, T.acqNoMovieLib)))));
     detail.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    let r;
-    try { r = await GET('/api/admin/acquire/releases?tmdb_id=' + m.id, { quiet: true }); }
-    catch (e) { put(detail, h('p.bad', null, e.message)); return; }
-    const mv = r.movie;
-    const lib = h('select', { 'aria-label': T.acqTargetLib }, s.libraries.map(l => h('option', { value: l.id }, l.name)));
-    const grab = async (rel, btn) => {
-      btn.disabled = true;
-      try {
-        await POST('/api/admin/acquire/grab', { tmdb_id: mv.id, library_id: +lib.value, release: rel || null });
-        toast(T.acqStarted(mv.title));
-        location.hash = '#/admin/acqqueue';
-      } finally { btn.disabled = false; }
-    };
-    const ok = r.results.filter(x => !x.rejected);
-    const best = h('button.btn.primary', { disabled: !ok.length || !s.libraries.length, onclick: e => grab(null, e.currentTarget) }, icon('dl'), T.acqGrabBest);
-    const row = x => h('tr' + (x.rejected ? '.acq-rej' : ''), null,
-      tdl('.acq-rel', T.acqRelease, h('div.acq-reltitle', { title: x.title }, x.title),
-        h('div.acq-tags', null, x.quality && h('span.badge', null, x.quality), x.release.codec && h('span.badge', null, x.release.codec.toUpperCase()),
-          x.release.hdr && h('span.badge', null, x.release.hdr.toUpperCase()), (x.release.languages || []).includes('hun') && h('span.badge.acq-hun', null, 'HUN'),
-          x.info_url && /^https?:/.test(x.info_url) && h('a.small', { href: x.info_url, target: '_blank', rel: 'noopener noreferrer' }, T.acqInfo))),
-      tdl('', T.acqSize, x.size ? fmtBytes(x.size) : '–'),
-      tdl('', T.acqSeeders, x.seeders >= 0 ? num(x.seeders, 0) : '–'),
-      tdl('', T.acqIndexer, x.indexer),
-      tdl('', T.acqScore, x.rejected ? h('span.bad.small', null, acqReject(x.rejected)) : num(x.score, 0)),
-      tdl('.a-tbl-acts', '', h('button.btn', { disabled: !s.libraries.length, onclick: e => grab(x, e.currentTarget) }, T.acqGrab)));
-    put(detail, h('section.acq-movie', null,
-      h('div.acq-mhead', null,
-        mv.poster && h('img.acq-mposter', { src: mv.poster, alt: '' }),
-        h('div.acq-mbody', null, h('h2', null, mv.title, mv.year ? h('span.muted', null, ' (' + mv.year + ')') : null),
-          mv.original_title && mv.original_title !== mv.title && h('p.muted.small', null, mv.original_title),
-          m.in_library && h('p', null, h('span.badge.acq-have', null, T.acqInLibrary)),
-          mv.overview && h('p.acq-overview', null, mv.overview),
-          s.libraries.length ? h('div.acq-actions', null, field(T.acqTargetLib, lib), best) : h('p.bad', null, T.acqNoMovieLib))),
-      r.errors.length > 0 && h('div.acq-errs', { role: 'alert' }, r.errors.map(e => h('p.bad.small', null, e.name + ': ' + srv(e.error)))),
-      r.results.length ? [h('p.muted.small', null, T.acqFound(r.results.length, ok.length)),
-        aTable([T.acqRelease, T.acqSize, T.acqSeeders, T.acqIndexer, T.acqScore, ''], r.results.map(row), '.a-stack.acq-tbl')]
-        : h('p.empty', null, T.acqNoReleases)));
   }
   put(body, head, searchField(input, 'acq-search'), results, detail);
   setTimeout(() => input.focus(), 30);
@@ -2694,7 +2676,8 @@ async function adminAcqQueue(body) {
     if (dead || !list) return;
     const active = list.some(g => g.status === 'downloading' || g.status === 'importing');
     const row = g => h('tr', null,
-      tdl('.acq-rel', T.title, h('b', null, g.title, g.year ? ' (' + g.year + ')' : ''), h('div.acq-reltitle.muted.small', { title: g.release_title }, g.release_title),
+      tdl('.acq-rel', T.title, h('b', null, g.title, g.year ? ' (' + g.year + ')' : '', g.season >= 0 ? ' · ' + (g.episodes ? g.episodes.split(',').map(e => `S${String(g.season).padStart(2, '0')}E${String(e).padStart(2, '0')}`).join(', ') : T.seasonN(g.season)) : ''),
+        h('div.acq-reltitle.muted.small', { title: g.release_title }, g.release_title),
         g.error && h('div.bad.small', null, srv(g.error)), g.status === 'done' && g.target_path && h('div.muted.small.mono.acq-url', null, g.target_path)),
       tdl('', T.acqStatus, h('span.badge' + (g.status === 'failed' ? '.warn' : ''), null, acqStateLabel(g.status)),
         g.status === 'downloading' && h('div.acq-prog', null, aBar(g.progress, 1), h('span.small.muted', null,
@@ -2707,7 +2690,10 @@ async function adminAcqQueue(body) {
           if (!await confirmBox(g.status === 'done' ? T.acqForgetAsk(g.title) : T.acqRemoveAsk(g.title), g.status === 'done' ? T.acqForget : T.acqRemove)) return;
           await api('DELETE', `/api/admin/acquire/grabs/${g.id}?files=${g.status === 'done' ? 0 : 1}`); render();
         } }, g.status === 'done' ? T.acqForget : T.acqRemove))));
+    const st = await GET('/api/admin/acquire/stats', { quiet: true }).catch(() => null);
+    if (dead) return;
     put(body, aHead(T.aAcqQueue, T.aLedeAcqQueue, h('a.btn.primary', { href: '#/admin/acquire' }, icon('search'), T.aAcqFind)),
+      st && acqStatsPanel(st),
       list.length ? aTable([T.title, T.acqStatus, T.acqSize, T.acqAdded, ''], list.map(row), '.a-stack.acq-tbl')
         : emptyNote(T.acqQueueEmpty, null, h('a.btn', { href: '#/admin/acquire' }, T.aAcqFind)));
     clearTimeout(t);
@@ -2726,16 +2712,17 @@ async function adminAcqSettings(body) {
   // indexers (Torznab: a tracker's own API, or Jackett / Prowlarr standing in for several)
   const indexerDialog = x => {
     const isNew = !x;
-    x = x || { name: '', url: '', api_key: '', categories: '', enabled: true, priority: 25 };
+    x = x || { name: '', kind: 'torznab', url: '', api_key: '', categories: '', enabled: true, priority: 25 };
     const name = h('input', { type: 'text', value: x.name });
+    const kind = h('select', null, [['torznab', T.acqKindTorznab], ['newznab', T.acqKindNewznab]].map(([v, l]) => h('option', { value: v, selected: (x.kind || 'torznab') === v }, l)));
     const url = h('input', { type: 'url', value: x.url, placeholder: 'http://192.168.1.10:9117/api/v2.0/indexers/all/results/torznab' });
     const key = h('input', { type: 'password', value: x.api_key, autocomplete: 'off' });
     const cats = h('input', { type: 'text', value: x.categories, placeholder: '2000' });
     const prio = h('input', { type: 'number', min: 1, max: 99, value: x.priority });
     const en = h('input.switch', { type: 'checkbox', role: 'switch', checked: x.enabled });
     const out = h('p.small', { role: 'status' });
-    const data = () => ({ id: x.id || 0, name: name.value, url: url.value, api_key: key.value, categories: cats.value, priority: +prio.value || 25, enabled: en.checked });
-    modal(isNew ? T.acqAddIndexer : x.name, h('div.a-form', null, field(T.acqName, name), field(T.acqUrl, url, T.acqUrlHint), field(T.acqApiKey, key),
+    const data = () => ({ id: x.id || 0, kind: kind.value, name: name.value, url: url.value, api_key: key.value, categories: cats.value, priority: +prio.value || 25, enabled: en.checked });
+    modal(isNew ? T.acqAddIndexer : x.name, h('div.a-form', null, h('div.grid2', null, field(T.acqName, name), field(T.acqKind, kind)), field(T.acqUrl, url, T.acqUrlHint), field(T.acqApiKey, key),
       h('div.grid2', null, field(T.acqCats, cats, T.acqCatsHint), field(T.acqPriority, prio, T.acqPriorityHint)),
       h('div.form-row', null, h('label.switch-row', null, h('span', null, T.acqEnabledRow), en)), out),
       close => [acqTestButton('/api/admin/acquire/indexers/test', data, out),
@@ -2749,63 +2736,511 @@ async function adminAcqSettings(body) {
     tdl('.a-tbl-acts', '', h('div.row-gap', null, h('button.btn', { onclick: () => indexerDialog(x) }, T.acqEdit),
       h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(x.name))) { await api('DELETE', '/api/admin/acquire/indexers/' + x.id); rerender(); } } }, T.delete)))));
 
-  // the download client (one for now)
-  const c = s.clients[0] || { name: 'qBittorrent', kind: 'qbittorrent', url: '', username: '', password: '', category: 'kinora', save_path: '', path_remote: '', path_local: '', enabled: true };
-  const ci = {
-    url: h('input', { type: 'url', value: c.url, placeholder: 'http://192.168.1.10:8080' }),
-    username: h('input', { type: 'text', value: c.username, autocomplete: 'off' }),
-    password: h('input', { type: 'password', value: c.password, autocomplete: 'new-password' }),
-    category: h('input', { type: 'text', value: c.category }),
-    save_path: h('input', { type: 'text', value: c.save_path, placeholder: '/downloads/kinora' }),
-    path_remote: h('input', { type: 'text', value: c.path_remote, placeholder: '/downloads' }),
-    path_local: h('input', { type: 'text', value: c.path_local, placeholder: '/data/downloads' }),
+  // download clients: torrents (qBittorrent, Transmission, Deluge) and Usenet (SABnzbd, NZBGet); Kinora picks by the release
+  const KINDS = [['qbittorrent', 'qBittorrent', 'http://192.168.1.10:8080'], ['transmission', 'Transmission', 'http://192.168.1.10:9091'],
+    ['deluge', 'Deluge', 'http://192.168.1.10:8112'], ['sabnzbd', 'SABnzbd', 'http://192.168.1.10:8080'], ['nzbget', 'NZBGet', 'http://192.168.1.10:6789']];
+  const clientDialog = c => {
+    const isNew = !c;
+    c = c || { kind: 'qbittorrent', name: '', url: '', username: '', password: '', category: 'kinora', save_path: '', path_remote: '', path_local: '', enabled: true };
+    const kind = h('select', null, KINDS.map(([v, l]) => h('option', { value: v, selected: c.kind === v }, l)));
+    const ci = {
+      name: h('input', { type: 'text', value: c.name }),
+      url: h('input', { type: 'url', value: c.url }),
+      username: h('input', { type: 'text', value: c.username, autocomplete: 'off' }),
+      password: h('input', { type: 'password', value: c.password, autocomplete: 'new-password' }),
+      category: h('input', { type: 'text', value: c.category }),
+      save_path: h('input', { type: 'text', value: c.save_path, placeholder: '/downloads/kinora' }),
+      path_remote: h('input', { type: 'text', value: c.path_remote, placeholder: '/downloads' }),
+      path_local: h('input', { type: 'text', value: c.path_local, placeholder: '/data/downloads' }),
+    };
+    const en = h('input.switch', { type: 'checkbox', role: 'switch', checked: c.enabled });
+    const userField = field(T.username, ci.username), passLabel = h('span', null, T.password), saveField = field(T.acqSavePath, ci.save_path, T.acqSavePathHint);
+    const passField = h('label.field', null, passLabel, ci.password);
+    const sync = () => {
+      const k = kind.value;
+      ci.url.placeholder = KINDS.find(x => x[0] === k)[2];
+      passLabel.textContent = k === 'sabnzbd' ? T.acqApiKey : T.password;
+      userField.classList.toggle('hidden', k === 'deluge' || k === 'sabnzbd');
+      saveField.classList.toggle('hidden', k === 'sabnzbd' || k === 'nzbget'); // Usenet clients sort by category
+    };
+    kind.addEventListener('change', sync); sync();
+    const out = h('p.small', { role: 'status' });
+    const data = () => Object.assign({ id: c.id || 0, kind: kind.value, enabled: en.checked }, Object.fromEntries(Object.entries(ci).map(([k, el]) => [k, el.value.trim()])));
+    modal(isNew ? T.acqAddClient : c.name, h('div.a-form', null,
+      h('div.grid2', null, field(T.acqClientKind, kind), field(T.acqName, ci.name)),
+      field(T.acqClientUrl, ci.url), h('div.grid2', null, userField, passField),
+      h('div.grid2', null, field(T.acqCategory, ci.category, T.acqCategoryHint), saveField),
+      h('div.grid2', null, field(T.acqPathRemote, ci.path_remote), field(T.acqPathLocal, ci.path_local)), h('div.hint', null, T.acqPathHint),
+      h('div.form-row', null, h('label.switch-row', null, h('span', null, T.acqEnabledRow), en)), out),
+    close => [acqTestButton('/api/admin/acquire/clients/test', data, out),
+      h('button.btn', { onclick: close }, T.cancel),
+      h('button.btn.primary', { onclick: async () => { await api(isNew ? 'POST' : 'PATCH', '/api/admin/acquire/clients' + (isNew ? '' : '/' + c.id), data()); close(); toast(T.saved); rerender(); } }, T.save)]);
   };
-  const cOut = h('p.small', { role: 'status' });
-  const cData = () => Object.assign({ id: c.id || 0, name: c.name || 'qBittorrent', kind: 'qbittorrent', enabled: true },
-    Object.fromEntries(Object.entries(ci).map(([k, el]) => [k, el.value.trim()])));
-  const clientForm = h('div.a-form', null,
-    field(T.acqClientUrl, ci.url, T.acqClientUrlHint),
-    h('div.grid2', null, field(T.username, ci.username), field(T.password, ci.password)),
-    h('div.grid2', null, field(T.acqCategory, ci.category, T.acqCategoryHint), field(T.acqSavePath, ci.save_path, T.acqSavePathHint)),
-    h('div.grid2', null, field(T.acqPathRemote, ci.path_remote), field(T.acqPathLocal, ci.path_local)),
-    h('div.hint', null, T.acqPathHint), cOut,
-    h('div.a-form-foot', null, acqTestButton('/api/admin/acquire/clients/test', cData, cOut),
-      h('button.btn.primary', { onclick: async () => { await api(c.id ? 'PATCH' : 'POST', '/api/admin/acquire/clients' + (c.id ? '/' + c.id : ''), cData()); toast(T.saved); rerender(); } }, T.save)));
+  const clientRows = s.clients.map(c => h('tr', null,
+    tdl('', T.acqName, h('b', null, c.name), h('div.muted.small.mono.acq-url', null, c.url)),
+    tdl('', T.acqClientKind, (KINDS.find(x => x[0] === c.kind) || [, c.kind])[1], h('div.muted.small', null, ['sabnzbd', 'nzbget'].includes(c.kind) ? 'Usenet' : 'Torrent')),
+    tdl('', T.acqStatus, c.enabled ? h('span.ok.small', null, T.acqEnabledRow) : h('span.muted.small', null, T.acqIdxOff)),
+    tdl('.a-tbl-acts', '', h('div.row-gap', null, h('button.btn', { onclick: () => clientDialog(c) }, T.acqEdit),
+      h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(c.name))) { await api('DELETE', '/api/admin/acquire/clients/' + c.id); rerender(); } } }, T.delete)))));
+  const clientList = h('div', null,
+    s.clients.length ? aTable([T.acqName, T.acqClientKind, T.acqStatus, ''], clientRows, '.a-stack') : emptyNote(T.acqNoClients, null),
+    h('div.a-form-foot', null, h('button.btn', { onclick: () => clientDialog(null) }, icon('plus'), T.acqAddClient)));
 
-  // quality profile and import
-  const p = s.profile;
-  const RES = [[2160, '2160p (4K)'], [1080, '1080p'], [720, '720p'], [576, '576p'], [480, '480p'], [0, T.acqResUnknown]];
-  const primary = h('select', null, RES.filter(([v]) => v).map(([v, l]) => h('option', { value: v, selected: p.resolutions[0] === v }, l)));
-  const resBoxes = RES.map(([v, l]) => [v, h('input', { type: 'checkbox', checked: p.resolutions.includes(v) }), l]);
-  const minGB = h('input', { type: 'number', min: 0, step: 0.1, value: p.min_size_gb });
-  const maxGB = h('input', { type: 'number', min: 0, step: 1, value: p.max_size_gb });
-  const seeders = h('input', { type: 'number', min: 0, value: p.min_seeders });
-  const hun = h('input.switch', { type: 'checkbox', role: 'switch', checked: p.prefer_hun });
-  const hunOnly = h('input.switch', { type: 'checkbox', role: 'switch', checked: p.require_hun });
-  const hevc = h('input.switch', { type: 'checkbox', role: 'switch', checked: p.prefer_hevc });
+  // quality profile (the built-in one; named profiles below) and import
+  const builtin = profileEditor(s.profile);
   const mode = h('select', null, [['hardlink', T.acqModeLink], ['copy', T.acqModeCopy]].map(([v, l]) => h('option', { value: v, selected: s.import_mode === v }, l)));
   const saveProfile = h('button.btn.primary', { onclick: async () => {
-    const first = +primary.value;
-    // the preferred resolution first, then the other ticked ones from the highest down
-    const others = resBoxes.filter(([v, el]) => el.checked && v !== first).map(([v]) => v);
-    const profile = Object.assign({}, p, { resolutions: [first, ...others], min_size_gb: +minGB.value || 0, max_size_gb: +maxGB.value || 0,
-      min_seeders: +seeders.value || 0, prefer_hun: hun.checked, require_hun: hunOnly.checked, prefer_hevc: hevc.checked });
-    await api('PUT', '/api/admin/acquire/settings', { profile, import_mode: mode.value }); toast(T.saved); rerender();
+    await api('PUT', '/api/admin/acquire/settings', { profile: builtin.value(), import_mode: mode.value }); toast(T.saved); rerender();
   } }, T.save);
+  const profileDialog = pr => {
+    const isNew = !pr;
+    const ed = profileEditor(pr ? JSON.parse(pr.json) : s.profile);
+    const name = h('input', { type: 'text', value: pr ? pr.name : '' });
+    const def = h('input.switch', { type: 'checkbox', role: 'switch', checked: !!(pr && pr.is_default) });
+    modal(isNew ? T.profAdd : pr.name, h('div.a-form', null, field(T.acqName, name),
+      h('div.form-row', null, h('label.switch-row', null, h('span', null, T.profDefault), def)), ed.el),
+    close => [h('button.btn', { onclick: close }, T.cancel),
+      h('button.btn.primary', { onclick: async () => {
+        await api(isNew ? 'POST' : 'PATCH', '/api/admin/acquire/profiles' + (isNew ? '' : '/' + pr.id), { name: name.value, is_default: def.checked, profile: ed.value() });
+        close(); toast(T.saved); rerender();
+      } }, T.save)]);
+  };
+  const profRows = (s.profiles || []).map(pr => h('tr', null,
+    tdl('', T.acqName, h('b', null, pr.name), pr.is_default && h('span.badge.acq-have', { class: 'ml2' }, T.profDefaultShort)),
+    tdl('', T.profSummary, profileSummary(JSON.parse(pr.json))),
+    tdl('.a-tbl-acts', '', h('div.row-gap', null, h('button.btn', { onclick: () => profileDialog(pr) }, T.acqEdit),
+      h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(pr.name))) { await api('DELETE', '/api/admin/acquire/profiles/' + pr.id); rerender(); } } }, T.delete)))));
   const sw = (label, el) => h('div.form-row', null, h('label.switch-row', null, h('span', null, label), el));
+
+  // requests (Felfedezés): who is approved automatically, weekly quota, where requested films go
+  const auto = h('select', null, [['admins', T.reqAutoAdmins], ['all', T.reqAutoAll]].map(([v, l]) => h('option', { value: v, selected: s.auto_approve === v }, l)));
+  const quota = h('input', { type: 'number', min: 0, max: 1000, value: s.quota_week });
+  const reqLib = h('select', null, h('option', { value: 0 }, T.reqLibAuto), s.libraries.map(l => h('option', { value: l.id, selected: s.library_id === l.id }, l.name)));
+  const retryH = h('input', { type: 'number', min: 1, max: 168, value: s.retry_hours });
+  const reqLibTV = h('select', null, h('option', { value: 0 }, T.reqLibTVAuto), s.tv_libraries.map(l => h('option', { value: l.id, selected: s.library_tv === l.id }, l.name)));
+  const reqSettings = aSplit(T.reqSettings, T.reqSettingsHint, h('div.a-form', null,
+    field(T.reqAuto, auto), h('div.grid2', null, field(T.reqQuota, quota, T.reqQuotaHint), field(T.reqRetry, retryH, T.reqRetryHint)),
+    h('div.grid2', null, field(T.reqLib, reqLib), field(T.reqLibTV, reqLibTV)),
+    h('div.a-form-foot', null, h('button.btn.primary', { onclick: async () => {
+      await api('PUT', '/api/admin/acquire/settings', { auto_approve: auto.value, quota_week: +quota.value || 0, library_id: +reqLib.value || 0, library_tv: +reqLibTV.value || 0, retry_hours: +retryH.value || 6 });
+      toast(T.saved); rerender();
+    } }, T.save))));
 
   put(body, aHead(T.aAcqSettings, T.aLedeAcqSettings),
     aSplit(T.acqModule, T.acqModuleHint, sw(T.acqEnable, enabled)),
     aSplit(T.acqIndexers, T.acqIndexersHint,
       s.indexers.length ? aTable([T.acqName, T.acqStatus, T.acqPriority, ''], ixRows, '.a-stack') : emptyNote(T.acqNoIndexers, null),
       h('div.a-form-foot', null, h('button.btn', { onclick: () => indexerDialog(null) }, icon('plus'), T.acqAddIndexer))),
-    aSplit(T.acqClient, T.acqClientHint, clientForm),
-    aSplit(T.acqProfile, T.acqProfileHint, h('div.a-form', null,
-      field(T.acqPrimaryRes, primary),
-      h('div.form-row', null, h('span.small.muted', null, T.acqAllowedRes), h('div.acq-resboxes', null, resBoxes.map(([, el, l]) => h('label.check', null, el, l)))),
-      h('div.grid2', null, field(T.acqMinGB, minGB), field(T.acqMaxGB, maxGB, T.acqMaxGBHint)),
-      field(T.acqMinSeeders, seeders),
-      sw(T.acqPreferHun, hun), sw(T.acqRequireHun, hunOnly), sw(T.acqPreferHevc, hevc),
+    aSplit(T.acqClients, T.acqClientsHint, clientList),
+    reqSettings,
+    aSplit(T.acqProfile, T.acqProfileHint, h('div.a-form', null, builtin.el,
       field(T.acqImportMode, mode, T.acqImportModeHint),
-      h('div.a-form-foot', null, saveProfile))));
+      h('div.a-form-foot', null, saveProfile))),
+    aSplit(T.profiles, T.profilesHint,
+      profRows.length ? aTable([T.acqName, T.profSummary, ''], profRows, '.a-stack') : emptyNote(T.profNone, null),
+      h('div.a-form-foot', null, h('button.btn', { onclick: () => profileDialog(null) }, icon('plus'), T.profAdd))));
+}
+
+// the quality profile controls, shared by the built-in profile and the named ones
+const RES_OPTS = () => [[2160, '2160p (4K)'], [1080, '1080p'], [720, '720p'], [576, '576p'], [480, '480p'], [0, T.acqResUnknown]];
+const SRC_OPTS = () => [['remux', 'Remux'], ['bluray', 'BluRay'], ['webdl', 'WEB-DL'], ['webrip', 'WEBRip'], ['hdtv', 'HDTV'], ['', T.profAnySource]];
+function profileEditor(p) {
+  const RES = RES_OPTS();
+  const primary = h('select', null, RES.filter(([v]) => v).map(([v, l]) => h('option', { value: v, selected: p.resolutions[0] === v }, l)));
+  const resBoxes = RES.map(([v, l]) => [v, h('input', { type: 'checkbox', checked: p.resolutions.includes(v) }), l]);
+  const minGB = h('input', { type: 'number', min: 0, step: 0.1, value: p.min_size_gb || 0 });
+  const maxGB = h('input', { type: 'number', min: 0, step: 1, value: p.max_size_gb || 0 });
+  const seeders = h('input', { type: 'number', min: 0, value: p.min_seeders || 0 });
+  const swi = on => h('input.switch', { type: 'checkbox', role: 'switch', checked: !!on });
+  const hun = swi(p.prefer_hun), hunOnly = swi(p.require_hun), hevc = swi(p.prefer_hevc), upgrade = swi(p.upgrade);
+  const cutRes = h('select', null, RES.filter(([v]) => v).map(([v, l]) => h('option', { value: v, selected: (p.cutoff_resolution || 1080) === v }, l)));
+  const cutSrc = h('select', null, SRC_OPTS().map(([v, l]) => h('option', { value: v, selected: (p.cutoff_source ?? 'bluray') === v }, l)));
+  const sw = (label, el) => h('div.form-row', null, h('label.switch-row', null, h('span', null, label), el));
+  const cutoff = h('div.grid2', null, field(T.profCutoffRes, cutRes), field(T.profCutoffSrc, cutSrc));
+  const syncUp = () => cutoff.classList.toggle('hidden', !upgrade.checked);
+  upgrade.addEventListener('change', syncUp); syncUp();
+  const el = h('div', null,
+    field(T.acqPrimaryRes, primary),
+    h('div.form-row', null, h('span.small.muted', null, T.acqAllowedRes), h('div.acq-resboxes', null, resBoxes.map(([, b, l]) => h('label.check', null, b, l)))),
+    h('div.grid2', null, field(T.acqMinGB, minGB), field(T.acqMaxGB, maxGB, T.acqMaxGBHint)),
+    field(T.acqMinSeeders, seeders),
+    sw(T.acqPreferHun, hun), sw(T.acqRequireHun, hunOnly), sw(T.acqPreferHevc, hevc),
+    sw(T.profUpgrade, upgrade), h('div.hint', null, T.profUpgradeHint), cutoff);
+  const value = () => {
+    const first = +primary.value;
+    // the preferred resolution first, then the other ticked ones
+    const others = resBoxes.filter(([v, b]) => b.checked && v !== first).map(([v]) => v);
+    return Object.assign({}, p, { resolutions: [first, ...others], min_size_gb: +minGB.value || 0, max_size_gb: +maxGB.value || 0,
+      min_seeders: +seeders.value || 0, prefer_hun: hun.checked, require_hun: hunOnly.checked, prefer_hevc: hevc.checked,
+      upgrade: upgrade.checked, cutoff_resolution: +cutRes.value, cutoff_source: cutSrc.value });
+  };
+  return { el, value };
+}
+const profileSummary = p => [p.resolutions.filter(Boolean).map(r => r + 'p').join(', '), p.prefer_hun && 'HUN', p.require_hun && T.profHunOnly,
+  p.upgrade && T.profUpTo((p.cutoff_resolution || '') + 'p ' + ((SRC_OPTS().find(x => x[0] === p.cutoff_source) || [, ''])[1]))].filter(Boolean).join(' · ');
+// a select of the quality profiles (0 = the default)
+function profileSelect(s, selected = 0) {
+  return h('select', { 'aria-label': T.profile }, h('option', { value: 0 }, T.profUseDefault),
+    (s.profiles || []).map(pr => h('option', { value: pr.id, selected: selected === pr.id }, pr.name)));
+}
+
+// ===================================================================== Felfedezés and requests (acquisition M2)
+// Anyone (not from a kids profile) can ask for a film; the server downloads it once approved.
+const reqLabel = st => ({ pending: T.reqPending, approved: T.reqApproved, waiting: T.reqWaiting, downloading: T.reqDownloading,
+  available: T.reqAvailable, denied: T.reqDenied, failed: T.reqFailed, canceled: T.reqCanceled })[st] || st;
+const reqOpen = st => ['pending', 'approved', 'waiting', 'downloading'].includes(st);
+
+function discoverTile(it, onChange) {
+  const open = () => it.kind === 'series' ? seriesDialog(it.id, onChange) : discoverDialog(it.id, onChange);
+  return h('button.acq-card' + (it.item_id && it.kind !== 'series' ? '.have' : ''), { type: 'button', 'aria-label': it.title + (it.year ? ' (' + it.year + ')' : ''), onclick: open },
+    h('div.acq-poster', null, it.poster ? h('img', { src: it.poster, alt: '', loading: 'lazy' }) : h('span', null, it.title)),
+    h('b', null, it.title), h('span.muted.small', null, it.year || '–'),
+    it.request && it.request !== 'canceled' ? h('span.badge' + (it.request === 'denied' || it.request === 'failed' ? '.warn' : ''), null, reqLabel(it.request))
+      : it.item_id ? h('span.badge.acq-have', null, it.kind === 'series' ? T.discHaveSeries : T.discHave)
+      : it.followed ? h('span.badge', null, T.seriesFollowedShort) : null);
+}
+
+async function discoverDialog(id, onChange) {
+  const d = await GET('/api/discover/movies/' + id);
+  const r = d.request;
+  const mine = r && r.user_id === state.me.user.id;
+  const facts = [d.year, d.runtime > 0 && fmtRuntime(d.runtime * 60), (d.genres || []).slice(0, 3).join(', ')].filter(Boolean).join(' · ');
+  const state_ = d.item_id ? h('p.ok', null, T.discHaveLong)
+    : r ? h('p', null, h('span.badge', null, reqLabel(r.status)), ' ', r.user_name && !mine ? h('span.muted.small', null, T.reqBy(r.user_name)) : null,
+      r.status === 'downloading' && r.progress > 0 ? h('div.acq-prog', null, aBar(r.progress, 1), h('span.small.muted', null, num(r.progress * 100, 0) + '%')) : null,
+      r.note ? h('div.muted.small', null, srv(r.note)) : null)
+    : null;
+  modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.disc-detail', null,
+    d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
+    h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
+      facts && h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), state_)),
+  close => [
+    h('button.btn', { onclick: close }, T.close),
+    d.item_id ? h('a.btn.primary', { href: '#/item/' + d.item_id, onclick: close }, icon('play'), T.discWatch)
+      : r && mine && ['pending', 'approved', 'waiting'].includes(r.status) ? h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/requests/' + r.id); close(); toast(T.reqCanceledToast); onChange && onChange(); } }, T.reqCancel)
+      : !r ? h('button.btn.primary', { onclick: async e => {
+        const b = e.currentTarget; // null once the handler awaits
+        b.disabled = true;
+        try {
+          const q = await POST('/api/requests', { tmdb_id: d.id });
+          close(); toast(q.status === 'pending' ? T.reqSentPending(d.title) : T.reqSentApproved(d.title)); onChange && onChange();
+        } finally { b.disabled = false; }
+      } }, icon('plus'), T.discAsk) : null]);
+}
+
+async function viewDiscover(q) {
+  if (!state.me.can_request) return go('#/home');
+  const main = shell('discover');
+  const input = h('input', { type: 'search', placeholder: T.discSearchPh, 'aria-label': T.discSearchPh, value: q || '' });
+  const body = h('div', { 'aria-live': 'polite' });
+  main.append(h('div.page-head', null, h('h1', null, T.discover), h('a.btn', { href: '#/requests' }, T.myRequests)),
+    h('p.muted.disc-lede', null, T.discLede), searchField(input, 'disc-search'), body);
+  let gen = 0;
+  const grid = items => h('div.acq-results', null, items.map(it => discoverTile(it, () => load(input.value.trim()))));
+  async function load(text) {
+    const my = ++gen;
+    put(body, aSkeleton());
+    try {
+      if (text.length >= 2) {
+        const [mv, tv] = await Promise.all(['movie', 'series'].map(k => GET('/api/discover/search?kind=' + k + '&q=' + encodeURIComponent(text), { quiet: true }).catch(() => [])));
+        if (my !== gen) return;
+        put(body, [[T.discMovies, mv], [T.discSeries, tv]].filter(([, l]) => l.length).map(([t, l]) => h('section.disc-sec', null, h('h2', null, t), grid(l.slice(0, 18)))));
+        if (!body.firstChild) put(body, h('p.empty', null, T.searchEmpty));
+        return;
+      }
+      const lists = [['trending', T.discTrending], ['tv_trending', T.discTvTrending], ['upcoming', T.discUpcoming], ['tv_airing', T.discTvAiring], ['popular', T.discPopular]];
+      const res = await Promise.all(lists.map(([l]) => GET('/api/discover?list=' + l, { quiet: true }).catch(() => [])));
+      if (my !== gen) return;
+      put(body, lists.map(([, t], i) => [t, res[i]]).filter(([, l]) => l.length).map(([t, l]) =>
+        h('section.disc-sec', null, h('h2', null, t), grid(l.slice(0, 18)))));
+      if (!body.firstChild) put(body, h('p.empty', null, T.discNothing));
+    } catch (e) { if (my === gen) put(body, h('p.bad', null, e.message)); }
+  }
+  input.addEventListener('input', debounce(() => {
+    const v = input.value.trim();
+    history.replaceState(history.state, '', '#/discover' + (v ? '?q=' + encodeURIComponent(v) : ''));
+    load(v);
+  }, 350));
+  await load((q || '').trim());
+}
+
+async function viewRequests() {
+  if (!state.me.can_request) return go('#/home');
+  const main = shell('requests');
+  main.append(h('div.page-head', null, h('h1', null, T.myRequests), h('a.btn', { href: '#/discover' }, T.discover)), h('p.muted.disc-lede', null, T.reqLede));
+  const box = h('div');
+  main.append(box);
+  let t;
+  onCleanup(() => clearTimeout(t));
+  const render = async () => {
+    const list = await GET('/api/requests');
+    put(box, list.length ? h('div.req-list', null, list.map(r => h('div.entry.req', null,
+      r.poster ? h('img.match-thumb', { src: r.poster, alt: '' }) : null,
+      h('div', null, h('b', null, r.title, r.year ? ' (' + r.year + ')' : ''),
+        h('div', null, h('span.badge' + (r.status === 'denied' || r.status === 'failed' ? '.warn' : r.status === 'available' ? '.acq-have' : ''), null, reqLabel(r.status)),
+          r.kind === 'series' && h('span.muted.small', null, ' · ' + T.discSeriesOne + ': ' + seasonsLabel(r.seasons)),
+          h('span.muted.small', null, ' · ' + ago(Date.now() / 1000 - r.created_at))),
+        r.status === 'downloading' && h('div.acq-prog', null, aBar(r.progress, 1), h('span.small.muted', null, num(r.progress * 100, 0) + '%')),
+        r.note && h('div.muted.small', null, srv(r.note))),
+      h('div.row-gap', null,
+        r.status === 'available' && h('button.btn', { onclick: () => (r.kind === 'series' ? seriesDialog : discoverDialog)(r.tmdb_id, render) }, T.discWatch),
+        ['pending', 'approved', 'waiting'].includes(r.status) && h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/requests/' + r.id); toast(T.reqCanceledToast); render(); } }, T.reqCancel)))))
+      : emptyNote(T.reqNone, null, h('a.btn.primary', { href: '#/discover' }, T.discover)));
+    clearTimeout(t);
+    if (list.some(r => reqOpen(r.status))) t = setTimeout(render, 10000);
+  };
+  await render();
+}
+
+// told once: requested films that arrived since the last visit
+async function announceArrivals() {
+  if (!state.me || !state.me.can_request) return;
+  const list = await GET('/api/requests/unseen', { quiet: true, noRedirect: true }).catch(() => []);
+  for (const r of list.slice(0, 3)) toast(T.reqArrived(r.title));
+}
+
+async function adminAcqRequests(body) {
+  const all = parseHash().q.get('all') === '1';
+  const set = await GET('/api/admin/acquire/settings');
+  const movieLib = set.library_id || (set.libraries[0] && set.libraries[0].id) || 0;
+  const list = await GET('/api/admin/acquire/requests' + (all ? '' : '?status=open'));
+  const decide = async (r, approve) => {
+    if (approve) { await POST(`/api/admin/acquire/requests/${r.id}/approve`, {}); toast(T.reqApprovedToast(r.title)); return adminAcqRequests(body); }
+    const note = h('input', { type: 'text', placeholder: T.reqDenyNotePh });
+    modal(T.reqDenyAsk(r.title), field(T.reqDenyNote, note), close => [h('button.btn', { onclick: close }, T.cancel),
+      h('button.btn.danger', { onclick: async () => { await POST(`/api/admin/acquire/requests/${r.id}/deny`, { note: note.value }); close(); adminAcqRequests(body); } }, T.reqDeny)]);
+  };
+  const row = r => h('tr', null,
+    tdl('.acq-rel', T.title, h('div.row-gap', null, r.poster && h('img.match-thumb', { src: r.poster, alt: '' }), h('div', null, h('b', null, r.title, r.year ? ' (' + r.year + ')' : ''),
+      r.kind === 'series' && h('div.small', null, T.discSeriesOne + ': ' + seasonsLabel(r.seasons)),
+      r.note && h('div.muted.small', null, srv(r.note))))),
+    tdl('', T.reqUser, r.user_name || '–'),
+    tdl('', T.acqStatus, h('span.badge' + (r.status === 'denied' || r.status === 'failed' ? '.warn' : ''), null, reqLabel(r.status)),
+      r.status === 'downloading' && h('div.acq-prog', null, aBar(r.progress, 1))),
+    tdl('', T.acqAdded, ago(Date.now() / 1000 - r.created_at)),
+    tdl('.a-tbl-acts', '', h('div.row-gap', null,
+      r.status === 'pending' && h('button.btn.primary', { onclick: () => decide(r, true) }, T.reqApprove),
+      r.status === 'pending' && h('button.btn.danger', { onclick: () => decide(r, false) }, T.reqDeny),
+      ['waiting', 'failed', 'denied'].includes(r.status) && h('button.btn', { onclick: () => decide(r, true) }, T.retry),
+      r.kind === 'movie' && ['pending', 'approved', 'waiting', 'failed'].includes(r.status) && movieLib > 0 &&
+        h('button.btn', { title: T.isInteractive, onclick: () => movieInteractive(r.tmdb_id, r.title + (r.year ? ' (' + r.year + ')' : ''), movieLib, r.id) }, icon('search'), T.isInteractiveShort))));
+  put(body, aHead(T.aAcqRequests, T.aLedeAcqRequests, h('a.btn', { href: all ? '#/admin/acqrequests' : '#/admin/acqrequests?all=1' }, all ? T.reqShowOpen : T.reqShowAll)),
+    list.length ? aTable([T.title, T.reqUser, T.acqStatus, T.acqAdded, ''], list.map(row), '.a-stack.acq-tbl') : emptyNote(all ? T.reqNoneAll : T.reqNoneOpen, null));
+}
+
+// ===================================================================== series (acquisition M3)
+const monitorLabel = m => ({ all: T.monAll, future: T.monFuture, seasons: T.monSeasons, none: T.monNone })[m] || m;
+const seasonsLabel = s => s === 'all' || !s ? T.monAll : s === 'future' ? T.monFuture : T.seasonsList(s.split(',').join(', '));
+const epStateLabel = st => ({ have: T.epHave, downloading: T.epDownloading, wanted: T.epWanted, future: T.epFuture, skipped: T.epSkipped })[st] || st;
+
+// the "which seasons" control shared by the request dialog and the admin's follow dialog
+function seasonPicker(seasons, initialMode = 'all', initialSet = []) {
+  const mode = h('select', { 'aria-label': T.monWhat }, [['all', T.monAll], ['future', T.monFuture], ['seasons', T.monSeasons]].map(([v, l]) => h('option', { value: v, selected: v === initialMode }, l)));
+  const boxes = seasons.map(s => [s.number, h('input', { type: 'checkbox', checked: initialSet.includes(s.number) })]);
+  const list = h('div.season-picks', null, seasons.map((s, i) => h('label.check', null, boxes[i][1],
+    h('span', null, T.seasonN(s.number), h('span.muted.small', null, ' · ' + T.epCount(s.episode_count) + (s.have ? ' · ' + T.seasonHave(s.have) : ''))))));
+  const sync = () => list.classList.toggle('hidden', mode.value !== 'seasons');
+  mode.addEventListener('change', sync); sync();
+  return { el: h('div', null, field(T.monWhat, mode), list), mode: () => mode.value, chosen: () => boxes.filter(([, b]) => b.checked).map(([n]) => n) };
+}
+
+async function seriesDialog(id, onChange) {
+  const d = await GET('/api/discover/series/' + id);
+  const r = d.request;
+  const mine = r && r.user_id === state.me.user.id;
+  const facts = [d.year, T.seasonsCount(d.seasons.length), (d.genres || []).slice(0, 3).join(', '), d.ended ? T.seriesEnded : null].filter(Boolean).join(' · ');
+  const picker = seasonPicker(d.seasons);
+  const status = r ? h('p', null, h('span.badge', null, reqLabel(r.status)), ' ', h('span.muted.small', null, seasonsLabel(r.seasons)),
+      r.user_name && !mine ? h('span.muted.small', null, ' · ' + T.reqBy(r.user_name)) : null, r.note ? h('div.muted.small', null, srv(r.note)) : null)
+    : d.followed ? h('p.ok', null, T.seriesFollowed) : null;
+  modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.disc-detail', null,
+    d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
+    h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
+      h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), status,
+      !r && d.seasons.length > 0 && picker.el)),
+  close => [
+    h('button.btn', { onclick: close }, T.close),
+    d.item_id ? h('a.btn', { href: '#/item/' + d.item_id, onclick: close }, icon('play'), T.discWatch) : null,
+    r && mine && ['pending', 'approved', 'waiting'].includes(r.status) ? h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/requests/' + r.id); close(); toast(T.reqCanceledToast); onChange && onChange(); } }, T.reqCancel) : null,
+    !r && h('button.btn.primary', { onclick: async e => {
+      const b = e.currentTarget;
+      const m = picker.mode(), chosen = picker.chosen();
+      if (m === 'seasons' && !chosen.length) return toast(T.pickSeason, true);
+      b.disabled = true;
+      try {
+        const q = await POST('/api/requests', { kind: 'series', tmdb_id: d.id, seasons: m === 'seasons' ? chosen.join(',') : m });
+        close(); toast(q.status === 'pending' ? T.reqSentPending(d.title) : T.reqSentApproved(d.title)); onChange && onChange();
+      } finally { b.disabled = false; }
+    } }, icon('plus'), T.discAsk)]);
+}
+
+// admin: follow a series directly (no request)
+async function seriesFollowDialog(id, s, onDone) {
+  const d = await GET('/api/discover/series/' + id);
+  const picker = seasonPicker(d.seasons);
+  const lib = h('select', null, s.tv_libraries.map(l => h('option', { value: l.id, selected: s.library_tv === l.id }, l.name)));
+  const prof = profileSelect(s);
+  modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.a-form', null,
+    d.followed && h('p.ok', null, T.seriesFollowed), d.overview && h('p.acq-overview', null, d.overview),
+    s.tv_libraries.length ? field(T.acqTargetLib, lib) : h('p.bad', null, T.noTvLib), (s.profiles || []).length > 0 && field(T.profile, prof), picker.el),
+  close => [h('button.btn', { onclick: close }, T.cancel),
+    h('button.btn.primary', { disabled: !s.tv_libraries.length, onclick: async e => {
+      const b = e.currentTarget;
+      const m = picker.mode(), chosen = picker.chosen();
+      if (m === 'seasons' && !chosen.length) return toast(T.pickSeason, true);
+      b.disabled = true;
+      try {
+        await POST('/api/admin/acquire/series', { tmdb_id: d.id, library_id: +lib.value, monitor: m, seasons: chosen, profile_id: +prof.value });
+        close(); toast(T.seriesFollowStarted(d.title)); onDone && onDone();
+      } finally { b.disabled = false; }
+    } }, T.seriesFollow)]);
+}
+
+async function adminAcqSeries(body) {
+  const s = await GET('/api/admin/acquire/settings');
+  const list = await GET('/api/admin/acquire/series');
+  const rerender = () => adminAcqSeries(body);
+  const row = x => h('tr', null,
+    tdl('.acq-rel', T.title, h('div.row-gap', null, x.poster && h('img.match-thumb', { src: x.poster, alt: '' }),
+      h('div', null, h('b', null, x.title, x.year ? ' (' + x.year + ')' : ''), h('div.muted.small', null, monitorLabel(x.monitor) + (x.ended ? ' · ' + T.seriesEnded : ''))))),
+    tdl('', T.seriesEpisodes, h('div', null, T.epHaveOf(x.have, x.total)),
+      x.total > 0 && h('div.acq-prog', null, aBar(x.have, x.total)),
+      h('div.small', null, x.wanted > 0 && h('span.bad', null, T.epWantedN(x.wanted)), x.downloading > 0 && h('span.muted', null, ' ' + T.epDownloadingN(x.downloading)))),
+    tdl('', T.seriesNext, x.next_air ? new Date(x.next_air).toLocaleDateString(T.locale) : '–'),
+    tdl('.a-tbl-acts', '', h('div.row-gap', null,
+      h('button.btn', { onclick: () => seriesEpisodesDialog(x, s, rerender) }, T.seriesDetails),
+      h('button.btn', { onclick: async () => { await POST(`/api/admin/acquire/series/${x.id}/search`); toast(T.seriesSearching); } }, T.seriesSearchNow),
+      h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.seriesStopAsk(x.title), T.seriesStop)) { await api('DELETE', '/api/admin/acquire/series/' + x.id); rerender(); } } }, T.seriesStop))));
+  const input = h('input', { type: 'search', placeholder: T.seriesSearchPh, 'aria-label': T.seriesSearchPh });
+  const results = h('div.acq-results');
+  input.addEventListener('input', debounce(async () => {
+    const q = input.value.trim();
+    if (q.length < 2) return put(results);
+    const res = await GET('/api/admin/acquire/lookup?kind=series&q=' + encodeURIComponent(q), { quiet: true }).catch(() => []);
+    put(results, res.slice(0, 18).map(it => h('button.acq-card', { type: 'button', onclick: () => seriesFollowDialog(it.id, s, rerender) },
+      h('div.acq-poster', null, it.poster ? h('img', { src: it.poster, alt: '' }) : h('span', null, it.title)),
+      h('b', null, it.title), h('span.muted.small', null, it.year || '–'), it.followed ? h('span.badge.acq-have', null, T.seriesFollowedShort) : null)));
+  }, 350));
+  put(body, aHead(T.aAcqSeries, T.aLedeAcqSeries),
+    !s.enabled ? emptyNote(T.acqOff, T.acqOffHint, h('a.btn.primary', { href: '#/admin/acqsettings' }, T.aAcqSettings)) : [
+      searchField(input, 'acq-search'), results,
+      list.length ? aTable([T.title, T.seriesEpisodes, T.seriesNext, ''], list.map(row), '.a-stack.acq-tbl') : emptyNote(T.seriesNone, T.seriesNoneHint)]);
+}
+
+async function seriesEpisodesDialog(x, s, onChange) {
+  const d = await GET('/api/admin/acquire/series/' + x.id);
+  const bySeason = {};
+  for (const e of d.episodes) (bySeason[e.season] = bySeason[e.season] || []).push(e);
+  const seasons = Object.keys(bySeason).map(Number).filter(n => n > 0).sort((a, b) => a - b);
+  const monitored = seasons.filter(n => bySeason[n].some(e => e.monitored));
+  const picker = seasonPicker(seasons.map(n => ({ number: n, episode_count: bySeason[n].length, have: bySeason[n].filter(e => e.have).length })),
+    x.monitor === 'none' ? 'seasons' : x.monitor, monitored);
+  modal(x.title, h('div', null,
+    h('div.season-table', null, seasons.map(n => h('div.season-row', null, h('div', null, h('b', null, T.seasonN(n)),
+        h('div.row-gap.season-acts', null,
+          h('button.btn.small', { onclick: async () => { await POST(`/api/admin/acquire/series/${x.id}/season-search?season=${n}`); toast(T.seriesSearching); } }, T.isAutoShort),
+          h('button.btn.small', { onclick: () => seriesInteractive(x, n, -1) }, icon('search'), T.isInteractiveShort))),
+      h('div.ep-chips', null, bySeason[n].map(e => h('button.ep-chip.' + e.state, { type: 'button', onclick: () => seriesInteractive(x, n, e.episode),
+        title: `S${String(n).padStart(2, '0')}E${String(e.episode).padStart(2, '0')}${e.title ? ' · ' + e.title : ''}${e.air_date ? ' · ' + e.air_date : ''} · ${epStateLabel(e.state)} · ${T.isInteractive}` }, e.episode)))))),
+    h('p.muted.small', null, T.isEpisodeHint),
+    h('div.ep-legend.small.muted', null, ['have', 'downloading', 'wanted', 'future', 'skipped'].map(st => h('span', null, h('span.ep-chip.' + st, null, ' '), epStateLabel(st)))),
+    picker.el),
+  close => [h('button.btn', { onclick: close }, T.close),
+    h('button.btn.primary', { onclick: async () => {
+      const m = picker.mode(), chosen = picker.chosen();
+      if (m === 'seasons' && !chosen.length) return toast(T.pickSeason, true);
+      await api('PATCH', '/api/admin/acquire/series/' + x.id, { monitor: m, seasons: chosen }); close(); toast(T.saved); onChange && onChange();
+    } }, T.save)]);
+}
+
+// ===================================================================== interactive search (like Radarr / Sonarr)
+// Every release from every indexer in one sortable table; any of them can be downloaded – a rejected one after a
+// warning that says why it was rejected. load() → { results, errors }, grab(release) starts the download.
+function interactiveSearch({ title, load, grab }) {
+  let sortKey = 'score', dir = -1, hideRej = false, data = null;
+  const body = h('div.isearch', null, h('div.acq-loading', null, h('div.spin'), h('p.muted', null, T.acqSearching)));
+  const m = modal(T.isTitle(title), body, close => [h('button.btn', { onclick: close }, T.close)]);
+  m.box.classList.add('wide', 'is-modal');
+  const age = r => { const t = Date.parse(r.published); return t > 0 && t < Date.now() + 864e5 ? (Date.now() - t) / 1000 : null; };
+  const qrank = r => (r.release.resolution || 0) * 100 + ({ remux: 60, bluray: 50, webdl: 45, webrip: 35, hdtv: 15, dvd: 5 }[r.release.source] || 0);
+  const val = {
+    age: r => { const a = age(r); return a == null ? Infinity : a; },
+    title: r => r.title.toLowerCase(),
+    indexer: r => (r.indexer || '').toLowerCase(),
+    size: r => r.size || 0,
+    peers: r => r.seeders,
+    quality: qrank,
+    score: r => (r.rejected ? -1e6 : 0) + r.score,
+  };
+  const cols = [['age', T.isAge], ['title', T.acqRelease], ['indexer', T.acqIndexer], ['size', T.acqSize], ['peers', T.isPeers], ['quality', T.isQuality], ['score', T.acqScore]];
+  const sent = new Set();
+  function render() {
+    const rows = data.results.filter(r => !hideRej || !r.rejected).slice().sort((a, b) => {
+      const x = val[sortKey](a), y = val[sortKey](b);
+      return (x < y ? -1 : x > y ? 1 : 0) * dir;
+    });
+    const nRej = data.results.filter(r => r.rejected).length;
+    const head = h('tr', null, cols.map(([k, l]) => h('th', null, h('button.is-sort' + (k === sortKey ? '.on' : ''), { type: 'button', 'aria-sort': k === sortKey ? (dir > 0 ? 'ascending' : 'descending') : null,
+      onclick: () => { if (sortKey === k) dir = -dir; else { sortKey = k; dir = k === 'title' || k === 'indexer' || k === 'age' ? 1 : -1; } render(); } },
+      l, k === sortKey ? (dir > 0 ? ' ▲' : ' ▼') : ''))), h('th'));
+    const row = r => {
+      const key = r.info_hash || r.guid || r.title;
+      const btn = h('button.btn' + (r.rejected ? '' : '.primary'), { disabled: sent.has(key), 'aria-label': T.acqGrab + ': ' + r.title, onclick: async e => {
+        const b = e.currentTarget;
+        if (r.rejected && !await confirmBox(T.isGrabRejected(acqReject(r.rejected)), T.acqGrab)) return;
+        b.disabled = true;
+        try { await grab(r); sent.add(key); toast(T.isSent(r.title)); render(); } catch { b.disabled = false; }
+      } }, sent.has(key) ? icon('check') : icon('dl'));
+      const a = age(r);
+      return h('tr' + (r.rejected ? '.acq-rej' : ''), null,
+        h('td.is-age', null, a == null ? '–' : ago(a)),
+        h('td.acq-rel', null, h('div.acq-reltitle', { title: r.title }, r.title),
+          h('div.acq-tags', null, r.release.season >= 0 && h('span.badge', null, r.release.episodes && r.release.episodes.length ? r.release.episodes.map(e => `S${String(r.release.season).padStart(2, '0')}E${String(e).padStart(2, '0')}`).join(' ') : T.isPack(r.release.season)),
+            r.release.codec && h('span.badge', null, r.release.codec.toUpperCase()), r.release.hdr && h('span.badge', null, r.release.hdr.toUpperCase()),
+            (r.release.languages || []).includes('hun') && h('span.badge.acq-hun', null, 'HUN'),
+            r.info_url && /^https?:/.test(r.info_url) && h('a.small', { href: r.info_url, target: '_blank', rel: 'noopener noreferrer' }, T.acqInfo)),
+          r.rejected && h('div.bad.small', null, acqReject(r.rejected))),
+        h('td', null, r.indexer),
+        h('td.is-num', null, r.size ? fmtBytes(r.size) : '–'),
+        h('td.is-num', null, r.seeders >= 0 ? num(r.seeders, 0) + ' / ' + num(Math.max(r.peers, 0), 0) : '–'),
+        h('td', null, r.quality || '–'),
+        h('td.is-num', null, r.rejected ? '–' : num(r.score, 0)),
+        h('td.a-tbl-acts', null, btn));
+    };
+    put(body,
+      h('div.is-bar', null, h('span.muted.small', null, T.acqFound(data.results.length, data.results.length - nRej)),
+        nRej > 0 && h('label.check.small', null, h('input', { type: 'checkbox', checked: hideRej, onchange: e => { hideRej = e.target.checked; render(); } }), T.isHideRejected)),
+      (data.errors || []).length > 0 && h('div.acq-errs', { role: 'alert' }, data.errors.map(e => h('p.bad.small', null, e.name + ': ' + srv(e.error)))),
+      rows.length ? h('div.scroll-x', null, h('table.tbl.is-tbl', null, h('thead', null, head), h('tbody', null, rows.map(row)))) : h('p.empty', null, T.acqNoReleases));
+  }
+  load().then(d => { data = { results: d.results || [], errors: d.errors || [] }; render(); }, e => put(body, h('p.bad', null, e.message)));
+}
+
+function movieInteractive(tmdbId, title, libraryId, requestId, profileId = 0) {
+  interactiveSearch({
+    title,
+    load: () => GET('/api/admin/acquire/releases?tmdb_id=' + tmdbId + '&profile_id=' + profileId, { quiet: true }),
+    grab: rel => POST('/api/admin/acquire/grab', { tmdb_id: tmdbId, library_id: libraryId, release: rel, request_id: requestId || 0, profile_id: profileId }),
+  });
+}
+
+function seriesInteractive(x, season, episode) {
+  const label = episode >= 0 ? `${x.title} · S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}` : `${x.title} · ${T.seasonN(season)}`;
+  interactiveSearch({
+    title: label,
+    load: () => GET(`/api/admin/acquire/series/${x.id}/releases?season=${season}` + (episode >= 0 ? '&episode=' + episode : ''), { quiet: true }),
+    grab: rel => POST(`/api/admin/acquire/series/${x.id}/grab`, { season, release: rel }),
+  });
+}
+
+function acqStatsPanel(st) {
+  const d = st.downloads, r = st.requests;
+  const tile = (n, l) => h('div.acq-stat', null, h('b', null, n), h('span.muted.small', null, l));
+  const rate = d.done + d.failed > 0 ? Math.round(d.done / (d.done + d.failed) * 100) + '%' : '–';
+  return h('section.acq-stats', { 'aria-label': T.statTitle },
+    h('div.acq-stat-row', null, tile(num(d.done, 0), T.statDone), tile(fmtBytes(d.bytes), T.statBytes), tile(rate, T.statSuccess),
+      tile(num(d.active, 0), T.statActive), tile(num(r.open, 0), T.statOpenReq), tile(num(st.series, 0), T.statFollowed)),
+    (st.requesters.length > 0 || st.indexers.length > 0) && h('div.acq-stat-lists', null,
+      st.requesters.length > 0 && h('div', null, h('h3.small.muted', null, T.statRequesters), h('ol.small', null, st.requesters.map(x => h('li', null, x.name + ' · ' + T.statReqCount(x.count, x.done))))),
+      st.indexers.length > 0 && h('div', null, h('h3.small.muted', null, T.statIndexers), h('ol.small', null, st.indexers.map(x => h('li', null, x.name + ' · ' + T.statIdxCount(x.count, x.done)))))));
 }

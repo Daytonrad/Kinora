@@ -50,7 +50,8 @@ type AcqGrab struct {
 	IndexerID    *int64  `json:"indexer_id"`
 	IndexerName  string  `json:"indexer_name"`
 	ClientID     *int64  `json:"client_id"`
-	InfoHash     string  `json:"info_hash"`
+	InfoHash     string  `json:"info_hash"`   // the release's identity (torrent info hash, "nzb:…")
+	DownloadID   string  `json:"download_id"` // the client's id for the download
 	Size         int64   `json:"size"`
 	Quality      string  `json:"quality"`
 	Score        int     `json:"score"`
@@ -61,6 +62,12 @@ type AcqGrab struct {
 	Error        string  `json:"error"`
 	TargetPath   string  `json:"target_path"`
 	RequestedBy  *int64  `json:"requested_by"`
+	RequestID    *int64  `json:"request_id"`
+	SeriesID     *int64  `json:"series_id"`
+	Season       int     `json:"season"`   // -1 for films
+	Episodes     string  `json:"episodes"` // "3", or "1,2,3" for a pack; "" = the whole season
+	ProfileID    *int64  `json:"profile_id"`
+	Replaces     string  `json:"replaces"` // an upgrade: the file it replaces once imported
 	CreatedAt    int64   `json:"created_at"`
 	UpdatedAt    int64   `json:"updated_at"`
 }
@@ -232,13 +239,13 @@ func (s *Store) DeleteAcqClient(id int64) error {
 // ---------------------------------------------------------------- grabs
 
 const grabCols = `id,kind,tmdb_id,imdb_id,title,year,library_id,release_title,indexer_id,indexer_name,client_id,info_hash,size,quality,score,
- status,progress,eta,speed,error,target_path,requested_by,created_at,updated_at`
+ status,progress,eta,speed,error,target_path,requested_by,created_at,updated_at,request_id,series_id,season,episodes,download_id,profile_id,replaces`
 
 func scanGrab(row interface{ Scan(...any) error }) (*AcqGrab, error) {
 	g := &AcqGrab{}
-	var lib, idx, cli, req sql.NullInt64
+	var lib, idx, cli, req, rq, ser, prof sql.NullInt64
 	if err := row.Scan(&g.ID, &g.Kind, &g.TmdbID, &g.ImdbID, &g.Title, &g.Year, &lib, &g.ReleaseTitle, &idx, &g.IndexerName, &cli, &g.InfoHash,
-		&g.Size, &g.Quality, &g.Score, &g.Status, &g.Progress, &g.ETA, &g.Speed, &g.Error, &g.TargetPath, &req, &g.CreatedAt, &g.UpdatedAt); err != nil {
+		&g.Size, &g.Quality, &g.Score, &g.Status, &g.Progress, &g.ETA, &g.Speed, &g.Error, &g.TargetPath, &req, &g.CreatedAt, &g.UpdatedAt, &rq, &ser, &g.Season, &g.Episodes, &g.DownloadID, &prof, &g.Replaces); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -251,7 +258,7 @@ func scanGrab(row interface{ Scan(...any) error }) (*AcqGrab, error) {
 		v := n.Int64
 		return &v
 	}
-	g.LibraryID, g.IndexerID, g.ClientID, g.RequestedBy = ptr(lib), ptr(idx), ptr(cli), ptr(req)
+	g.LibraryID, g.IndexerID, g.ClientID, g.RequestedBy, g.RequestID, g.SeriesID, g.ProfileID = ptr(lib), ptr(idx), ptr(cli), ptr(req), ptr(rq), ptr(ser), ptr(prof)
 	return g, nil
 }
 
@@ -299,10 +306,13 @@ func (s *Store) AddAcqGrab(g *AcqGrab) error {
 	if g.Status == "" {
 		g.Status = GrabDownloading
 	}
+	if g.Kind == "movie" || g.Kind == "" {
+		g.Season = -1
+	}
 	res, err := s.DB.Exec(`INSERT INTO acq_grabs(kind,tmdb_id,imdb_id,title,year,library_id,release_title,indexer_id,indexer_name,client_id,info_hash,size,quality,score,
- status,progress,eta,speed,error,target_path,requested_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,-1,0,'','',?,?,?)`,
+ status,progress,eta,speed,error,target_path,requested_by,created_at,updated_at,request_id,series_id,season,episodes,download_id,profile_id,replaces) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,-1,0,'','',?,?,?,?,?,?,?,?,?,?)`,
 		g.Kind, g.TmdbID, g.ImdbID, g.Title, g.Year, g.LibraryID, g.ReleaseTitle, g.IndexerID, g.IndexerName, g.ClientID, g.InfoHash, g.Size, g.Quality, g.Score,
-		g.Status, g.RequestedBy, g.CreatedAt, g.UpdatedAt)
+		g.Status, g.RequestedBy, g.CreatedAt, g.UpdatedAt, g.RequestID, g.SeriesID, g.Season, g.Episodes, g.DownloadID, g.ProfileID, g.Replaces)
 	if err != nil {
 		return err
 	}
@@ -326,9 +336,9 @@ func (s *Store) SetAcqGrabStatus(id int64, status, errText, target string) error
 	return err
 }
 
-// MovieTmdbIDs returns which of these TMDB ids are films already in a library.
-func (s *Store) MovieTmdbIDs(ids []int64) (map[int64]bool, error) {
-	out := map[int64]bool{}
+// MovieTmdbIDs returns which of these TMDB ids are films already in a library, with an item id for each.
+func (s *Store) MovieTmdbIDs(ids []int64) (map[int64]int64, error) {
+	out := map[int64]int64{}
 	if len(ids) == 0 {
 		return out, nil
 	}
@@ -336,15 +346,15 @@ func (s *Store) MovieTmdbIDs(ids []int64) (map[int64]bool, error) {
 	for i, id := range ids {
 		args[i] = id
 	}
-	rows, err := s.DB.Query(`SELECT DISTINCT tmdb_id FROM items WHERE kind='movie' AND missing=0 AND tmdb_id IN (?`+strings.Repeat(",?", len(ids)-1)+`)`, args...)
+	rows, err := s.DB.Query(`SELECT tmdb_id, MIN(id) FROM items WHERE kind='movie' AND missing=0 AND tmdb_id IN (?`+strings.Repeat(",?", len(ids)-1)+`) GROUP BY tmdb_id`, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id int64
-		if rows.Scan(&id) == nil {
-			out[id] = true
+		var id, item int64
+		if rows.Scan(&id, &item) == nil {
+			out[id] = item
 		}
 	}
 	return out, rows.Err()
@@ -373,4 +383,249 @@ func (s *Store) GrabbedTmdbIDs(ids []int64) (map[int64]string, error) {
 		}
 	}
 	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------- requests
+
+// AcqRequest is a film someone asked for.
+type AcqRequest struct {
+	ID        int64  `json:"id"`
+	Kind      string `json:"kind"`
+	TmdbID    int64  `json:"tmdb_id"`
+	ImdbID    string `json:"imdb_id"`
+	Title     string `json:"title"`
+	Year      int    `json:"year"`
+	Poster    string `json:"poster"`
+	UserID    *int64 `json:"user_id"`
+	UserName  string `json:"user_name"`
+	ProfileID *int64 `json:"profile_id"`
+	Status    string `json:"status"`
+	Note      string `json:"note"`
+	Seasons   string `json:"seasons"` // series: "all", "future" or "1,2"
+	Attempts  int    `json:"attempts"`
+	NextTryAt int64  `json:"next_try_at"`
+	DecidedBy *int64 `json:"decided_by"`
+	Seen      bool   `json:"seen"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+	// the running download of this request, if any (0..1)
+	Progress float64 `json:"progress"`
+}
+
+// Request states.
+const (
+	ReqPending     = "pending"     // waits for an admin
+	ReqApproved    = "approved"    // to be searched
+	ReqWaiting     = "waiting"     // no acceptable release yet: searched again at next_try_at
+	ReqDownloading = "downloading" // a grab runs
+	ReqAvailable   = "available"   // in the library
+	ReqDenied      = "denied"
+	ReqFailed      = "failed"
+	ReqCanceled    = "canceled"
+)
+
+// OpenRequestStates are the states of a request still being worked on.
+var OpenRequestStates = []string{ReqPending, ReqApproved, ReqWaiting, ReqDownloading}
+
+const reqCols = `r.id,r.kind,r.tmdb_id,r.imdb_id,r.title,r.year,r.poster,r.user_id,COALESCE(u.username,''),r.profile_id,r.status,r.note,r.attempts,
+ r.next_try_at,r.decided_by,r.seen,r.created_at,r.updated_at,r.seasons,
+ COALESCE((SELECT g.progress FROM acq_grabs g WHERE g.request_id=r.id AND g.status IN ('downloading','importing') ORDER BY g.id DESC LIMIT 1),0)`
+
+const reqFrom = ` FROM acq_requests r LEFT JOIN users u ON u.id=r.user_id`
+
+func scanRequest(row interface{ Scan(...any) error }) (*AcqRequest, error) {
+	q := &AcqRequest{}
+	var user, prof, dec sql.NullInt64
+	var seen int
+	if err := row.Scan(&q.ID, &q.Kind, &q.TmdbID, &q.ImdbID, &q.Title, &q.Year, &q.Poster, &user, &q.UserName, &prof, &q.Status, &q.Note, &q.Attempts,
+		&q.NextTryAt, &dec, &seen, &q.CreatedAt, &q.UpdatedAt, &q.Seasons, &q.Progress); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	ptr := func(n sql.NullInt64) *int64 {
+		if !n.Valid {
+			return nil
+		}
+		v := n.Int64
+		return &v
+	}
+	q.UserID, q.ProfileID, q.DecidedBy, q.Seen = ptr(user), ptr(prof), ptr(dec), seen == 1
+	return q, nil
+}
+
+func (s *Store) queryRequests(where string, args ...any) ([]*AcqRequest, error) {
+	rows, err := s.DB.Query(`SELECT `+reqCols+reqFrom+` `+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*AcqRequest{}
+	for rows.Next() {
+		q, err := scanRequest(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, q)
+	}
+	return out, rows.Err()
+}
+
+func inStates(col string, states []string) (string, []any) {
+	args := make([]any, len(states))
+	for i, st := range states {
+		args[i] = st
+	}
+	return col + ` IN (?` + strings.Repeat(",?", len(states)-1) + `)`, args
+}
+
+// AcqRequests lists requests: of one user (userID > 0) and/or in some states, newest first.
+func (s *Store) AcqRequests(userID int64, limit int, states ...string) ([]*AcqRequest, error) {
+	where := []string{"1=1"}
+	var args []any
+	if userID > 0 {
+		where = append(where, "r.user_id=?")
+		args = append(args, userID)
+	}
+	if len(states) > 0 {
+		w, a := inStates("r.status", states)
+		where = append(where, w)
+		args = append(args, a...)
+	}
+	args = append(args, limit)
+	return s.queryRequests(`WHERE `+strings.Join(where, " AND ")+` ORDER BY r.id DESC LIMIT ?`, args...)
+}
+
+// AcqRequest loads one request.
+func (s *Store) AcqRequest(id int64) (*AcqRequest, error) {
+	return scanRequest(s.DB.QueryRow(`SELECT `+reqCols+reqFrom+` WHERE r.id=?`, id))
+}
+
+// OpenRequestFor returns a request for this film that is still being worked on.
+func (s *Store) OpenRequestFor(kind string, tmdbID int64) (*AcqRequest, error) {
+	w, a := inStates("r.status", OpenRequestStates)
+	return scanRequest(s.DB.QueryRow(`SELECT `+reqCols+reqFrom+` WHERE r.kind=? AND r.tmdb_id=? AND `+w+` ORDER BY r.id LIMIT 1`, append([]any{kind, tmdbID}, a...)...))
+}
+
+// DueRequests are the approved ones and the waiting ones whose retry time has come.
+func (s *Store) DueRequests(at int64, limit int) ([]*AcqRequest, error) {
+	return s.queryRequests(`WHERE r.status='approved' OR (r.status='waiting' AND r.next_try_at<=?) ORDER BY r.id LIMIT ?`, at, limit)
+}
+
+// CountUserRequests counts a user's requests since a time (denied and canceled ones do not count).
+func (s *Store) CountUserRequests(userID, since int64) int {
+	var n int
+	s.DB.QueryRow(`SELECT COUNT(*) FROM acq_requests WHERE user_id=? AND created_at>=? AND status NOT IN ('denied','canceled')`, userID, since).Scan(&n)
+	return n
+}
+
+// AddAcqRequest stores a new request.
+func (s *Store) AddAcqRequest(q *AcqRequest) error {
+	q.CreatedAt, q.UpdatedAt = now(), now()
+	res, err := s.DB.Exec(`INSERT INTO acq_requests(kind,tmdb_id,imdb_id,title,year,poster,user_id,profile_id,status,note,attempts,next_try_at,decided_by,seen,created_at,updated_at,seasons)
+ VALUES(?,?,?,?,?,?,?,?,?,'',0,0,?,0,?,?,?)`, q.Kind, q.TmdbID, q.ImdbID, q.Title, q.Year, q.Poster, q.UserID, q.ProfileID, q.Status, q.DecidedBy, q.CreatedAt, q.UpdatedAt, q.Seasons)
+	if err != nil {
+		return err
+	}
+	q.ID, _ = res.LastInsertId()
+	return nil
+}
+
+// SetRequestStatus moves a request on; nextTry matters for the waiting state.
+func (s *Store) SetRequestStatus(id int64, status, note string, nextTry int64) error {
+	if len(note) > 300 {
+		note = note[:300]
+	}
+	_, err := s.DB.Exec(`UPDATE acq_requests SET status=?, note=?, next_try_at=?, updated_at=? WHERE id=?`, status, note, nextTry, now(), id)
+	return err
+}
+
+// DecideRequest records an admin's approval or refusal.
+func (s *Store) DecideRequest(id int64, status, note string, adminID int64) error {
+	_, err := s.DB.Exec(`UPDATE acq_requests SET status=?, note=?, decided_by=?, updated_at=? WHERE id=?`, status, note, adminID, now(), id)
+	return err
+}
+
+// BumpRequestAttempts counts one failed download of a request and returns the new count.
+func (s *Store) BumpRequestAttempts(id int64) int {
+	s.DB.Exec(`UPDATE acq_requests SET attempts=attempts+1, updated_at=? WHERE id=?`, now(), id)
+	var n int
+	s.DB.QueryRow(`SELECT attempts FROM acq_requests WHERE id=?`, id).Scan(&n)
+	return n
+}
+
+// MarkFilmAvailable closes every open request for a film that is now in the library.
+func (s *Store) MarkFilmAvailable(kind string, tmdbID int64) {
+	w, a := inStates("status", OpenRequestStates)
+	s.DB.Exec(`UPDATE acq_requests SET status='available', note='', seen=0, updated_at=? WHERE kind=? AND tmdb_id=? AND `+w, append([]any{now(), kind, tmdbID}, a...)...)
+}
+
+// UnseenAvailable lists a user's fulfilled requests they were not told about yet.
+func (s *Store) UnseenAvailable(userID int64) ([]*AcqRequest, error) {
+	return s.queryRequests(`WHERE r.user_id=? AND r.status='available' AND r.seen=0 ORDER BY r.id`, userID)
+}
+
+// MarkRequestsSeen records that the user saw their fulfilled requests.
+func (s *Store) MarkRequestsSeen(userID int64) {
+	s.DB.Exec(`UPDATE acq_requests SET seen=1 WHERE user_id=? AND status='available'`, userID)
+}
+
+// RequestStates returns the newest request state per TMDB id (kind "movie" or "series"), for badges.
+func (s *Store) RequestStates(kind string, ids []int64) (map[int64]string, error) {
+	out := map[int64]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.DB.Query(`SELECT tmdb_id, status FROM acq_requests WHERE kind=? AND status<>'canceled' AND tmdb_id IN (?`+strings.Repeat(",?", len(ids)-1)+`) ORDER BY id`, append([]any{kind}, args...)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var st string
+		if rows.Scan(&id, &st) == nil {
+			out[id] = st
+		}
+	}
+	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------- blocklist
+
+// Blocklist marks a release as bad, so automatic grabs skip it.
+func (s *Store) Blocklist(hash, title, reason string) {
+	if hash == "" {
+		return
+	}
+	s.DB.Exec(`INSERT INTO acq_blocklist(info_hash,title,reason,created_at) VALUES(?,?,?,?) ON CONFLICT(info_hash) DO UPDATE SET reason=excluded.reason`, hash, title, reason, now())
+}
+
+// Blocklisted returns the blocklisted hashes among these.
+func (s *Store) Blocklisted(hashes []string) map[string]bool {
+	out := map[string]bool{}
+	if len(hashes) == 0 {
+		return out
+	}
+	args := make([]any, len(hashes))
+	for i, h := range hashes {
+		args[i] = h
+	}
+	rows, err := s.DB.Query(`SELECT info_hash FROM acq_blocklist WHERE info_hash IN (?`+strings.Repeat(",?", len(hashes)-1)+`)`, args...)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var h string
+		if rows.Scan(&h) == nil {
+			out[h] = true
+		}
+	}
+	return out
 }

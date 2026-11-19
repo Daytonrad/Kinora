@@ -201,6 +201,8 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 		"server_name":    s.st.Setting("server_name"),
 		"version":        Version,
 		"api_version":    APIVersion,
+		// Felfedezés: films can be requested (the acquisition module is on and this is not a kids profile)
+		"can_request": s.Acquire != nil && s.Acquire.Enabled() && !(c.Profile != nil && c.Profile.IsKids),
 	})
 }
 

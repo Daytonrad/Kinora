@@ -16,8 +16,9 @@ import (
 type Release struct {
 	Title      string   `json:"title"`
 	Year       int      `json:"year,omitempty"`
-	Season     int      `json:"season,omitempty"`  // -1 when none
-	Episode    int      `json:"episode,omitempty"` // -1 when none (or a whole season pack)
+	Season     int      `json:"season,omitempty"`   // -1 when none
+	Episode    int      `json:"episode,omitempty"`  // -1 when none (or a whole season pack)
+	Episodes   []int    `json:"episodes,omitempty"` // every episode of a multi-episode file (S01E01E02)
 	Resolution int      `json:"resolution,omitempty"`
 	Source     string   `json:"source,omitempty"` // remux, bluray, webdl, webrip, hdtv, dvd, cam, ts, tc, scr
 	Codec      string   `json:"codec,omitempty"`  // h264, hevc, av1, xvid
@@ -32,7 +33,8 @@ type Release struct {
 
 var (
 	reYearTok  = regexp.MustCompile(`^(19\d\d|20\d\d)$`)
-	reSE       = regexp.MustCompile(`(?i)^s(\d{1,2})(?:e(\d{1,3}))?(?:-?e\d{1,3})*$`)
+	reSE       = regexp.MustCompile(`(?i)^s(\d{1,2})(?:e(\d{1,3})((?:-?e\d{1,3})*))?$`)
+	reMoreEps  = regexp.MustCompile(`(?i)e(\d{1,3})`)
 	reRes      = regexp.MustCompile(`(?i)^(\d{3,4})[pi]$`)
 	reGroup    = regexp.MustCompile(`-([A-Za-z0-9]+)(?:\.[a-z0-9]{2,4})?$`)
 	reSplitter = regexp.MustCompile(`[\s._\[\]()]+`)
@@ -84,6 +86,11 @@ func ParseRelease(name string) Release {
 			r.Season, _ = strconv.Atoi(m[1])
 			if m[2] != "" {
 				r.Episode, _ = strconv.Atoi(m[2])
+				r.Episodes = []int{r.Episode}
+				for _, x := range reMoreEps.FindAllStringSubmatch(m[3], -1) {
+					n, _ := strconv.Atoi(x[1])
+					r.Episodes = append(r.Episodes, n)
+				}
 			}
 			titleDone = true
 			continue

@@ -249,3 +249,161 @@ func copyFile(src, dst string) error {
 	}
 	return os.Rename(tmp, dst)
 }
+
+// ImportShow is what lands in a series library: one or more episodes of one season.
+type ImportShow struct {
+	Source  string // a file or a folder (a season pack)
+	LibRoot string
+	Title   string
+	Year    int
+	Quality string
+	Mode    string
+	Season  int
+	Want    []int // the episodes to take; files of other episodes are left alone
+}
+
+// ImportedEpisodes says where each episode went.
+type ImportedEpisodes struct {
+	Folder   string         `json:"folder"`
+	Episodes map[int]string `json:"episodes"`
+	Linked   bool           `json:"linked"`
+}
+
+// videoFiles lists the non-sample video files of a download, with the subtitles found in it.
+func videoFiles(src string) ([]string, []string, error) {
+	info, err := os.Stat(src)
+	if err != nil {
+		return nil, nil, fmt.Errorf("a letöltött fájl nem található: %s", src)
+	}
+	if !info.IsDir() {
+		if !scanner.VideoExts[strings.ToLower(filepath.Ext(src))] {
+			return nil, nil, errors.New("a letöltés nem videófájl")
+		}
+		return []string{src}, siblingsSubs(filepath.Dir(src), src), nil
+	}
+	var videos, subs []string
+	filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if strings.EqualFold(d.Name(), "sample") || strings.EqualFold(d.Name(), "samples") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(p))
+		if subExts[ext] {
+			subs = append(subs, p)
+			return nil
+		}
+		if !scanner.VideoExts[ext] {
+			return nil
+		}
+		if fi, err := d.Info(); err == nil && strings.Contains(strings.ToLower(d.Name()), "sample") && fi.Size() < 300<<20 {
+			return nil
+		}
+		videos = append(videos, p)
+		return nil
+	})
+	sort.Strings(videos)
+	sort.Strings(subs)
+	if len(videos) == 0 {
+		return nil, nil, errors.New("a letöltésben nincs videófájl")
+	}
+	return videos, subs, nil
+}
+
+// ImportEpisodes links (or copies) episodes into "<Title> (<Year>)/Season 01/<Title> (<Year>) - S01E03 - <Quality>.ext",
+// each with the subtitles named after it. A file is matched to its episode by the SxxEyy in its name.
+func ImportEpisodes(m ImportShow) (ImportedEpisodes, error) {
+	videos, subs, err := videoFiles(m.Source)
+	if err != nil {
+		return ImportedEpisodes{}, err
+	}
+	root, err := filepath.Abs(m.LibRoot)
+	if err != nil {
+		return ImportedEpisodes{}, err
+	}
+	if st, err := os.Stat(root); err != nil || !st.IsDir() {
+		return ImportedEpisodes{}, fmt.Errorf("a könyvtár mappája nem érhető el: %s", m.LibRoot)
+	}
+	show := SafeName(m.Title)
+	if m.Year > 0 {
+		show += " (" + strconv.Itoa(m.Year) + ")"
+	}
+	dir := filepath.Join(root, show, fmt.Sprintf("Season %02d", m.Season))
+	if rel, err := filepath.Rel(root, dir); err != nil || strings.HasPrefix(rel, "..") {
+		return ImportedEpisodes{}, errors.New("érvénytelen célmappa")
+	}
+	want := map[int]bool{}
+	for _, e := range m.Want {
+		want[e] = true
+	}
+	out := ImportedEpisodes{Folder: filepath.Join(root, show), Episodes: map[int]string{}}
+	for _, v := range videos {
+		r := ParseRelease(filepath.Base(v))
+		eps := r.Episodes
+		if r.Season >= 0 && r.Season != m.Season {
+			continue
+		}
+		if len(eps) == 0 && len(videos) == 1 && len(m.Want) == 1 { // a lone file without SxxEyy: the one episode asked for
+			eps = m.Want
+		}
+		var take []int
+		for _, e := range eps {
+			if len(want) == 0 || want[e] {
+				take = append(take, e)
+			}
+		}
+		if len(take) == 0 {
+			continue
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return out, fmt.Errorf("a célmappa nem hozható létre: %w", err)
+		}
+		code := fmt.Sprintf("S%02dE%02d", m.Season, take[0])
+		if len(take) > 1 {
+			code += fmt.Sprintf("-E%02d", take[len(take)-1])
+		}
+		base := show + " - " + code
+		if m.Quality != "" {
+			base += " - " + SafeName(m.Quality)
+		}
+		ext := strings.ToLower(filepath.Ext(v))
+		target, err := freeName(dir, base, ext, v)
+		if err != nil {
+			return out, err
+		}
+		if target == "" {
+			target = filepath.Join(dir, base+ext)
+		} else {
+			linked, err := place(v, target, m.Mode)
+			if err != nil {
+				return out, err
+			}
+			out.Linked = out.Linked || linked
+		}
+		for _, e := range take {
+			out.Episodes[e] = target
+		}
+		vb := strings.TrimSuffix(filepath.Base(v), filepath.Ext(v))
+		for _, s := range subs {
+			sb := filepath.Base(s)
+			if !strings.HasPrefix(sb, vb) {
+				continue
+			}
+			dst := strings.TrimSuffix(target, ext) + strings.TrimPrefix(sb, vb)
+			if _, err := os.Stat(dst); err != nil {
+				place(s, dst, m.Mode)
+			}
+		}
+	}
+	if len(out.Episodes) == 0 {
+		return out, errors.New("a letöltésben nem találtam a keresett részeket")
+	}
+	return out, nil
+}

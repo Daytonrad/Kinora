@@ -730,3 +730,174 @@ func (f *Fetcher) Movie(ctx context.Context, id int64) (MovieInfo, error) {
 	}
 	return m, nil
 }
+
+// MovieLists are the TMDB film lists the discover page shows.
+var MovieLists = map[string]string{
+	"trending": "/trending/movie/week",
+	"popular":  "/movie/popular",
+	"upcoming": "/movie/upcoming",
+	"top":      "/movie/top_rated",
+}
+
+// MovieList returns one page of a TMDB film list (see MovieLists).
+func (f *Fetcher) MovieList(ctx context.Context, list string, page int) ([]SearchResult, error) {
+	path, ok := MovieLists[list]
+	if !ok {
+		return nil, errors.New("ismeretlen lista")
+	}
+	q := url.Values{}
+	if page > 1 {
+		q.Set("page", strconv.Itoa(page))
+	}
+	if lang := f.st.Setting("metadata_lang"); len(lang) == 5 && list == "upcoming" {
+		q.Set("region", lang[3:]) // "hu-HU" → releases in Hungary
+	}
+	var r searchResp
+	if err := f.get(ctx, path, q, &r); err != nil {
+		return nil, err
+	}
+	out := []SearchResult{}
+	for _, x := range r.Results {
+		sr := SearchResult{ID: x.ID, Title: x.Title, Year: yearOf(x.ReleaseDate), Overview: x.Overview, Rating: x.VoteAverage}
+		if x.PosterPath != "" {
+			sr.Poster = f.ImageURL + "w342" + x.PosterPath
+		}
+		out = append(out, sr)
+	}
+	return out, nil
+}
+
+// ------------------------------------------------------------------ series (acquisition M3)
+
+// TVSeason is one season of a series as TMDB lists it.
+type TVSeason struct {
+	Number       int    `json:"number"`
+	Name         string `json:"name"`
+	EpisodeCount int    `json:"episode_count"`
+	AirDate      string `json:"air_date"`
+}
+
+// TVInfo is what the acquisition module needs about a series.
+type TVInfo struct {
+	ID            int64      `json:"id"`
+	IMDb          string     `json:"imdb_id"`
+	TVDB          int64      `json:"tvdb_id"`
+	Title         string     `json:"title"`
+	OriginalTitle string     `json:"original_title"`
+	EnglishTitle  string     `json:"english_title"`
+	Year          int        `json:"year"`
+	Overview      string     `json:"overview"`
+	Poster        string     `json:"poster,omitempty"`
+	Backdrop      string     `json:"backdrop,omitempty"`
+	Ended         bool       `json:"ended"`
+	Genres        []string   `json:"genres"`
+	Seasons       []TVSeason `json:"seasons"`
+}
+
+// TVEpisode is one episode with its first air date (YYYY-MM-DD, empty when unknown).
+type TVEpisode struct {
+	Season  int    `json:"season"`
+	Episode int    `json:"episode"`
+	Title   string `json:"title"`
+	AirDate string `json:"air_date"`
+}
+
+// TV fetches a series by its TMDB id with its seasons and external ids.
+func (f *Fetcher) TV(ctx context.Context, id int64) (TVInfo, error) {
+	var d struct {
+		tvDetails
+		OriginalName string `json:"original_name"`
+		Status       string `json:"status"`
+		Seasons      []struct {
+			SeasonNumber int    `json:"season_number"`
+			Name         string `json:"name"`
+			EpisodeCount int    `json:"episode_count"`
+			AirDate      string `json:"air_date"`
+		} `json:"seasons"`
+		ExternalIDs struct {
+			IMDb string `json:"imdb_id"`
+			TVDB int64  `json:"tvdb_id"`
+		} `json:"external_ids"`
+	}
+	if err := f.get(ctx, "/tv/"+strconv.FormatInt(id, 10), url.Values{"append_to_response": {"external_ids"}}, &d); err != nil {
+		if errors.Is(err, errNotFound) {
+			return TVInfo{}, errors.New("a sorozat nem található a TMDB-ben")
+		}
+		return TVInfo{}, err
+	}
+	t := TVInfo{ID: d.ID, IMDb: d.ExternalIDs.IMDb, TVDB: d.ExternalIDs.TVDB, Title: d.Name, OriginalTitle: d.OriginalName,
+		Year: yearOf(d.FirstAirDate), Overview: d.Overview, Ended: d.Status == "Ended" || d.Status == "Canceled", Genres: []string{}, Seasons: []TVSeason{}}
+	for _, g := range d.Genres {
+		t.Genres = append(t.Genres, g.Name)
+	}
+	for _, s := range d.Seasons {
+		t.Seasons = append(t.Seasons, TVSeason{Number: s.SeasonNumber, Name: s.Name, EpisodeCount: s.EpisodeCount, AirDate: s.AirDate})
+	}
+	if d.PosterPath != "" {
+		t.Poster = f.ImageURL + "w342" + d.PosterPath
+	}
+	if d.BackdropPath != "" {
+		t.Backdrop = f.ImageURL + "w1280" + d.BackdropPath
+	}
+	t.EnglishTitle = t.Title
+	if !strings.HasPrefix(f.st.Setting("metadata_lang"), "en") {
+		var en struct {
+			Name string `json:"name"`
+		}
+		if err := f.get(ctx, "/tv/"+strconv.FormatInt(id, 10), url.Values{"language": {"en-US"}}, &en); err == nil && en.Name != "" {
+			t.EnglishTitle = en.Name
+		}
+	}
+	return t, nil
+}
+
+// TVSeasonEpisodes lists the episodes of one season.
+func (f *Fetcher) TVSeasonEpisodes(ctx context.Context, id int64, season int) ([]TVEpisode, error) {
+	var d struct {
+		Episodes []struct {
+			EpisodeNumber int    `json:"episode_number"`
+			Name          string `json:"name"`
+			AirDate       string `json:"air_date"`
+		} `json:"episodes"`
+	}
+	if err := f.get(ctx, "/tv/"+strconv.FormatInt(id, 10)+"/season/"+strconv.Itoa(season), nil, &d); err != nil {
+		return nil, err
+	}
+	out := make([]TVEpisode, 0, len(d.Episodes))
+	for _, e := range d.Episodes {
+		out = append(out, TVEpisode{Season: season, Episode: e.EpisodeNumber, Title: e.Name, AirDate: e.AirDate})
+	}
+	return out, nil
+}
+
+// TVLists are the TMDB series lists the discover page shows.
+var TVLists = map[string]string{
+	"tv_trending": "/trending/tv/week",
+	"tv_popular":  "/tv/popular",
+	"tv_airing":   "/tv/on_the_air",
+}
+
+// TVList returns one page of a TMDB series list (see TVLists).
+func (f *Fetcher) TVList(ctx context.Context, list string, page int) ([]SearchResult, error) {
+	path, ok := TVLists[list]
+	if !ok {
+		return nil, errors.New("ismeretlen lista")
+	}
+	q := url.Values{}
+	if page > 1 {
+		q.Set("page", strconv.Itoa(page))
+	}
+	var r searchResp
+	if err := f.get(ctx, path, q, &r); err != nil {
+		return nil, err
+	}
+	out := []SearchResult{}
+	for _, x := range r.Results {
+		sr := SearchResult{ID: x.ID, Title: x.Name, Year: yearOf(x.FirstAirDate), Overview: x.Overview, Rating: x.VoteAverage}
+		if x.PosterPath != "" {
+			sr.Poster = f.ImageURL + "w342" + x.PosterPath
+		}
+		out = append(out, sr)
+	}
+	return out, nil
+}
