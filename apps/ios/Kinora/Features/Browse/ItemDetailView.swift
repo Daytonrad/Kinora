@@ -23,6 +23,7 @@ struct ItemDetailView: View {
     /// The version of a film picked here; nil = the one played last.
     @State private var selectedVersion: Int?
     @State private var subSearch: Item?
+    @State private var langsFor: Item?
 
     private struct Notice {
         var title: String
@@ -63,6 +64,7 @@ struct ItemDetailView: View {
             Text(notice?.message ?? "")
         }
         .sheet(item: $subSearch) { SubtitleSearchView(item: $0) }
+        .sheet(item: $langsFor) { TitleLangsSheet(item: $0) }
         .kinoraScreen()
         .navigationTitle(current.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -168,6 +170,12 @@ struct ItemDetailView: View {
                                 .padding(.vertical, 6)
                                 .contentShape(.rect)
                         }
+                    }
+                    // the film's or series' own audio and subtitle language
+                    Button { Haptic.tap.play(); langsFor = current } label: {
+                        Label(L("Nyelv"), systemImage: "captions.bubble")
+                            .padding(.vertical, 6)
+                            .contentShape(.rect)
                     }
                 }
                 .font(.subheadline.weight(.semibold))

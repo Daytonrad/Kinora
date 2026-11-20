@@ -224,3 +224,65 @@ func Decide(it *store.Item, req PlaybackRequest, audioLangs []string, maxKbps in
 	d.Reasons = why
 	return d
 }
+
+// ChooseSubtitle picks the text subtitle a playback starts with (-1: none). A title's own choice comes first:
+// "off", or a language (its full track before a forced one); a language this file lacks falls back to the
+// profile: mode "off" shows none, "always" the first of its languages, "auto" one only when the audio is
+// not in the profile's first language, and otherwise a forced track in one of its languages.
+func ChooseSubtitle(streams []store.StreamInfo, audioIdx int, titleLang string, langs []string, mode string) int {
+	var subs []store.StreamInfo
+	var audio *store.StreamInfo
+	for i, s := range streams {
+		switch {
+		case s.Type == "subtitle" && s.TextBased:
+			subs = append(subs, s)
+		case s.Type == "audio" && s.TypeIndex == audioIdx:
+			audio = &streams[i]
+		}
+	}
+	find := func(lang string, forced bool) int {
+		for _, s := range subs {
+			if s.Forced == forced && strings.EqualFold(s.Lang, lang) {
+				return s.TypeIndex
+			}
+		}
+		return -1
+	}
+	switch titleLang {
+	case "":
+	case "off":
+		return -1
+	default:
+		if i := find(titleLang, false); i >= 0 {
+			return i
+		}
+		if i := find(titleLang, true); i >= 0 {
+			return i
+		}
+	}
+	if mode == "off" || len(subs) == 0 {
+		return -1
+	}
+	foreign := audio == nil || len(langs) == 0 || !strings.EqualFold(audio.Lang, langs[0])
+	if mode == "always" || foreign {
+		for _, l := range langs {
+			if i := find(l, false); i >= 0 {
+				return i
+			}
+		}
+	}
+	for _, l := range langs {
+		if i := find(l, true); i >= 0 {
+			return i
+		}
+	}
+	return -1
+}
+
+// WithTitleLang puts a title's chosen audio language before the profile's.
+func WithTitleLang(lang string, langs []string) []string {
+	if lang == "" {
+		return langs
+	}
+	return append([]string{lang}, langs...)
+}

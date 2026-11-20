@@ -460,6 +460,17 @@ ALTER TABLE acq_requests ADD COLUMN library_id INTEGER REFERENCES libraries(id) 
 ALTER TABLE acq_clients ADD COLUMN category_tv TEXT NOT NULL DEFAULT '';
 ALTER TABLE acq_clients ADD COLUMN save_path_tv TEXT NOT NULL DEFAULT '';
 `,
+	// 13: a profile's audio and subtitle language for one film or series (episodes share their series')
+	`
+CREATE TABLE title_langs(
+  profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  title_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  audio_lang TEXT NOT NULL DEFAULT '',
+  sub_lang TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(profile_id, title_id)
+);
+`,
 }
 
 func (s *Store) migrate() error {

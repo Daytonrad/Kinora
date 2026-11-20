@@ -223,10 +223,18 @@ final class PlayerModel: NSObject {
             self.info = info
             audioIdx = info.audioIdx.flatMap { $0 >= 0 ? $0 : nil }
             let remembered = item.seriesId.flatMap { AppSettings.languages(series: $0) }
+            // A newer server keeps the film's or series' languages per profile and already applied them
+            // (audio_idx, sub_idx). A series remembered only on this device moves to the server once.
+            let serverChose = info.titleLangs.map { !$0.audioLang.isEmpty || !$0.subLang.isEmpty } ?? false
+            let useServer = localInfo == nil && info.subIdx != nil && (serverChose || remembered == nil)
+            if !languagesApplied, localInfo == nil, info.subIdx != nil, !serverChose, let r = remembered {
+                let c = client, id = item.id
+                Task { try? await c.setTitleLangs(id, audio: r.audio, subtitle: r.subtitle.map { $0.isEmpty ? TitleLangs.off : $0 }) }
+            }
             if !languagesApplied, localInfo == nil {
                 languagesApplied = true
                 // The series was last watched in another audio language: ask for that track instead.
-                if let a = remembered?.audioTrack(in: info.audioTracks), a.typeIndex != audioIdx {
+                if !useServer, let a = remembered?.audioTrack(in: info.audioTracks), a.typeIndex != audioIdx {
                     audioIdx = a.typeIndex
                     if let s = info.session { session = s }
                     await start(at: t)
@@ -235,7 +243,9 @@ final class PlayerModel: NSObject {
             }
             if !subtitlesChosen {
                 subtitlesChosen = true
-                if let pick = remembered?.subtitleTrack(in: info.textSubtitles) {
+                if useServer, let s = info.subIdx {
+                    selectSubtitle(s >= 0 ? info.textSubtitles.first(where: { $0.idx == s }) : nil, remember: false)
+                } else if let pick = remembered?.subtitleTrack(in: info.textSubtitles) {
                     selectSubtitle(pick, remember: false)
                 } else {
                     selectSubtitle(defaultSubtitle(info.textSubtitles, mode: subMode, langs: subLangs), remember: false)
@@ -320,12 +330,18 @@ final class PlayerModel: NSObject {
         selectSubtitle(track)
     }
 
-    /// The series starts with these languages next time.
+    /// The film or series starts with these languages next time: kept on the server for this profile (every
+    /// device), and for a series on this device too (an older server, offline playback).
     private func rememberLanguages() {
-        guard let series = item.seriesId else { return }
         let audio = info?.audioTracks.first { $0.typeIndex == audioIdx }?.lang
-        AppSettings.setLanguages(LanguageChoice(audio: audio, subtitle: subtitle?.lang ?? (subtitle == nil ? "" : nil),
-                                                subtitleForced: subtitle?.forced), series: series)
+        if let series = item.seriesId {
+            AppSettings.setLanguages(LanguageChoice(audio: audio, subtitle: subtitle?.lang ?? (subtitle == nil ? "" : nil),
+                                                    subtitleForced: subtitle?.forced), series: series)
+        }
+        guard !isOffline else { return }
+        let sub = subtitle == nil ? TitleLangs.off : subtitle?.lang
+        let c = client, id = item.id
+        Task { try? await c.setTitleLangs(id, audio: audio, subtitle: sub) }
     }
 
     func shiftSubtitles(by delta: Double) {

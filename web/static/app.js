@@ -895,6 +895,22 @@ function versionPicker(it, versions) {
   }
   return group;
 }
+// the audio and subtitle language this profile starts the film / series with; an episode stands for its series
+async function titleLangsDialog(it) {
+  const l = await GET(`/api/items/${it.id}/langs`);
+  const series = it.kind !== 'movie';
+  const opts = (list, cur) => list.map(c => h('option', { value: c, selected: c === cur }, langName(c)));
+  const audio = h('select', null, h('option', { value: '' }, T.tlProfile), opts(l.audio.includes(l.audio_lang) || !l.audio_lang ? l.audio : [l.audio_lang, ...l.audio], l.audio_lang));
+  const sub = h('select', null, h('option', { value: '' }, T.tlProfile), h('option', { value: 'off', selected: l.sub_lang === 'off' }, T.subOff),
+    opts(l.subs.includes(l.sub_lang) || !l.sub_lang || l.sub_lang === 'off' ? l.subs : [l.sub_lang, ...l.subs], l.sub_lang));
+  modal(T.tlTitle, h('div.a-form', null,
+    h('p.small.muted', null, series ? T.tlSeriesHint : T.tlMovieHint),
+    field(T.audioTrack, audio, l.audio.length ? null : T.tlNoAudio), field(T.subtitle, sub, l.subs.length ? null : T.tlNoSubs)),
+  close => [h('button.btn', { onclick: close }, T.cancel), h('button.btn.primary', { onclick: async () => {
+    await api('PUT', `/api/items/${it.id}/langs`, { audio_lang: audio.value, sub_lang: sub.value }); close(); toast(T.saved);
+  } }, T.save)]);
+}
+
 async function viewItem(id) {
   const main = shell('item');
   const d = await GET('/api/items/' + id);
@@ -957,6 +973,8 @@ async function viewItem(id) {
     state.me.user.is_admin && (it.kind === 'movie' || it.kind === 'series') && [T.fixMatch, () => fixMatchDialog(it)],
     state.me.user.is_admin && (it.kind === 'series' || it.kind === 'season') && [T.segAnalyze, async () => { const r = await POST('/api/admin/segments/analyze', { item_id: it.id }); toast(T.segQueued(r.seasons)); }],
   ]) }, icon('more', true), T.moreBtn);
+  const langBtn = (it.kind === 'movie' || it.kind === 'series' || it.kind === 'episode') &&
+    h('button.btn', { title: T.tlTitle, onclick: () => titleLangsDialog(it) }, icon('cc'), T.tlBtn);
   const tagBox = !kidsP && tagEditor(it);
   const sideInfo = h('dl.side-info', null,
     it.genres && [h('dt', null, T.genres), h('dd', null, it.genres.join(', '))],
@@ -976,7 +994,7 @@ async function viewItem(id) {
       d.versions && h('div.versions-wrap', null, h('div.vhead', null, T.versionsN(d.versions.length)), versionPicker(it, d.versions)),
       h('div.actions', null,
         playTarget && h('button.btn.primary.big', { onclick: () => go('#/play/' + playTarget.id) }, icon('play'), playLabel),
-        playedBtn, favBtn, hideBtn, stars, moreBtn)))));
+        playedBtn, favBtn, hideBtn, stars, langBtn, moreBtn)))));
   main.append(h('div.below', null,
     sideInfo.childElementCount > 0 && h('section', null, h('h2', null, T.data), sideInfo), // a series without metadata has nothing to list
     tagBox && h('section', null, h('h2', null, T.tags), tagBox)));
@@ -1573,6 +1591,10 @@ async function viewPlayer(id, q) {
     return out;
   }
   function chooseInitialSubtitle() {
+    if (typeof info.sub_idx === 'number') { // the server picked it (the title's choice, then the profile's)
+      subIdx = info.streams.some(s => s.type === 'subtitle' && s.text_based && s.type_index === info.sub_idx) ? info.sub_idx : -1;
+      return;
+    }
     const langs = (profile.sub_langs || '').split(',').filter(Boolean);
     const subs = info.streams.filter(s => s.type === 'subtitle' && s.text_based);
     if (profile.sub_mode === 'off' || !subs.length) return;
@@ -1593,6 +1615,11 @@ async function viewPlayer(id, q) {
     pop.querySelector('button')?.focus();
   }
   const opt = (label, on, fn) => h('button.opt' + (on ? '.on' : ''), { 'aria-pressed': on ? 'true' : 'false', onclick: () => { pop.classList.add('hidden'); fn(); } }, on ? icon('check') : h('span', { class: 'opt-gap' }), label);
+  // a language picked in the player is kept for the film / series: the next episode starts with it too
+  function keepLangs(v) {
+    if (v.audio_lang === '' || v.sub_lang === '') return; // a track without a language says nothing to keep
+    api('PUT', `/api/items/${id}/langs`, v, { quiet: true }).catch(() => {});
+  }
   function buildTracks() {
     const langs = (profile.sub_langs || '').split(',').filter(Boolean), alangs = (profile.audio_langs || '').split(',').filter(Boolean);
     const audios = info.streams.filter(s => s.type === 'audio');
@@ -1602,12 +1629,12 @@ async function viewPlayer(id, q) {
     const hiddenCount = (audios.length - visA.length) + (subs.length - visS.length);
     return [
       h('h3', null, T.audioTrack),
-      ...visA.map(a => opt(`${langName(a.lang)} – ${a.codec}${a.channels ? ' ' + a.channels + 'ch' : ''}${a.title ? ' (' + a.title + ')' : ''}`, a.type_index === audioIdx, () => { audioIdx = a.type_index; start(pos()); })),
+      ...visA.map(a => opt(`${langName(a.lang)} – ${a.codec}${a.channels ? ' ' + a.channels + 'ch' : ''}${a.title ? ' (' + a.title + ')' : ''}`, a.type_index === audioIdx, () => { audioIdx = a.type_index; keepLangs({ audio_lang: a.lang }); start(pos()); })),
       h('h3', null, T.subtitle),
-      opt(T.subOff, subIdx < 0 && burnIdx == null, () => { subIdx = -1; if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); }),
+      opt(T.subOff, subIdx < 0 && burnIdx == null, () => { subIdx = -1; keepLangs({ sub_lang: 'off' }); if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); }),
       ...visS.map(s => s.text_based
-        ? opt(`${langName(s.lang)}${s.forced ? ` (${T.forced})` : ''}${s.external ? ' · ' + T.external : ''}`, s.type_index === subIdx, () => { subIdx = s.type_index; if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); })
-        : opt(`${langName(s.lang)} · ${T.burnIn} (${s.codec})`, s.type_index === burnIdx, () => { subIdx = -1; burnIdx = s.type_index; applySubtitle(); start(pos()); })),
+        ? opt(`${langName(s.lang)}${s.forced ? ` (${T.forced})` : ''}${s.external ? ' · ' + T.external : ''}`, s.type_index === subIdx, () => { subIdx = s.type_index; keepLangs({ sub_lang: s.lang }); if (burnIdx != null) { burnIdx = null; start(pos()); } else applySubtitle(); })
+        : opt(`${langName(s.lang)} · ${T.burnIn} (${s.codec})`, s.type_index === burnIdx, () => { subIdx = -1; burnIdx = s.type_index; keepLangs({ sub_lang: s.lang }); applySubtitle(); start(pos()); })),
       h('button.opt', { onclick: () => { pop._b = null; put(pop, h('h3', null, T.subSearch), subSearchPanel(item, st => {
         info.streams.push(st); subIdx = st.type_index; subCache = null; applySubtitle(); pop.classList.add('hidden');
       })); pop.classList.remove('hidden'); } }, h('span', { class: 'opt-gap' }), T.subSearch + '…'),

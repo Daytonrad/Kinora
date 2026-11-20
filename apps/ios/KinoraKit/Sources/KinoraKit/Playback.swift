@@ -113,6 +113,10 @@ public struct PlaybackInfo: Decodable, Sendable {
     public var segments: [Segment]?
     public var subtitles: [SubtitleTrack]?
     public var audioIdx: Int?
+    /// The subtitle the server picked to start with (the title's choice, then the profile's); -1 = none.
+    /// nil from an older server: the app picks on its own.
+    public var subIdx: Int?
+    public var titleLangs: TitleLangs?
     public var streams: [MediaStream]?
     public var chapters: [Chapter]?
     public var streamToken: String?

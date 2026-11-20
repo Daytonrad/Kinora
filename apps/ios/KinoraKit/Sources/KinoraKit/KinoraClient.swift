@@ -47,6 +47,10 @@ public actor KinoraClient {
         try await decode(send("PATCH", path, body: body))
     }
 
+    public func put<R: Decodable & Sendable>(_ path: String, _ body: some Encodable & Sendable, as: R.Type = R.self) async throws -> R {
+        try await decode(send("PUT", path, body: body))
+    }
+
     public func delete(_ path: String) async throws {
         _ = try await send("DELETE", path, body: Optional<Empty>.none)
     }

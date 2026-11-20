@@ -58,6 +58,8 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/hls/{session}/{file}", s.media(false, s.handleHLS))
 	m.HandleFunc("DELETE /api/hls/{session}", s.authed(s.handleHLSStop))
 	m.HandleFunc("POST /api/items/{id}/playback", s.withProfile(s.handlePlayback))
+	m.HandleFunc("GET /api/items/{id}/langs", s.withProfile(s.handleTitleLangs))
+	m.HandleFunc("PUT /api/items/{id}/langs", s.withProfile(s.handleTitleLangsPut))
 	m.HandleFunc("GET /api/items/{id}/segments", s.withProfile(s.handleSegments))
 	m.HandleFunc("GET /api/stream/{id}", s.media(true, s.handleStream))
 	m.HandleFunc("GET /api/items/{id}/subtitles/{idx}", s.media(true, s.handleSubtitle))

@@ -228,3 +228,38 @@ func TestHEVCTranscodeArgs(t *testing.T) {
 		t.Fatalf("libx264 args: %s", a)
 	}
 }
+
+func TestChooseSubtitle(t *testing.T) {
+	streams := []store.StreamInfo{
+		{Type: "audio", TypeIndex: 0, Lang: "eng"}, {Type: "audio", TypeIndex: 1, Lang: "hun"},
+		{Type: "subtitle", TypeIndex: 0, Lang: "hun", TextBased: true, Forced: true},
+		{Type: "subtitle", TypeIndex: 1, Lang: "hun", TextBased: true},
+		{Type: "subtitle", TypeIndex: 2, Lang: "eng", TextBased: true},
+		{Type: "subtitle", TypeIndex: 3, Lang: "ger", TextBased: false},
+	}
+	hu := []string{"hun", "eng"}
+	cases := []struct {
+		audio int
+		title string
+		langs []string
+		mode  string
+		want  int
+	}{
+		{0, "", hu, "auto", 1},       // English audio for a Hungarian: Hungarian subtitles
+		{1, "", hu, "auto", 0},       // Hungarian audio: only the forced track
+		{1, "", hu, "always", 1},     // always: the full one
+		{0, "", hu, "off", -1},       // the profile says off
+		{0, "off", hu, "always", -1}, // the title says off
+		{1, "eng", hu, "off", 2},     // the title's language beats the profile's "off"
+		{1, "ger", hu, "auto", 0},    // only an image track in that language: back to the profile
+		{0, "", nil, "auto", -1},     // no languages: nothing to look for
+	}
+	for i, c := range cases {
+		if got := ChooseSubtitle(streams, c.audio, c.title, c.langs, c.mode); got != c.want {
+			t.Errorf("case %d: got %d, want %d", i, got, c.want)
+		}
+	}
+	if l := WithTitleLang("eng", hu); len(l) != 3 || l[0] != "eng" {
+		t.Errorf("WithTitleLang: %v", l)
+	}
+}

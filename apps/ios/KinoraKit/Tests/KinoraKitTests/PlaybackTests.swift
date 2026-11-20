@@ -38,6 +38,21 @@ struct PlaybackTests {
         #expect(p.item.seasonNum == 2)
     }
 
+    @Test func titleLanguages() throws {
+        // the server's starting subtitle and the series' saved choice come with the playback answer
+        let json = """
+        {"audio_idx":1,"sub_idx":-1,"title_langs":{"title_id":3,"audio_lang":"hun","sub_lang":"off"},"duration":20,
+         "item":{"id":10,"kind":"episode","series_id":3,"title":"1. rész"},"mode":"direct","url":"/api/stream/10?st=t"}
+        """
+        let p = try JSONDecoder.kinora.decode(PlaybackInfo.self, from: Data(json.utf8))
+        #expect(p.subIdx == -1 && p.titleLangs?.titleId == 3 && p.titleLangs?.subLang == TitleLangs.off)
+        // an older server sends neither
+        let old = try JSONDecoder.kinora.decode(PlaybackInfo.self, from: Data(#"{"mode":"direct","url":"/x","item":{"id":1,"kind":"movie","title":"M"}}"#.utf8))
+        #expect(old.subIdx == nil && old.titleLangs == nil)
+        let l = try JSONDecoder.kinora.decode(TitleLangs.self, from: Data(#"{"title_id":8,"audio_lang":"","sub_lang":"eng","audio":["eng","hun"],"subs":["eng"]}"#.utf8))
+        #expect(l.audio == ["eng", "hun"] && l.subLang == "eng" && l.audioLang.isEmpty)
+    }
+
     @Test func requestEncodesSnakeCase() throws {
         let body = PlaybackRequest(start: 30, force: "transcode", prevSession: "s1")
         let obj = try JSONSerialization.jsonObject(with: JSONEncoder.kinora.encode(body)) as? [String: Any]

@@ -68,7 +68,9 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request, c *reqCt
 	if req.MaxBitrate > 0 && (maxK == 0 || req.MaxBitrate < maxK) {
 		maxK = req.MaxBitrate
 	}
-	d := media.Decide(it, req, splitLangs(c.Profile.AudioLangs), maxK, s.Encoders.ToneMap())
+	// the profile's languages, with this film's or series' own choice first
+	tl := s.st.TitleLangsFor(c.Profile.ID, store.TitleOf(it))
+	d := media.Decide(it, req, media.WithTitleLang(tl.AudioLang, splitLangs(c.Profile.AudioLangs)), maxK, s.Encoders.ToneMap())
 	tok := s.mintStreamToken(c, it.ID)
 	subs := []map[string]any{}
 	for _, st := range it.Streams {
@@ -84,6 +86,8 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request, c *reqCt
 		"mode":          d.Mode,
 		"reasons":       d.Reasons,
 		"audio_idx":     d.AudioIdx,
+		"sub_idx":       media.ChooseSubtitle(it.Streams, d.AudioIdx, tl.SubLang, splitLangs(c.Profile.SubLangs), c.Profile.SubMode),
+		"title_langs":   tl,
 		"streams":       it.Streams,
 		"chapters":      it.Chapters,
 		"duration":      it.RuntimeSec,
@@ -297,7 +301,8 @@ func (s *Server) handleDownloadCreate(w http.ResponseWriter, r *http.Request, c 
 		writeErr(w, http.StatusBadRequest, "ismeretlen minőség (1080p, 720p, 480p, 360p vagy original)")
 		return
 	}
-	audio := media.ChooseAudio(it.Streams, in.AudioIdx, splitLangs(c.Profile.AudioLangs))
+	tl := s.st.TitleLangsFor(c.Profile.ID, store.TitleOf(it))
+	audio := media.ChooseAudio(it.Streams, in.AudioIdx, media.WithTitleLang(tl.AudioLang, splitLangs(c.Profile.AudioLangs)))
 	job := s.Downloads.Enqueue(it, c.User.ID, q, audio, downloadName(it, q.Name)+".mp4")
 	writeJSON(w, http.StatusAccepted, job)
 }
