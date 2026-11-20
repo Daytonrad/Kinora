@@ -14,6 +14,7 @@ struct SearchView: View {
             if let results {
                 if results.isEmpty {
                     ContentUnavailableView.search(text: query).padding(.top, 60)
+                    askLink
                 } else {
                     LazyVGrid(columns: metrics.posterGrid, spacing: metrics.regular ? 28 : 20) {
                         ForEach(results) { item in
@@ -23,6 +24,7 @@ struct SearchView: View {
                     }
                     .padding(.horizontal, metrics.regular ? metrics.gutter : 16)
                     .padding(.vertical, 16)
+                    askLink.padding(.bottom, 24)
                 }
             } else if let error {
                 LoadingState(error: error) { Task { await search(query) } }
@@ -44,6 +46,23 @@ struct SearchView: View {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
             await search(q)
+        }
+    }
+
+    /// Not in the library: the same title in Felfedezés, where it can be requested.
+    @ViewBuilder private var askLink: some View {
+        if model.canRequest {
+            Button {
+                model.discoverQuery = query.trimmingCharacters(in: .whitespaces)
+                model.tab = .discover
+            } label: {
+                Label(L("Nincs meg? Kérd meg a Felfedezésben"), systemImage: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+                    .contentShape(.rect)
+            }
+            .foregroundStyle(Theme.amber)
+            .frame(maxWidth: .infinity)
         }
     }
 

@@ -49,9 +49,13 @@ final class AppModel {
     /// A language is being downloaded for the picker.
     private(set) var languageLoading = false
 
-    enum Tab: Hashable { case home, libraries, search, downloads }
+    enum Tab: Hashable { case home, libraries, search, discover, downloads }
     /// The selected tab and the home tab's stack, so links from widgets can open a title.
     var tab: Tab = .home
+    /// Felfedezés: a title the library search did not find, handed over to the request search.
+    var discoverQuery = ""
+    /// Films and series can be requested from this profile (the server's acquisition is on).
+    var canRequest: Bool { me?.canRequest == true }
     var homePath = NavigationPath()
     /// A link that arrived before the user reached home (still launching, picking a profile).
     private var pendingLink: KinoraLink?

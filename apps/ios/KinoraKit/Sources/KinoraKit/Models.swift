@@ -72,6 +72,8 @@ public struct Me: Codable, Sendable, Equatable {
     public var mediaToken: String
     public var serverName: String
     public var version: String
+    /// Felfedezés: films and series can be requested (acquisition is on, not a kids profile).
+    public var canRequest: Bool?
 }
 
 /// What the server records about this device (shown under Settings → Devices).

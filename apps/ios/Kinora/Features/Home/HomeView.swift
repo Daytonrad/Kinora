@@ -1,9 +1,11 @@
 import SwiftUI
 import KinoraKit
 
-/// Signed in with a profile: home, libraries and search tabs.
+/// Signed in with a profile: home, libraries, search, Felfedezés (when requests are on) and downloads tabs.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
+    /// Requested titles that reached the library since the user last looked.
+    @State private var arrived: [AcqRequest] = []
 
     var body: some View {
         @Bindable var model = model
@@ -17,12 +19,24 @@ struct HomeView: View {
             NavigationStack { SearchView().browseDestinations() }
                 .tabItem { Label(L("Keresés"), systemImage: "magnifyingglass") }
                 .tag(AppModel.Tab.search)
+            if model.canRequest {
+                DiscoverTab()
+                    .tabItem { Label(L("Felfedezés"), systemImage: "sparkles") }
+                    .tag(AppModel.Tab.discover)
+            }
             NavigationStack { DownloadsView() }
                 .tabItem { Label(L("Letöltések"), systemImage: "arrow.down.circle") }
                 .tag(AppModel.Tab.downloads)
         }
         // A widget link that arrived while signing in.
         .onAppear { model.handlePendingLink() }
+        .task(id: model.me?.profile?.id) { await announceArrivals() }
+        .alert(L("Megérkezett, amit kértél"), isPresented: Binding(get: { !arrived.isEmpty && !model.playerVisible },
+                                                                set: { if !$0 { arrived = [] } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(arrived.prefix(5).map(\.title).joined(separator: "\n"))
+        }
         // A new profile sees its own home: rebuild everything when it changes.
         .id(model.me?.profile?.id)
         .sheet(isPresented: $model.settingsVisible) { SettingsView() }
@@ -35,6 +49,16 @@ struct HomeView: View {
         .fullScreenCover(isPresented: Binding(get: { model.playerVisible && model.player != nil },
                                               set: { model.playerVisible = $0 })) {
             if let p = model.player { PlayerView(player: p) }
+        }
+    }
+}
+
+extension HomeView {
+    /// Like the web client: titles the user asked for that arrived are announced once.
+    private func announceArrivals() async {
+        guard model.canRequest else { return }
+        if let list = try? await model.api({ try await $0.unseenRequests() }), !list.isEmpty {
+            arrived = list
         }
     }
 }
