@@ -65,8 +65,10 @@ type ClientConfig struct {
 	URL        string
 	Username   string
 	Password   string
-	Category   string
+	Category   string // films, and series when CategoryTV is empty
 	SavePath   string
+	CategoryTV string // series
+	SavePathTV string
 	PathRemote string // where the client says files are…
 	PathLocal  string // …and where Kinora sees them
 }

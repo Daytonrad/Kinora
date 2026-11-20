@@ -455,6 +455,11 @@ ALTER TABLE acq_indexers ADD COLUMN config TEXT NOT NULL DEFAULT '{}';
 	`
 ALTER TABLE acq_requests ADD COLUMN library_id INTEGER REFERENCES libraries(id) ON DELETE SET NULL;
 `,
+	// 12: series downloads can go to their own client category and folder
+	`
+ALTER TABLE acq_clients ADD COLUMN category_tv TEXT NOT NULL DEFAULT '';
+ALTER TABLE acq_clients ADD COLUMN save_path_tv TEXT NOT NULL DEFAULT '';
+`,
 }
 
 func (s *Store) migrate() error {

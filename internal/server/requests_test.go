@@ -23,6 +23,20 @@ func fakeTMDB() *httptest.Server {
 			fmt.Fprint(w, `{"episodes":[{"episode_number":1,"air_date":"2011-04-17"},{"episode_number":2,"air_date":"2011-04-24"}]}`)
 		case r.URL.Path == "/trending/tv/week":
 			fmt.Fprint(w, `{"results":[{"id":1399,"name":"Trónok harca","first_air_date":"2011-04-17"}]}`)
+		case r.URL.Path == "/watch/providers/movie":
+			fmt.Fprint(w, `{"results":[{"provider_id":8,"provider_name":"Netflix","logo_path":"/nf.jpg"}]}`)
+		case r.URL.Path == "/watch/providers/tv":
+			fmt.Fprint(w, `{"results":[{"provider_id":8,"provider_name":"Netflix"},{"provider_id":350,"provider_name":"Apple TV+"}]}`)
+		case r.URL.Path == "/genre/movie/list", r.URL.Path == "/genre/tv/list":
+			fmt.Fprint(w, `{"genres":[{"id":18,"name":"Dráma"}]}`)
+		case r.URL.Path == "/movie/603/watch/providers":
+			fmt.Fprint(w, `{"results":{"HU":{"flatrate":[{"provider_id":8,"provider_name":"Netflix"}]}}}`)
+		case r.URL.Path == "/discover/movie":
+			if r.URL.Query().Get("with_watch_providers") != "8" {
+				fmt.Fprint(w, `{"page":1,"total_pages":0,"results":[]}`)
+				return
+			}
+			fmt.Fprint(w, `{"page":1,"total_pages":4,"total_results":70,"results":[{"id":603,"title":"Mátrix","release_date":"1999-03-31"}]}`)
 		case r.URL.Path == "/trending/movie/week", r.URL.Path == "/search/movie":
 			fmt.Fprint(w, `{"results":[{"id":603,"title":"Mátrix","release_date":"1999-03-31","poster_path":"/m.jpg"}]}`)
 		default:
@@ -72,6 +86,30 @@ func TestRequestsAPI(t *testing.T) {
 	if code := anna.do("GET", "/api/discover?list=nope", nil, nil); code != 400 {
 		t.Errorf("unknown list: %d", code)
 	}
+	// the filter bar: streaming services of the region (films first, then series-only ones) and genres
+	var opts struct {
+		Region    string `json:"region"`
+		Providers []struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"providers"`
+		MovieGenres []struct{ ID int } `json:"movie_genres"`
+	}
+	if code := anna.do("GET", "/api/discover/options", nil, &opts); code != 200 || opts.Region != "HU" || len(opts.Providers) != 2 ||
+		opts.Providers[1].Name != "Apple TV+" || len(opts.MovieGenres) != 1 {
+		t.Fatalf("options: %d %+v", code, opts)
+	}
+	var page struct {
+		Results    []map[string]any `json:"results"`
+		TotalPages int              `json:"total_pages"`
+	}
+	if code := anna.do("GET", "/api/discover/browse?kind=movie&providers=8,x&sort=popular&page=1", nil, &page); code != 200 || len(page.Results) != 1 ||
+		page.Results[0]["kind"] != "movie" || page.TotalPages != 4 {
+		t.Fatalf("browse: %d %+v", code, page)
+	}
+	if code := anna.do("GET", "/api/discover/browse?sort=shuffle", nil, nil); code != 400 {
+		t.Errorf("unknown sort: %d", code)
+	}
 	// where a request may go: films libraries for a film, series libraries for a series
 	var libs struct {
 		Movies []struct {
@@ -97,6 +135,9 @@ func TestRequestsAPI(t *testing.T) {
 	anna.do("GET", "/api/discover/movies/603", nil, &d)
 	if r, _ := d["request"].(map[string]any); r == nil || r["status"] != "pending" {
 		t.Errorf("movie detail request: %v", d)
+	}
+	if wt, _ := d["watch"].(map[string]any); wt == nil || len(wt["stream"].([]any)) != 1 {
+		t.Errorf("movie detail where to watch: %v", d["watch"])
 	}
 	var mine []map[string]any
 	if anna.do("GET", "/api/requests", nil, &mine); len(mine) != 1 || mine[0]["user_name"] != "anna" {

@@ -274,7 +274,8 @@ func validClient(x *store.AcqClient) string {
 	if !strings.HasPrefix(x.URL, "http://") && !strings.HasPrefix(x.URL, "https://") {
 		return "a letöltőkliens címe http:// vagy https:// kezdetű legyen"
 	}
-	x.Category = strings.TrimSpace(x.Category)
+	x.Category, x.CategoryTV = strings.TrimSpace(x.Category), strings.TrimSpace(x.CategoryTV)
+	x.SavePath, x.SavePathTV = strings.TrimSpace(x.SavePath), strings.TrimSpace(x.SavePathTV)
 	x.PathRemote, x.PathLocal = strings.TrimSpace(x.PathRemote), strings.TrimSpace(x.PathLocal)
 	if (x.PathRemote == "") != (x.PathLocal == "") {
 		return "az útvonal-leképezéshez mindkét mezőt töltsd ki (vagy egyiket se)"
@@ -286,7 +287,7 @@ var clientNames = map[string]string{"qbittorrent": "qBittorrent", "transmission"
 
 func clientConfig(x *store.AcqClient) acquire.ClientConfig {
 	return acquire.ClientConfig{ID: x.ID, Kind: x.Kind, URL: x.URL, Username: x.Username, Password: x.Password, Category: x.Category,
-		SavePath: x.SavePath, PathRemote: x.PathRemote, PathLocal: x.PathLocal}
+		SavePath: x.SavePath, CategoryTV: x.CategoryTV, SavePathTV: x.SavePathTV, PathRemote: x.PathRemote, PathLocal: x.PathLocal}
 }
 
 func (s *Server) handleAcqClientSave(w http.ResponseWriter, r *http.Request, c *reqCtx) {

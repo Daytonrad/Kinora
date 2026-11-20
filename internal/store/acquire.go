@@ -32,8 +32,10 @@ type AcqClient struct {
 	URL        string `json:"url"`
 	Username   string `json:"username"`
 	Password   string `json:"password"`
-	Category   string `json:"category"`
-	SavePath   string `json:"save_path"`
+	Category   string `json:"category"`  // films (and series, when CategoryTV is empty)
+	SavePath   string `json:"save_path"` // films (and series, when SavePathTV is empty)
+	CategoryTV string `json:"category_tv"`
+	SavePathTV string `json:"save_path_tv"`
 	PathRemote string `json:"path_remote"`
 	PathLocal  string `json:"path_local"`
 	Enabled    bool   `json:"enabled"`
@@ -181,12 +183,12 @@ func (s *Store) MarkAcqIndexer(id int64, errText string) {
 
 // ---------------------------------------------------------------- clients
 
-const cliCols = `id,name,kind,url,username,password,category,save_path,path_remote,path_local,enabled,created_at`
+const cliCols = `id,name,kind,url,username,password,category,save_path,category_tv,save_path_tv,path_remote,path_local,enabled,created_at`
 
 func scanClient(row interface{ Scan(...any) error }) (*AcqClient, error) {
 	c := &AcqClient{}
 	var en int
-	if err := row.Scan(&c.ID, &c.Name, &c.Kind, &c.URL, &c.Username, &c.Password, &c.Category, &c.SavePath, &c.PathRemote, &c.PathLocal, &en, &c.CreatedAt); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.Kind, &c.URL, &c.Username, &c.Password, &c.Category, &c.SavePath, &c.CategoryTV, &c.SavePathTV, &c.PathRemote, &c.PathLocal, &en, &c.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -226,16 +228,16 @@ func (s *Store) SaveAcqClient(c *AcqClient) error {
 	}
 	if c.ID == 0 {
 		c.CreatedAt = now()
-		res, err := s.DB.Exec(`INSERT INTO acq_clients(name,kind,url,username,password,category,save_path,path_remote,path_local,enabled,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-			c.Name, c.Kind, c.URL, c.Username, c.Password, c.Category, c.SavePath, c.PathRemote, c.PathLocal, b2i(c.Enabled), c.CreatedAt)
+		res, err := s.DB.Exec(`INSERT INTO acq_clients(name,kind,url,username,password,category,save_path,category_tv,save_path_tv,path_remote,path_local,enabled,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			c.Name, c.Kind, c.URL, c.Username, c.Password, c.Category, c.SavePath, c.CategoryTV, c.SavePathTV, c.PathRemote, c.PathLocal, b2i(c.Enabled), c.CreatedAt)
 		if err != nil {
 			return err
 		}
 		c.ID, _ = res.LastInsertId()
 		return nil
 	}
-	_, err := s.DB.Exec(`UPDATE acq_clients SET name=?,kind=?,url=?,username=?,password=?,category=?,save_path=?,path_remote=?,path_local=?,enabled=? WHERE id=?`,
-		c.Name, c.Kind, c.URL, c.Username, c.Password, c.Category, c.SavePath, c.PathRemote, c.PathLocal, b2i(c.Enabled), c.ID)
+	_, err := s.DB.Exec(`UPDATE acq_clients SET name=?,kind=?,url=?,username=?,password=?,category=?,save_path=?,category_tv=?,save_path_tv=?,path_remote=?,path_local=?,enabled=? WHERE id=?`,
+		c.Name, c.Kind, c.URL, c.Username, c.Password, c.Category, c.SavePath, c.CategoryTV, c.SavePathTV, c.PathRemote, c.PathLocal, b2i(c.Enabled), c.ID)
 	return err
 }
 

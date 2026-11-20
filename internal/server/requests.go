@@ -73,6 +73,61 @@ func (s *Server) handleDiscover(w http.ResponseWriter, r *http.Request, c *reqCt
 	writeJSON(w, http.StatusOK, res)
 }
 
+// ints parses a comma list of positive ids ("8,337"), at most max of them.
+func ints(v string, max int) []int {
+	out := []int{}
+	for _, p := range strings.Split(v, ",") {
+		if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil && n > 0 && len(out) < max {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// handleDiscoverBrowse: a filtered listing (streaming services, genres, years, rating).
+func (s *Server) handleDiscoverBrowse(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acqUser(w, c)
+	if m == nil {
+		return
+	}
+	q := r.URL.Query()
+	b := meta.BrowseFilter{Kind: "movie", Providers: ints(q.Get("providers"), 20), Genres: ints(q.Get("genres"), 5),
+		Sort: q.Get("sort"), Lang: q.Get("lang")}
+	if q.Get("kind") == "series" {
+		b.Kind = "series"
+	}
+	b.YearFrom, _ = strconv.Atoi(q.Get("from"))
+	b.YearTo, _ = strconv.Atoi(q.Get("to"))
+	b.MinRating, _ = strconv.ParseFloat(q.Get("rating"), 64)
+	b.Page, _ = strconv.Atoi(q.Get("page"))
+	switch b.Sort {
+	case "", "popular", "new", "top":
+	default:
+		writeErr(w, http.StatusBadRequest, "ismeretlen rendezés")
+		return
+	}
+	res, err := m.Browse(r.Context(), b)
+	if err != nil {
+		writeErr(w, acqErrStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// handleDiscoverOptions: the streaming services of the region and the genres.
+func (s *Server) handleDiscoverOptions(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acqUser(w, c)
+	if m == nil {
+		return
+	}
+	o, err := m.Options(r.Context())
+	if err != nil {
+		writeErr(w, acqErrStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, o)
+}
+
 func (s *Server) handleDiscoverSearch(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	m := s.acqUser(w, c)
 	if m == nil {

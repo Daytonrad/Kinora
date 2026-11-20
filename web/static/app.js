@@ -152,6 +152,7 @@ const ICONS = {
   lock: 'M7 11V8a5 5 0 0110 0v3M5 11h14v10H5z', people: 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2 20c0-4 3-6 7-6s7 2 7 6M16 4.5a3.5 3.5 0 010 6.5M18 14c2.5.6 4 2.6 4 6', tag: 'M3 12V4h8l10 10-8 8z M7.5 8.5h.01',
   pip: 'M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2zM12.5 12.5h5.5v3.5h-5.5z', list: 'M4 6h16M4 12h16M4 18h10', pencil: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   x: 'M6 6l12 12M18 6L6 18', filter: 'M4 5h16l-6 8v6l-4-2v-4z',
+  film: 'M4 4h16v16H4zM8 4v16M16 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4', tv: 'M3 6h18v12H3zM8 21h8M12 18v3M9 3l3 3 3-3',
   search: 'M10.5 4a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM20 20l-4.8-4.8', sortAsc: 'M4 7h5M4 12h8M4 17h11M18 19V5M15 8l3-3 3 3', sortDesc: 'M4 7h11M4 12h8M4 17h5M18 5v14M15 16l3 3 3-3',
 };
 function icon(name, fill) {
@@ -298,7 +299,7 @@ async function route() {
       case 'search': return await viewSearch(q.get('q') || '');
       case 'collections': return p1 === 'new' ? await viewCollectionEdit(null, q) : p2 === 'edit' ? await viewCollectionEdit(+p1) : p1 ? await viewCollection(+p1) : await viewCollections();
       case 'downloads': return await viewDownloads();
-      case 'discover': return await viewDiscover(q.get('q') || '');
+      case 'discover': return await viewDiscover(q);
       case 'requests': return await viewRequests();
       case 'party': return await viewPartyJoin(p1);
       case 'admin': return await viewAdmin(p1 || 'dash');
@@ -2338,7 +2339,7 @@ async function adminMeta(body) {
   let t;
   put(body, aHead(T.aMeta, T.aLedeMeta),
     aSplit('TMDB', T.metaHint,
-      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]], T.metaLangHint]], () => setTimeout(() => adminMeta(body), 400))),
+      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]], T.metaLangHint], ['watch_region', T.watchRegion, 'text', null, T.watchRegionHint]], () => setTimeout(() => adminMeta(body), 400))),
     aSplit('OpenSubtitles', T.osHint,
       settingsForm(s.values, s.env, [['opensubtitles_key', T.osKey, 'password', null, T.osKeyHint], ['opensubtitles_user', T.osUser, 'text', null, T.osUserHint], ['opensubtitles_pass', T.osPass, 'password']])),
     aSplit(T.refreshMeta, T.refreshMetaHint,
@@ -2705,8 +2706,8 @@ async function adminAcqQueue(body) {
 async function adminAcqSettings(body) {
   const [s, defs] = await Promise.all([GET('/api/admin/acquire/settings'), GET('/api/admin/acquire/definitions').catch(() => [])]);
   const rerender = () => adminAcqSettings(body);
-  const enabled = h('input.switch', { type: 'checkbox', role: 'switch', checked: s.enabled, onchange: async e => {
-    await api('PUT', '/api/admin/acquire/settings', { enabled: e.target.checked }); toast(T.saved);
+  const enabled = h('input.switch', { type: 'checkbox', role: 'switch', checked: s.enabled, 'aria-label': T.acqEnable, onchange: async e => {
+    await api('PUT', '/api/admin/acquire/settings', { enabled: e.target.checked }); toast(T.saved); rerender();
   } });
 
   // indexers (Torznab: a tracker's own API, or Jackett / Prowlarr standing in for several)
@@ -2797,51 +2798,81 @@ async function adminAcqSettings(body) {
   // download clients: torrents (qBittorrent, Transmission, Deluge) and Usenet (SABnzbd, NZBGet); Kinora picks by the release
   const KINDS = [['qbittorrent', 'qBittorrent', 'http://192.168.1.10:8080'], ['transmission', 'Transmission', 'http://192.168.1.10:9091'],
     ['deluge', 'Deluge', 'http://192.168.1.10:8112'], ['sabnzbd', 'SABnzbd', 'http://192.168.1.10:8080'], ['nzbget', 'NZBGet', 'http://192.168.1.10:6789']];
+  // what a client sorts by: qBittorrent category and folder, Transmission / Deluge a folder, Usenet a category
+  const isUsenet = k => k === 'sabnzbd' || k === 'nzbget';
+  const hasCat = k => k !== 'transmission' && k !== 'deluge';
   const clientDialog = c => {
     const isNew = !c;
-    c = c || { kind: 'qbittorrent', name: '', url: '', username: '', password: '', category: 'kinora', save_path: '', path_remote: '', path_local: '', enabled: true };
+    c = c || { kind: 'qbittorrent', name: '', url: '', username: '', password: '', category: 'kinora-movies', save_path: '', category_tv: 'kinora-tv', save_path_tv: '', path_remote: '', path_local: '', enabled: true };
     const kind = h('select', null, KINDS.map(([v, l]) => h('option', { value: v, selected: c.kind === v }, l)));
+    const inp = (k, more) => h('input', Object.assign({ type: 'text', value: c[k] || '' }, more));
     const ci = {
-      name: h('input', { type: 'text', value: c.name }),
-      url: h('input', { type: 'url', value: c.url }),
-      username: h('input', { type: 'text', value: c.username, autocomplete: 'off' }),
-      password: h('input', { type: 'password', value: c.password, autocomplete: 'new-password' }),
-      category: h('input', { type: 'text', value: c.category }),
-      save_path: h('input', { type: 'text', value: c.save_path, placeholder: '/downloads/kinora' }),
-      path_remote: h('input', { type: 'text', value: c.path_remote, placeholder: '/downloads' }),
-      path_local: h('input', { type: 'text', value: c.path_local, placeholder: '/data/downloads' }),
+      name: inp('name'), url: inp('url', { type: 'url' }),
+      username: inp('username', { autocomplete: 'off' }), password: inp('password', { type: 'password', autocomplete: 'new-password' }),
+      category: inp('category'), save_path: inp('save_path'), category_tv: inp('category_tv'), save_path_tv: inp('save_path_tv'),
+      path_remote: inp('path_remote', { placeholder: '/downloads' }), path_local: inp('path_local', { placeholder: '/data/downloads' }),
     };
     const en = h('input.switch', { type: 'checkbox', role: 'switch', checked: c.enabled });
-    const userField = field(T.username, ci.username), passLabel = h('span', null, T.password), saveField = field(T.acqSavePath, ci.save_path, T.acqSavePathHint);
+    const userField = field(T.username, ci.username), passLabel = h('span', null, T.password);
     const passField = h('label.field', null, passLabel, ci.password);
+    const cat = [field(T.acqCategory, ci.category), field(T.acqCategory, ci.category_tv)];
+    const dir = [field(T.acqFolder, ci.save_path), field(T.acqFolder, ci.save_path_tv)];
+    const where = h('p.hint.acq-where');
+    // an empty field shows what applies instead: the client's default for films, the films' value for series
+    const follow = () => {
+      ci.category.placeholder = ci.save_path.placeholder = T.acqClientDefault;
+      ci.category_tv.placeholder = ci.category.value.trim() || T.acqClientDefault;
+      ci.save_path_tv.placeholder = ci.save_path.value.trim() || T.acqClientDefault;
+    };
+    ci.category.addEventListener('input', follow); ci.save_path.addEventListener('input', follow);
     const sync = () => {
       const k = kind.value;
       ci.url.placeholder = KINDS.find(x => x[0] === k)[2];
       passLabel.textContent = k === 'sabnzbd' ? T.acqApiKey : T.password;
       userField.classList.toggle('hidden', k === 'deluge' || k === 'sabnzbd');
-      saveField.classList.toggle('hidden', k === 'sabnzbd' || k === 'nzbget'); // Usenet clients sort by category
+      dir.forEach(f => f.classList.toggle('hidden', isUsenet(k)));
+      cat.forEach(f => f.classList.toggle('hidden', !hasCat(k)));
+      where.textContent = isUsenet(k) ? T.acqWhereUsenet : hasCat(k) ? T.acqWhereBoth : T.acqWhereFolder;
+      follow();
     };
     kind.addEventListener('change', sync); sync();
     const out = h('p.small', { role: 'status' });
     const data = () => Object.assign({ id: c.id || 0, kind: kind.value, enabled: en.checked }, Object.fromEntries(Object.entries(ci).map(([k, el]) => [k, el.value.trim()])));
-    modal(isNew ? T.acqAddClient : c.name, h('div.a-form', null,
+    const col = (ic, title, ...kids) => h('div.acq-route-col', null, h('h4', null, icon(ic), title), ...kids);
+    modal(isNew ? T.acqAddClient : c.name, h('div.a-form.acq-cdlg', null,
+      h('h3.acq-sub', null, T.acqConn),
       h('div.grid2', null, field(T.acqClientKind, kind), field(T.acqName, ci.name)),
       field(T.acqClientUrl, ci.url), h('div.grid2', null, userField, passField),
-      h('div.grid2', null, field(T.acqCategory, ci.category, T.acqCategoryHint), saveField),
-      h('div.grid2', null, field(T.acqPathRemote, ci.path_remote), field(T.acqPathLocal, ci.path_local)), h('div.hint', null, T.acqPathHint),
+      h('h3.acq-sub', null, T.acqWhere), where,
+      h('div.acq-route-grid', null, col('film', T.kinds.movies, cat[0], dir[0]), col('tv', T.kinds.shows, cat[1], dir[1], h('div.hint', null, T.acqTvHint))),
+      h('details.a-opt.acq-adv', { open: !!(c.path_remote || c.path_local) }, h('summary', null, T.acqPathMap),
+        h('div.a-opt-b', null, h('div.grid2', null, field(T.acqPathRemote, ci.path_remote), field(T.acqPathLocal, ci.path_local)), h('div.hint', null, T.acqPathHint))),
       h('div.form-row', null, h('label.switch-row', null, h('span', null, T.acqEnabledRow), en)), out),
     close => [acqTestButton('/api/admin/acquire/clients/test', data, out),
       h('button.btn', { onclick: close }, T.cancel),
       h('button.btn.primary', { onclick: async () => { await api(isNew ? 'POST' : 'PATCH', '/api/admin/acquire/clients' + (isNew ? '' : '/' + c.id), data()); close(); toast(T.saved); rerender(); } }, T.save)]);
   };
-  const clientRows = s.clients.map(c => h('tr', null,
-    tdl('', T.acqName, h('b', null, c.name), h('div.muted.small.mono.acq-url', null, c.url)),
-    tdl('', T.acqClientKind, (KINDS.find(x => x[0] === c.kind) || [, c.kind])[1], h('div.muted.small', null, ['sabnzbd', 'nzbget'].includes(c.kind) ? 'Usenet' : 'Torrent')),
-    tdl('', T.acqStatus, c.enabled ? h('span.ok.small', null, T.acqEnabledRow) : h('span.muted.small', null, T.acqIdxOff)),
-    tdl('.a-tbl-acts', '', h('div.row-gap', null, h('button.btn', { onclick: () => clientDialog(c) }, T.acqEdit),
-      h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(c.name))) { await api('DELETE', '/api/admin/acquire/clients/' + c.id); rerender(); } } }, T.delete)))));
+  // each client as a ruled entry: who it is, and where films and series end up
+  const route = (k, category, path) => {
+    const parts = [hasCat(k) && category && h('span.acq-cat', null, icon('tag'), category), !isUsenet(k) && path && h('span.mono', null, path)].filter(Boolean);
+    return parts.length ? parts : h('span.muted', null, T.acqClientDefault);
+  };
+  const clientRows = s.clients.map(c => {
+    const own = (hasCat(c.kind) && c.category_tv) || (!isUsenet(c.kind) && c.save_path_tv);
+    return h('article.acq-client' + (c.enabled ? '' : '.is-off'), null,
+      h('div.acq-client-h', null,
+        h('div.acq-client-t', null, h('h3', null, c.name),
+          h('p.small.muted', null, (KINDS.find(x => x[0] === c.kind) || [, c.kind])[1] + ' · ' + (isUsenet(c.kind) ? 'Usenet' : 'Torrent') + ' · ', h('span.mono', null, c.url))),
+        h('span.acq-dot.small.' + (c.enabled ? 'ok' : 'off'), null, c.enabled ? T.acqOn : T.acqOff),
+        h('div.row-gap', null, h('button.btn', { onclick: () => clientDialog(c) }, icon('pencil'), T.acqEdit),
+          h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(c.name))) { await api('DELETE', '/api/admin/acquire/clients/' + c.id); rerender(); } } }, T.delete))),
+      h('dl.acq-route', null,
+        h('dt', null, icon('film'), T.kinds.movies), h('dd', null, route(c.kind, c.category, c.save_path)),
+        h('dt', null, icon('tv'), T.kinds.shows), h('dd', null, own ? route(c.kind, c.category_tv || c.category, c.save_path_tv || c.save_path) : h('span.muted', null, T.acqSameAsFilms)),
+        c.path_remote && [h('dt', null, T.acqPathMap), h('dd', null, h('span.mono', null, c.path_remote), ' → ', h('span.mono', null, c.path_local))]));
+  });
   const clientList = h('div', null,
-    s.clients.length ? aTable([T.acqName, T.acqClientKind, T.acqStatus, ''], clientRows, '.a-stack') : emptyNote(T.acqNoClients, null),
+    s.clients.length ? h('div.acq-clients', null, clientRows) : emptyNote(T.acqNoClients, null),
     h('div.a-form-foot', null, h('button.btn', { onclick: () => clientDialog(null) }, icon('plus'), T.acqAddClient)));
 
   // quality profile (the built-in one; named profiles below) and import
@@ -2881,20 +2912,47 @@ async function adminAcqSettings(body) {
       toast(T.saved); rerender();
     } }, T.save))));
 
-  put(body, aHead(T.aAcqSettings, T.aLedeAcqSettings),
-    aSplit(T.acqModule, T.acqModuleHint, sw(T.acqEnable, enabled)),
-    aSplit(T.acqIndexers, T.acqIndexersHint,
+  // the page: on/off in the head, an overview ledger, and the four areas as tabs
+  const ixOn = s.indexers.filter(x => x.enabled), ixBad = ixOn.filter(x => x.last_error).length,
+    ixNew = ixOn.filter(x => !x.last_error && !x.last_ok_at).length;
+  const clOn = s.clients.filter(c => c.enabled);
+  const protos = [...new Set(clOn.map(c => isUsenet(c.kind) ? 'Usenet' : 'Torrent'))];
+  const TABS = [['sources', T.acqTabSources], ['clients', T.acqClients], ['quality', T.acqTabQuality], ['requests', T.reqSettings]];
+  const panels = {
+    sources: [aSplit(T.acqIndexers, T.acqIndexersHint,
       s.indexers.length ? aTable([T.acqName, T.acqStatus, T.acqPriority, ''], ixRows, '.a-stack') : emptyNote(T.acqNoIndexers, null),
       h('div.a-form-foot', null, h('button.btn', { onclick: () => indexerDialog(null) }, icon('plus'), T.acqAddIndexer))),
-    aSplit(T.acqDefs, T.acqDefsHint, defList),
-    aSplit(T.acqClients, T.acqClientsHint, clientList),
-    reqSettings,
-    aSplit(T.acqProfile, T.acqProfileHint, h('div.a-form', null, builtin.el,
-      field(T.acqImportMode, mode, T.acqImportModeHint),
-      h('div.a-form-foot', null, saveProfile))),
-    aSplit(T.profiles, T.profilesHint,
-      profRows.length ? aTable([T.acqName, T.profSummary, ''], profRows, '.a-stack') : emptyNote(T.profNone, null),
-      h('div.a-form-foot', null, h('button.btn', { onclick: () => profileDialog(null) }, icon('plus'), T.profAdd))));
+    aSplit(T.acqDefs, T.acqDefsHint, defList)],
+    clients: [aSplit(T.acqClients, T.acqClientsHint, clientList)],
+    quality: [aSplit(T.acqProfile, T.acqProfileHint, h('div.a-form', null, builtin.el, field(T.acqImportMode, mode, T.acqImportModeHint), h('div.a-form-foot', null, saveProfile))),
+      aSplit(T.profiles, T.profilesHint,
+        profRows.length ? aTable([T.acqName, T.profSummary, ''], profRows, '.a-stack') : emptyNote(T.profNone, null),
+        h('div.a-form-foot', null, h('button.btn', { onclick: () => profileDialog(null) }, icon('plus'), T.profAdd)))],
+    requests: [reqSettings],
+  };
+  // the overview ledger is the tab strip: each area with its headline figure and how it stands
+  const pane = {}, tab = {};
+  for (const [k, kids] of Object.entries(panels)) pane[k] = h('div.acq-pane', { role: 'tabpanel', id: 'acq-' + k, 'aria-labelledby': 'acq-t-' + k }, kids);
+  const show = k => {
+    state.acqTab = k;
+    for (const [id] of TABS) {
+      const on = id === k;
+      tab[id].classList.toggle('on', on); tab[id].setAttribute('aria-selected', String(on)); pane[id].hidden = !on;
+    }
+  };
+  const cell = (k, n, label, note, warn) => tab[k] = h('button.acq-ov-i', { type: 'button', role: 'tab', id: 'acq-t-' + k, 'aria-controls': 'acq-' + k, onclick: () => show(k) },
+    h('span.acq-ov-h', null, TABS.find(t => t[0] === k)[1]), h('span.acq-ov-n', null, h('b', null, n), h('span', null, label)),
+    h('small' + (warn ? '.warn' : ''), null, note));
+  const tabs = h('div.acq-ov', { role: 'tablist', 'aria-label': T.aAcqSettings },
+    cell('sources', ixOn.length, T.acqOvSources, ixBad ? T.acqOvBad(ixBad) : !ixOn.length ? T.acqOvNone : ixNew ? T.acqOvUnchecked : T.acqOvOk, ixBad || !ixOn.length),
+    cell('clients', clOn.length, T.acqOvClients, protos.length ? protos.join(' · ') : T.acqOvNone, !clOn.length),
+    cell('quality', 1 + (s.profiles || []).length, T.acqOvProfiles, s.import_mode === 'copy' ? T.acqModeCopy : T.acqModeLink),
+    cell('requests', s.quota_week || '∞', T.acqOvQuota, s.auto_approve === 'all' ? T.acqOvAutoAll : T.acqOvAutoAdmins));
+  put(body, aHead(T.aAcqSettings, T.acqModuleHint,
+    h('label.acq-power', null, h('span.acq-dot.' + (s.enabled ? 'ok' : 'off'), null, s.enabled ? T.acqOn : T.acqOff), enabled)),
+    !s.enabled && h('p.a-warn', null, T.acqOffNote),
+    tabs, Object.values(pane));
+  show(TABS.some(t => t[0] === state.acqTab) ? state.acqTab : 'sources');
 }
 
 // the quality profile controls, shared by the built-in profile and the named ones
@@ -2950,7 +3008,7 @@ function discoverTile(it, onChange) {
   const open = () => it.kind === 'series' ? seriesDialog(it.id, onChange) : discoverDialog(it.id, onChange);
   return h('button.acq-card' + (it.item_id && it.kind !== 'series' ? '.have' : ''), { type: 'button', 'aria-label': it.title + (it.year ? ' (' + it.year + ')' : ''), onclick: open },
     h('div.acq-poster', null, it.poster ? h('img', { src: it.poster, alt: '', loading: 'lazy' }) : h('span', null, it.title)),
-    h('b', null, it.title), h('span.muted.small', null, it.year || '–'),
+    h('b', null, it.title), h('span.muted.small', null, it.year || '–', it.rating > 0 ? ' · ★ ' + num(it.rating, 1) : ''),
     it.request && it.request !== 'canceled' ? h('span.badge' + (it.request === 'denied' || it.request === 'failed' ? '.warn' : ''), null, reqLabel(it.request))
       : it.item_id ? h('span.badge.acq-have', null, it.kind === 'series' ? T.discHaveSeries : T.discHave)
       : it.followed ? h('span.badge', null, T.seriesFollowedShort) : null);
@@ -2961,6 +3019,18 @@ function libChoice(list, noneText) {
   if (!list.length) return { el: h('p.bad', null, noneText), value: () => 0, ok: false };
   const sel = h('select', null, list.map(l => h('option', { value: l.id }, l.name)));
   return { el: list.length > 1 ? field(T.discLibrary, sel) : null, value: () => +sel.value, ok: true };
+}
+
+// where a title streams in the server's region (TMDB, data by JustWatch); a logo opens the Felfedezés filtered to that service
+function watchBlock(w, kind, close) {
+  if (!w) return null;
+  const prov = p => h('a.disc-prov', { href: '#/discover?kind=' + kind + '&p=' + p.id, title: p.name, onclick: () => close() },
+    p.logo ? h('img', { src: p.logo, alt: '' }) : null, h('span', null, p.name));
+  const other = [...new Set([...w.rent, ...w.buy].map(p => p.name))];
+  return h('div.disc-watch', null, h('h3', null, T.discWhere(isoName(w.region, 'region'))),
+    w.stream.length ? h('div.disc-provs', null, w.stream.map(prov)) : h('p.muted.small', null, T.discWhereNone),
+    other.length > 0 && h('p.muted.small', null, T.discRentBuy + ': ' + other.slice(0, 6).join(', ')),
+    h('p.muted.small.disc-jw', null, w.link ? h('a', { href: w.link, target: '_blank', rel: 'noopener noreferrer' }, T.discJustWatch) : T.discJustWatch));
 }
 
 async function discoverDialog(id, onChange) {
@@ -2974,11 +3044,13 @@ async function discoverDialog(id, onChange) {
       r.status === 'downloading' && r.progress > 0 ? h('div.acq-prog', null, aBar(r.progress, 1), h('span.small.muted', null, num(r.progress * 100, 0) + '%')) : null,
       r.note ? h('div.muted.small', null, srv(r.note)) : null)
     : null;
+  let shut = () => {};
   modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.disc-detail', null,
     d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
     h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
-      facts && h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), state_, lc && lc.el)),
-  close => [
+      facts && h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), state_, lc && lc.el,
+      watchBlock(d.watch, 'movie', () => shut()))),
+  close => (shut = close, [
     h('button.btn', { onclick: close }, T.close),
     d.item_id ? h('a.btn.primary', { href: '#/item/' + d.item_id, onclick: close }, icon('play'), T.discWatch)
       : r && mine && ['pending', 'approved', 'waiting'].includes(r.status) ? h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/requests/' + r.id); close(); toast(T.reqCanceledToast); onChange && onChange(); } }, T.reqCancel)
@@ -2989,43 +3061,197 @@ async function discoverDialog(id, onChange) {
           const q = await POST('/api/requests', { tmdb_id: d.id, library_id: lc.value() });
           close(); toast(q.status === 'pending' ? T.reqSentPending(d.title) : T.reqSentApproved(d.title)); onChange && onChange();
         } finally { b.disabled = false; }
-      } }, icon('plus'), T.discAsk) : null]);
+      } }, icon('plus'), T.discAsk) : null]));
 }
+
+// Felfedezés: search, or browse TMDB by streaming service, genre, year, rating and language; with no
+// filter it shows curated shelves and one shelf per leading streaming service of the region.
+const DISC_YEARS = () => {
+  const y = new Date().getFullYear();
+  return [['', T.discAnyTime, 0, 0], ['this', T.discThisYear, y, y], ['recent', T.discRecent, y - 2, 0], ...[2020, 2010, 2000, 1990, 1980].map(d => [d + 's', d + '–' + (d + 9), d, d + 9]), ['old', T.discOlder, 0, 1979]];
+};
+const DISC_LANGS = ['hu', 'en', 'fr', 'de', 'es', 'it', 'da', 'sv', 'ko', 'ja'];
+const isoName = (code, type) => { try { return new Intl.DisplayNames([T.locale], { type }).of(code); } catch { return code.toUpperCase(); } };
 
 async function viewDiscover(q) {
   if (!state.me.can_request) return go('#/home');
   const main = shell('discover');
-  const input = h('input', { type: 'search', placeholder: T.discSearchPh, 'aria-label': T.discSearchPh, value: q || '' });
+  const f = { q: q.get('q') || '', kind: q.get('kind') === 'series' ? 'series' : 'movie', p: new Set((q.get('p') || '').split(',').filter(Boolean)),
+    g: q.get('g') || '', sort: q.get('sort') || '', y: q.get('y') || '', r: q.get('r') || '', lang: q.get('lang') || '', fresh: q.get('new') === '1' };
+  const filtered = () => f.p.size > 0 || f.g || f.sort || f.y || f.r || f.lang;
+  const nFilters = () => f.p.size + ['g', 'sort', 'y', 'r', 'lang'].filter(k => f[k]).length;
+  const url = () => {
+    const p = new URLSearchParams();
+    if (f.q) p.set('q', f.q);
+    if (f.kind === 'series') p.set('kind', 'series');
+    if (f.p.size) p.set('p', [...f.p].join(','));
+    ['g', 'sort', 'y', 'r', 'lang'].forEach(k => f[k] && p.set(k, f[k]));
+    if (f.fresh) p.set('new', '1');
+    const s = String(p);
+    return '#/discover' + (s ? '?' + s : '');
+  };
+  const opts = await GET('/api/discover/options', { quiet: true }).catch(() => ({ providers: [], movie_genres: [], series_genres: [], region: '' }));
+
+  // ---- the bar: search, films / series, sort; then the streaming services; then the rest
+  const input = h('input', { type: 'search', placeholder: T.discSearchPh, 'aria-label': T.discSearchPh, value: f.q });
+  const kindTabs = h('div.disc-kind', { role: 'tablist', 'aria-label': T.discKind });
+  const sortSel = h('select', { 'aria-label': T.sort });
+  const genreSel = h('select', { 'aria-label': T.genres });
+  const yearSel = h('select', { 'aria-label': T.year }, DISC_YEARS().map(([v, l]) => h('option', { value: v, selected: f.y === v }, l)));
+  const rateSel = h('select', { 'aria-label': T.minRating }, [['', T.discAnyRating], ['6', '★ 6+'], ['7', '★ 7+'], ['8', '★ 8+']].map(([v, l]) => h('option', { value: v, selected: f.r === v }, l)));
+  const langSel = h('select', { 'aria-label': T.discLang }, h('option', { value: '' }, T.discAnyLang), DISC_LANGS.map(c => h('option', { value: c, selected: f.lang === c }, isoName(c, 'language'))));
+  const fresh = h('input', { type: 'checkbox', checked: f.fresh });
+  const clearBtn = h('button.btn.ghost', { type: 'button' }, icon('x'), T.clear);
+  const provBox = h('div.disc-provbar', { role: 'group', 'aria-label': T.discServices });
+  const moreFilters = h('div.disc-filters');
+  const filtersBtn = h('button.btn.filters-toggle', { type: 'button', 'aria-expanded': 'false', onclick: () => filtersBtn.setAttribute('aria-expanded', String(moreFilters.classList.toggle('open'))) });
   const body = h('div', { 'aria-live': 'polite' });
+  const sentinel = h('div.disc-more');
+  let showAllProv = false;
+
+  const paintKind = () => put(kindTabs, [['movie', T.discMovies], ['series', T.discSeries]].map(([k, l]) =>
+    h('button.chip' + (f.kind === k ? '.on' : ''), { type: 'button', role: 'tab', 'aria-selected': String(f.kind === k), onclick: () => { if (f.kind !== k) { f.kind = k; f.g = ''; changed(); } } }, l)));
+  const paintSelects = () => {
+    put(sortSel, [['', T.discSortPopular], ['new', T.discSortNew], ['top', T.discSortTop]].map(([v, l]) => h('option', { value: v, selected: f.sort === v }, l)));
+    const gs = f.kind === 'series' ? opts.series_genres : opts.movie_genres;
+    put(genreSel, h('option', { value: '' }, T.discAnyGenre), gs.map(g => h('option', { value: g.id, selected: f.g === String(g.id) }, g.name)));
+    genreSel.style.display = gs.length ? '' : 'none';
+  };
+  const paintProv = () => {
+    const all = opts.providers;
+    if (!all.length) return put(provBox);
+    const top = 12;
+    const shown = showAllProv ? all : all.filter((p, i) => i < top || f.p.has(String(p.id)));
+    put(provBox, h('span.disc-provlabel', null, T.discServices),
+      h('div.chips', null, shown.map(p => {
+        const on = f.p.has(String(p.id));
+        return h('button.chip.disc-pchip' + (on ? '.on' : ''), { type: 'button', 'aria-pressed': String(on), title: p.name, onclick: () => {
+          on ? f.p.delete(String(p.id)) : f.p.add(String(p.id)); changed();
+        } }, p.logo ? h('img', { src: p.logo, alt: '', loading: 'lazy' }) : null, h('span', null, p.name));
+      }),
+      all.length > top && h('button.chip.disc-pmore', { type: 'button', 'aria-expanded': String(showAllProv), onclick: () => { showAllProv = !showAllProv; paintProv(); } },
+        showAllProv ? T.discFewer : T.discAllServices(all.length))));
+  };
+  const paintBar = () => {
+    paintKind(); paintSelects(); paintProv(); clearBtn.style.display = filtered() ? '' : 'none';
+    const n = nFilters() - f.p.size + (f.fresh ? 1 : 0);
+    put(filtersBtn, icon('filter'), T.filters, n ? h('span.n', null, '· ' + n) : null);
+  };
+
+  sortSel.addEventListener('change', () => { f.sort = sortSel.value; changed(); });
+  genreSel.addEventListener('change', () => { f.g = genreSel.value; changed(); });
+  yearSel.addEventListener('change', () => { f.y = yearSel.value; changed(); });
+  rateSel.addEventListener('change', () => { f.r = rateSel.value; changed(); });
+  langSel.addEventListener('change', () => { f.lang = langSel.value; changed(); });
+  fresh.addEventListener('change', () => { f.fresh = fresh.checked; changed(); });
+  clearBtn.addEventListener('click', () => {
+    f.p.clear(); f.g = f.sort = f.y = f.r = f.lang = '';
+    yearSel.value = rateSel.value = langSel.value = '';
+    changed();
+  });
+  input.addEventListener('input', debounce(() => { f.q = input.value.trim(); changed(); }, 350));
+
   main.append(h('div.page-head', null, h('h1', null, T.discover), h('a.btn', { href: '#/requests' }, T.myRequests)),
-    h('p.muted.disc-lede', null, T.discLede), searchField(input, 'disc-search'), body);
-  let gen = 0;
-  const grid = items => h('div.acq-results', null, items.map(it => discoverTile(it, () => load(input.value.trim()))));
-  async function load(text) {
+    h('p.muted.disc-lede', null, T.discLede),
+    h('div.disc-bar', null,
+      h('div.toolbar.disc-top', null, searchField(input, 'disc-search'), kindTabs, h('div.sort-ctl', null, filtersBtn, sortSel)),
+      provBox,
+      add(moreFilters, [genreSel, yearSel, rateSel, langSel, h('label.check', null, fresh, T.discOnlyNew), clearBtn]),
+      opts.region && h('p.muted.small.disc-region', null, T.discRegion(isoName(opts.region, 'region')))),
+    body, sentinel);
+
+  // ---- results
+  let gen = 0, page = 0, pages = 0, loading = false;
+  const keep = it => !f.fresh || (!it.item_id && !(it.request && it.request !== 'canceled' && it.request !== 'denied'));
+  const reload = () => changed(true);
+  const tiles = items => items.filter(keep).map(it => discoverTile(it, reload));
+  const grid = items => h('div.acq-results', null, tiles(items));
+  const browseURL = (extra = {}) => {
+    const p = new URLSearchParams({ kind: f.kind });
+    const prov = extra.p != null ? String(extra.p) : [...f.p].join(',');
+    if (prov) p.set('providers', prov);
+    const sort = extra.sort != null ? extra.sort : f.sort;
+    if (sort) p.set('sort', sort);
+    if (f.g) p.set('genres', f.g);
+    const yr = DISC_YEARS().find(([v]) => v === f.y);
+    if (yr && yr[2]) p.set('from', yr[2]);
+    if (yr && yr[3]) p.set('to', yr[3]);
+    if (f.r) p.set('rating', f.r);
+    if (f.lang) p.set('lang', f.lang);
+    p.set('page', extra.page || 1);
+    return '/api/discover/browse?' + p;
+  };
+  const shelfOf = (title, items, more, logo) => items.filter(keep).length > 0 && h('section.shelf.disc-shelf', { 'aria-label': title },
+    h('div.shelf-head', null, h('h2', null, logo && h('img.disc-shelflogo', { src: logo, alt: '' }), title), more && h('a', { href: more }, T.more)),
+    h('div.shelf-track.poster', null, tiles(items)));
+
+  async function showcase(my) {
+    const lists = f.kind === 'series'
+      ? [['tv_trending', T.discTvTrending], ['tv_airing', T.discTvAiring], ['tv_popular', T.discTvPopular]]
+      : [['trending', T.discTrending], ['upcoming', T.discUpcoming], ['popular', T.discPopular], ['top', T.discTop]];
+    const provs = opts.providers.slice(0, 5);
+    const [res, byProv] = await Promise.all([
+      Promise.all(lists.map(([l]) => GET('/api/discover?list=' + l, { quiet: true }).catch(() => []))),
+      Promise.all(provs.map(p => GET(browseURL({ p: p.id }), { quiet: true }).then(r => r.results).catch(() => [])))]);
+    if (my !== gen) return;
+    const kindQ = f.kind === 'series' ? 'kind=series&' : '';
+    const shelves = [];
+    lists.forEach(([, t], i) => shelves.push(shelfOf(t, res[i])));
+    // the services go between the first curated shelf and the rest
+    const provShelves = provs.map((p, i) => shelfOf(T.discOnService(p.name), byProv[i], '#/discover?' + kindQ + 'p=' + p.id, p.logo));
+    put(body, shelves[0], provShelves, shelves.slice(1));
+    if (!body.querySelector('.shelf')) put(body, h('p.empty', null, T.discNothing));
+  }
+
+  async function more() {
+    if (loading || page >= pages) return;
+    loading = true;
+    const my = gen;
+    try {
+      const r = await GET(browseURL({ page: page + 1 }), { quiet: true });
+      if (my !== gen) return;
+      page = r.page || page + 1; pages = r.total_pages;
+      body.querySelector('.acq-results').append(...tiles(r.results));
+    } catch { pages = 0; } finally { loading = false; rearm(); }
+  }
+
+  async function load() {
     const my = ++gen;
+    page = pages = 0;
     put(body, aSkeleton());
     try {
-      if (text.length >= 2) {
-        const [mv, tv] = await Promise.all(['movie', 'series'].map(k => GET('/api/discover/search?kind=' + k + '&q=' + encodeURIComponent(text), { quiet: true }).catch(() => [])));
+      if (f.q.length >= 2) {
+        const [mv, tv] = await Promise.all(['movie', 'series'].map(k => GET('/api/discover/search?kind=' + k + '&q=' + encodeURIComponent(f.q), { quiet: true }).catch(() => [])));
         if (my !== gen) return;
-        put(body, [[T.discMovies, mv], [T.discSeries, tv]].filter(([, l]) => l.length).map(([t, l]) => h('section.disc-sec', null, h('h2', null, t), grid(l.slice(0, 18)))));
+        const secs = (f.kind === 'series' ? [[T.discSeries, tv], [T.discMovies, mv]] : [[T.discMovies, mv], [T.discSeries, tv]])
+          .map(([t, l]) => [t, l.filter(keep)]).filter(([, l]) => l.length);
+        put(body, secs.map(([t, l]) => h('section.disc-sec', null, h('h2', null, t), grid(l.slice(0, 24)))));
         if (!body.firstChild) put(body, h('p.empty', null, T.searchEmpty));
         return;
       }
-      const lists = [['trending', T.discTrending], ['tv_trending', T.discTvTrending], ['upcoming', T.discUpcoming], ['tv_airing', T.discTvAiring], ['popular', T.discPopular]];
-      const res = await Promise.all(lists.map(([l]) => GET('/api/discover?list=' + l, { quiet: true }).catch(() => [])));
+      if (!filtered()) return await showcase(my);
+      const r = await GET(browseURL(), { quiet: true });
       if (my !== gen) return;
-      put(body, lists.map(([, t], i) => [t, res[i]]).filter(([, l]) => l.length).map(([t, l]) =>
-        h('section.disc-sec', null, h('h2', null, t), grid(l.slice(0, 18)))));
-      if (!body.firstChild) put(body, h('p.empty', null, T.discNothing));
+      page = r.page || 1; pages = r.total_pages;
+      put(body, h('p.muted.disc-count', null, T.titlesN(r.total)), grid(r.results));
+      if (!r.total) put(body, emptyNote(T.noResults, f.p.size ? T.discNoResultsHint : null, h('button.btn', { onclick: () => clearBtn.click() }, T.clear)));
+      rearm();
     } catch (e) { if (my === gen) put(body, h('p.bad', null, e.message)); }
   }
-  input.addEventListener('input', debounce(() => {
-    const v = input.value.trim();
-    history.replaceState(history.state, '', '#/discover' + (v ? '?q=' + encodeURIComponent(v) : ''));
-    load(v);
-  }, 350));
-  await load((q || '').trim());
+
+  function changed(keepURL) {
+    if (!keepURL) history.replaceState(history.state, '', url());
+    paintBar();
+    load();
+  }
+
+  const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && page > 0) more(); }, { rootMargin: '800px' });
+  // observing again reports the current state, so a sentinel still in view (a short page, or one emptied by "only new") loads on
+  const rearm = () => { io.unobserve(sentinel); io.observe(sentinel); };
+  io.observe(sentinel);
+  onCleanup(() => io.disconnect());
+  paintBar();
+  await load();
 }
 
 async function viewRequests() {
@@ -3118,12 +3344,14 @@ async function seriesDialog(id, onChange) {
   const status = r ? h('p', null, h('span.badge', null, reqLabel(r.status)), ' ', h('span.muted.small', null, seasonsLabel(r.seasons)),
       r.user_name && !mine ? h('span.muted.small', null, ' · ' + T.reqBy(r.user_name)) : null, r.note ? h('div.muted.small', null, srv(r.note)) : null)
     : d.followed ? h('p.ok', null, T.seriesFollowed) : null;
+  let shut = () => {};
   modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.disc-detail', null,
     d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
     h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
       h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), status,
+      watchBlock(d.watch, 'series', () => shut()),
       !r && d.seasons.length > 0 && picker.el, lc && lc.el)),
-  close => [
+  close => (shut = close, [
     h('button.btn', { onclick: close }, T.close),
     d.item_id ? h('a.btn', { href: '#/item/' + d.item_id, onclick: close }, icon('play'), T.discWatch) : null,
     r && mine && ['pending', 'approved', 'waiting'].includes(r.status) ? h('button.btn.danger', { onclick: async () => { await api('DELETE', '/api/requests/' + r.id); close(); toast(T.reqCanceledToast); onChange && onChange(); } }, T.reqCancel) : null,
@@ -3136,7 +3364,7 @@ async function seriesDialog(id, onChange) {
         const q = await POST('/api/requests', { kind: 'series', tmdb_id: d.id, seasons: m === 'seasons' ? chosen.join(',') : m, library_id: lc.value() });
         close(); toast(q.status === 'pending' ? T.reqSentPending(d.title) : T.reqSentApproved(d.title)); onChange && onChange();
       } finally { b.disabled = false; }
-    } }, icon('plus'), T.discAsk)]);
+    } }, icon('plus'), T.discAsk)]));
 }
 
 // admin: follow a series directly (no request)

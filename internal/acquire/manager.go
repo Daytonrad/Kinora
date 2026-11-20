@@ -24,6 +24,11 @@ type Movies interface {
 	TV(ctx context.Context, id int64) (meta.TVInfo, error)
 	TVSeasonEpisodes(ctx context.Context, id int64, season int) ([]meta.TVEpisode, error)
 	TVList(ctx context.Context, list string, page int) ([]meta.SearchResult, error)
+	Browse(ctx context.Context, b meta.BrowseFilter) (meta.BrowsePage, error)
+	WatchProviders(ctx context.Context, kind string) ([]meta.WatchProvider, error)
+	Genres(ctx context.Context, kind string) ([]meta.Genre, error)
+	TitleProviders(ctx context.Context, kind string, id int64) (meta.WhereToWatch, error)
+	WatchRegion() string
 }
 
 // Manager runs the acquisition: search, grab, follow, import.
@@ -261,7 +266,8 @@ type GrabInput struct {
 
 func (m *Manager) client(cfg *store.AcqClient) (DownloadClient, ClientConfig, error) {
 	cc := ClientConfig{ID: cfg.ID, Kind: cfg.Kind, URL: cfg.URL, Username: cfg.Username, Password: cfg.Password,
-		Category: cfg.Category, SavePath: cfg.SavePath, PathRemote: cfg.PathRemote, PathLocal: cfg.PathLocal}
+		Category: cfg.Category, SavePath: cfg.SavePath, CategoryTV: cfg.CategoryTV, SavePathTV: cfg.SavePathTV,
+		PathRemote: cfg.PathRemote, PathLocal: cfg.PathLocal}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if c, ok := m.clients[cfg.ID]; ok && c.cfg == cc {

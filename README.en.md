@@ -57,6 +57,7 @@ All settings can also be provided through environment variables. When set this w
 | `KINORA_TMDB_KEY` | — | TMDB API key (v3 key or v4 token) |
 | `KINORA_TMDB_API` | `https://api.themoviedb.org/3` | TMDB API address (for a proxy or mirror) |
 | `KINORA_METADATA_LANG` | `hu-HU` | Default metadata language (clients get titles in their own interface language when it differs) |
+| `KINORA_WATCH_REGION` | the metadata language's country | Country of the streaming catalogue on the Discover page (two letters, e.g. `HU`) |
 | `KINORA_ENCODER` | `auto` | `auto`, `h264_nvenc`, `h264_qsv`, `h264_vaapi`, `libx264`, etc. |
 | `KINORA_VIDEO_CODEC` | `auto` | `auto`: HEVC/AV1 output when the client reports it and the hardware encoder works; `h264`: H.264 only |
 | `KINORA_VAAPI_DEVICE` | `/dev/dri/renderD128` | VA-API device |

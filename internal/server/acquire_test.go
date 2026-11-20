@@ -76,10 +76,12 @@ func TestAcquireAdminAPI(t *testing.T) {
 		t.Errorf("half a mapping: %d", code)
 	}
 	var cl map[string]any
-	if code := c.do("POST", "/api/admin/acquire/clients", map[string]any{"url": "http://qb:8080", "username": "admin", "password": "pw123456", "enabled": true}, &cl); code != 200 {
+	if code := c.do("POST", "/api/admin/acquire/clients", map[string]any{"url": "http://qb:8080", "username": "admin", "password": "pw123456", "enabled": true,
+		"category": "kinora-movies", "category_tv": " kinora-tv ", "save_path_tv": "/downloads/tv"}, &cl); code != 200 {
 		t.Fatalf("client %d", code)
 	}
-	if p := cl["password"].(string); strings.Contains(p, "pw12") || cl["kind"] != "qbittorrent" || cl["name"] != "qBittorrent" {
+	if p := cl["password"].(string); strings.Contains(p, "pw12") || cl["kind"] != "qbittorrent" || cl["name"] != "qBittorrent" ||
+		cl["category_tv"] != "kinora-tv" || cl["save_path_tv"] != "/downloads/tv" {
 		t.Errorf("client: %v", cl)
 	}
 

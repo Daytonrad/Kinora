@@ -83,11 +83,84 @@ func (m *Manager) DiscoverSearch(ctx context.Context, q, kind string) ([]Discove
 	return m.mark(res), nil
 }
 
+// DiscoverBrowse is one page of a filtered listing (streaming service, genre, year, …).
+type DiscoverBrowse struct {
+	Results    []DiscoverItem `json:"results"`
+	Page       int            `json:"page"`
+	TotalPages int            `json:"total_pages"`
+	Total      int            `json:"total"`
+}
+
+// Browse lists films or series by the filter, marked like the other lists.
+func (m *Manager) Browse(ctx context.Context, b meta.BrowseFilter) (DiscoverBrowse, error) {
+	if !m.Enabled() {
+		return DiscoverBrowse{}, ErrDisabled
+	}
+	p, err := m.movies.Browse(ctx, b)
+	if err != nil {
+		return DiscoverBrowse{}, err
+	}
+	out := DiscoverBrowse{Page: p.Page, TotalPages: p.TotalPages, Total: p.Total}
+	if b.Kind == "series" {
+		out.Results = m.markSeries(p.Results)
+	} else {
+		out.Results = m.mark(p.Results)
+	}
+	return out, nil
+}
+
+// DiscoverOptions is what the filter bar offers: the streaming services of the region
+// and the genres, both for films and series.
+type DiscoverOptions struct {
+	Region       string               `json:"region"`
+	Providers    []meta.WatchProvider `json:"providers"`
+	MovieGenres  []meta.Genre         `json:"movie_genres"`
+	SeriesGenres []meta.Genre         `json:"series_genres"`
+}
+
+// Options gathers the filter choices. The service list is the films one followed by the
+// series-only services (Apple TV+ and the like are on both).
+func (m *Manager) Options(ctx context.Context) (DiscoverOptions, error) {
+	if !m.Enabled() {
+		return DiscoverOptions{}, ErrDisabled
+	}
+	o := DiscoverOptions{Region: m.movies.WatchRegion(), Providers: []meta.WatchProvider{}, MovieGenres: []meta.Genre{}, SeriesGenres: []meta.Genre{}}
+	pm, err := m.movies.WatchProviders(ctx, "movie")
+	if err != nil {
+		return o, err
+	}
+	pt, _ := m.movies.WatchProviders(ctx, "series")
+	seen := map[int]bool{}
+	for _, p := range append(pm, pt...) {
+		if !seen[p.ID] {
+			seen[p.ID] = true
+			o.Providers = append(o.Providers, p)
+		}
+	}
+	if g, err := m.movies.Genres(ctx, "movie"); err == nil {
+		o.MovieGenres = g
+	}
+	if g, err := m.movies.Genres(ctx, "series"); err == nil {
+		o.SeriesGenres = g
+	}
+	return o, nil
+}
+
+// whereToWatch is best effort: a detail page still opens when TMDB has no answer.
+func (m *Manager) whereToWatch(ctx context.Context, kind string, id int64) *meta.WhereToWatch {
+	w, err := m.movies.TitleProviders(ctx, kind, id)
+	if err != nil {
+		return nil
+	}
+	return &w
+}
+
 // MovieDetail is one film for the request dialog.
 type MovieDetail struct {
 	meta.MovieInfo
-	ItemID  int64             `json:"item_id,omitempty"`
-	Request *store.AcqRequest `json:"request,omitempty"` // the open request, or the newest closed one
+	Watch   *meta.WhereToWatch `json:"watch,omitempty"`
+	ItemID  int64              `json:"item_id,omitempty"`
+	Request *store.AcqRequest  `json:"request,omitempty"` // the open request, or the newest closed one
 }
 
 // DiscoverMovie returns a film with its library and request state.
@@ -99,7 +172,7 @@ func (m *Manager) DiscoverMovie(ctx context.Context, id int64) (*MovieDetail, er
 	if err != nil {
 		return nil, err
 	}
-	d := &MovieDetail{MovieInfo: mv}
+	d := &MovieDetail{MovieInfo: mv, Watch: m.whereToWatch(ctx, "movie", id)}
 	have, _ := m.st.MovieTmdbIDs([]int64{id})
 	d.ItemID = have[id]
 	if q, err := m.st.OpenRequestFor("movie", id); err == nil {
@@ -117,10 +190,11 @@ type SeasonState struct {
 // SeriesDetail is one series for the request dialog.
 type SeriesDetail struct {
 	meta.TVInfo
-	ItemID   int64             `json:"item_id,omitempty"`
-	Request  *store.AcqRequest `json:"request,omitempty"`
-	Followed bool              `json:"followed"`
-	Seasons  []SeasonState     `json:"seasons"`
+	Watch    *meta.WhereToWatch `json:"watch,omitempty"`
+	ItemID   int64              `json:"item_id,omitempty"`
+	Request  *store.AcqRequest  `json:"request,omitempty"`
+	Followed bool               `json:"followed"`
+	Seasons  []SeasonState      `json:"seasons"`
 }
 
 // DiscoverSeries returns a series with its seasons and how many episodes of each are in the library.
@@ -132,7 +206,7 @@ func (m *Manager) DiscoverSeries(ctx context.Context, id int64) (*SeriesDetail, 
 	if err != nil {
 		return nil, err
 	}
-	d := &SeriesDetail{TVInfo: info, Seasons: []SeasonState{}}
+	d := &SeriesDetail{TVInfo: info, Watch: m.whereToWatch(ctx, "series", id), Seasons: []SeasonState{}}
 	have, _ := m.st.SeriesTmdbIDs([]int64{id})
 	d.ItemID = have[id]
 	d.Followed = m.st.FollowedSeries([]int64{id})[id]

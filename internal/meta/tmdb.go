@@ -38,9 +38,10 @@ type Fetcher struct {
 
 	mu     sync.Mutex
 	status Status
-	langs  map[string]bool // viewer languages (metadata_langs), loaded on first use
-	again  bool            // a Kick arrived while a refresh ran: run once more
-	noImdb map[int64]bool  // TMDB movies without an IMDb id (asked once per process)
+	langs  map[string]bool   // viewer languages (metadata_langs), loaded on first use
+	again  bool              // a Kick arrived while a refresh ran: run once more
+	noImdb map[int64]bool    // TMDB movies without an IMDb id (asked once per process)
+	cache  map[string]cached // streaming services and genres (discover.go)
 }
 
 // Status is the progress of a refresh.

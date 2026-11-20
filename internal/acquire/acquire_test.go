@@ -538,10 +538,28 @@ func (fakeMovies) MovieList(ctx context.Context, list string, page int) ([]meta.
 	return []meta.SearchResult{{ID: 603, Title: "Mátrix", Year: 1999}, {ID: 777, Title: "Nincs Ilyen Film", Year: 2031}}, nil
 }
 
+func (fakeMovies) Browse(ctx context.Context, b meta.BrowseFilter) (meta.BrowsePage, error) {
+	if b.Kind == "series" {
+		return meta.BrowsePage{Results: []meta.SearchResult{{ID: 1399, Title: "Trónok harca", Year: 2011}}, Page: 1, TotalPages: 1, Total: 1}, nil
+	}
+	return meta.BrowsePage{Results: []meta.SearchResult{{ID: 603, Title: "Mátrix", Year: 1999}}, Page: b.Page, TotalPages: 3, Total: 60}, nil
+}
+func (fakeMovies) WatchProviders(ctx context.Context, kind string) ([]meta.WatchProvider, error) {
+	return []meta.WatchProvider{{ID: 8, Name: "Netflix"}}, nil
+}
+func (fakeMovies) Genres(ctx context.Context, kind string) ([]meta.Genre, error) {
+	return []meta.Genre{{ID: 878, Name: "Sci-Fi"}}, nil
+}
+func (fakeMovies) TitleProviders(ctx context.Context, kind string, id int64) (meta.WhereToWatch, error) {
+	return meta.WhereToWatch{Region: "HU", Stream: []meta.WatchProvider{{ID: 8, Name: "Netflix"}}}, nil
+}
+func (fakeMovies) WatchRegion() string { return "HU" }
+
 type memClient struct {
 	mu   sync.Mutex
 	st   map[string]TorrentStatus
 	adds int
+	reqs []AddRequest // category and folder of each download
 }
 
 func (c *memClient) Test(ctx context.Context) (string, error) { return "mem", nil }
@@ -550,6 +568,7 @@ func (c *memClient) Add(ctx context.Context, r AddRequest) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.adds++
+	c.reqs = append(c.reqs, r)
 	c.st[r.InfoHash] = TorrentStatus{Hash: r.InfoHash, Progress: 0.1, State: "downloading", ETA: 60}
 	return r.InfoHash, nil
 }
@@ -620,7 +639,7 @@ func TestManagerFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.InfoHash != "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c" || g.Title != "Mátrix" || mem.adds != 1 {
+	if g.InfoHash != "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c" || g.Title != "Mátrix" || mem.adds != 1 || mem.reqs[0].Category != "" {
 		t.Fatalf("grab: %+v adds %d", g, mem.adds)
 	}
 	if g2, _ := m.Grab(ctx, GrabInput{TmdbID: 603, LibraryID: libRow.ID}); g2 == nil || g2.ID != g.ID || mem.adds != 1 {
@@ -840,7 +859,8 @@ func TestSeries(t *testing.T) {
 	os.MkdirAll(shows, 0o755)
 	lib, _ := st.CreateLibrary("Sorozatok", shows, "shows")
 	st.SaveAcqIndexer(&store.AcqIndexer{Name: "TV", URL: idx.URL, Enabled: true, Priority: 1})
-	st.SaveAcqClient(&store.AcqClient{Name: "qB", URL: "http://qb", Enabled: true, PathRemote: "/downloads", PathLocal: filepath.Join(dir, "dl")})
+	st.SaveAcqClient(&store.AcqClient{Name: "qB", URL: "http://qb", Enabled: true, Category: "kinora-movies", SavePath: "/downloads/movies",
+		CategoryTV: "kinora-tv", SavePathTV: "/downloads/tv", PathRemote: "/downloads", PathLocal: filepath.Join(dir, "dl")})
 	var scanned int
 	m := New(st, fakeMovies{}, func(int64) { scanned++ }, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	m.hc, m.tz = idx.Client(), &Torznab{HC: idx.Client()}
@@ -861,6 +881,11 @@ func TestSeries(t *testing.T) {
 	m.ProcessSeries(ctx)
 	if mem.adds != 2 {
 		t.Fatalf("expected the season 1 pack and S02E01, got %d downloads", mem.adds)
+	}
+	for _, r := range mem.reqs { // series go to their own category and folder, not the films'
+		if r.Category != "kinora-tv" || r.SavePath != "/downloads/tv" {
+			t.Errorf("series download sent to %q %q", r.Category, r.SavePath)
+		}
 	}
 	grabs, _ := st.AcqGrabs(10)
 	var pack, single *store.AcqGrab

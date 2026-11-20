@@ -427,7 +427,7 @@ func (m *Manager) grabSeries(ctx context.Context, x *store.AcqSeries, season int
 	if err != nil {
 		return err
 	}
-	cl, _, err := m.client(cfg)
+	cl, cc, err := m.client(cfg)
 	if err != nil {
 		return err
 	}
@@ -451,7 +451,8 @@ func (m *Manager) grabSeries(ctx context.Context, x *store.AcqSeries, season int
 		m.st.SetEpisodesGrab(x.ID, pairs(season, cover), g.ID)
 		return nil
 	}
-	dlID, err := cl.Add(ctx, AddRequest{Fetched: f, Tag: "kinora"})
+	// series have their own category / folder in the client; empty: the films' one
+	dlID, err := cl.Add(ctx, AddRequest{Fetched: f, Tag: "kinora", Category: cc.CategoryTV, SavePath: cc.SavePathTV})
 	if err != nil {
 		return err
 	}

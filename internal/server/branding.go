@@ -18,6 +18,9 @@ const (
 
 var reHexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
+// reRegion is an ISO 3166-1 country code (the streaming catalogue region).
+var reRegion = regexp.MustCompile(`^[A-Z]{2}$`)
+
 // serverID is a stable random identifier (lets apps recognise a server whose address changed).
 func (s *Server) serverID() string {
 	s.serverIDMu.Lock()

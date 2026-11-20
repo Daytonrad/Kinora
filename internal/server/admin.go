@@ -152,20 +152,20 @@ func (s *Server) handleInviteDelete(w http.ResponseWriter, r *http.Request, c *r
 
 var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder", "video_codec",
 	"quickconnect_enabled", "discovery_enabled", "brand_accent", "intro_detection", "intro_window_min",
-	"opensubtitles_key", "opensubtitles_user", "opensubtitles_pass"}
+	"opensubtitles_key", "opensubtitles_user", "opensubtitles_pass", "watch_region"}
 
 // secretSettings are shown masked and kept when the masked value comes back.
 var secretSettings = map[string]bool{"tmdb_key": true, "opensubtitles_key": true, "opensubtitles_pass": true}
 
 // SettingEnv maps settings to the environment variables that can force them.
 var SettingEnv = map[string]string{
-	"server_name":       "KINORA_SERVER_NAME",
-	"public_url":        "KINORA_PUBLIC_URL",
-	"scan_interval_min": "KINORA_SCAN_INTERVAL_MIN",
-	"tmdb_key":          "KINORA_TMDB_KEY",
-	"metadata_lang":     "KINORA_METADATA_LANG",
-	"encoder":           "KINORA_ENCODER",
-	"video_codec":       "KINORA_VIDEO_CODEC",
+	"server_name":          "KINORA_SERVER_NAME",
+	"public_url":           "KINORA_PUBLIC_URL",
+	"scan_interval_min":    "KINORA_SCAN_INTERVAL_MIN",
+	"tmdb_key":             "KINORA_TMDB_KEY",
+	"metadata_lang":        "KINORA_METADATA_LANG",
+	"encoder":              "KINORA_ENCODER",
+	"video_codec":          "KINORA_VIDEO_CODEC",
 	"quickconnect_enabled": "KINORA_QUICKCONNECT",
 	"discovery_enabled":    "KINORA_DISCOVERY",
 	"brand_accent":         "KINORA_ACCENT",
@@ -174,6 +174,7 @@ var SettingEnv = map[string]string{
 	"opensubtitles_key":    "KINORA_OPENSUBTITLES_KEY",
 	"opensubtitles_user":   "KINORA_OPENSUBTITLES_USER",
 	"opensubtitles_pass":   "KINORA_OPENSUBTITLES_PASS",
+	"watch_region":         "KINORA_WATCH_REGION",
 }
 
 const maskChar = "•"
@@ -251,6 +252,12 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 		case "brand_accent":
 			if v != "" && !reHexColor.MatchString(v) {
 				writeErr(w, http.StatusBadRequest, "az akcentszín #rrggbb formátumú legyen")
+				return
+			}
+		case "watch_region":
+			v = strings.ToUpper(v)
+			if v != "" && !reRegion.MatchString(v) {
+				writeErr(w, http.StatusBadRequest, "az ország kétbetűs kód legyen (pl. HU), vagy üres")
 				return
 			}
 		case "server_name":

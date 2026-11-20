@@ -1023,7 +1023,45 @@ p.bad, span.bad, div.bad { color: var(--danger); }
 
 /* ---- Felfedezés and requests */
 .disc-lede { margin: calc(-1 * var(--s3)) 0 var(--s4); max-width: var(--measure); }
-.disc-search { max-width: var(--measure-s); }
+.disc-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); margin-bottom: var(--s5); padding-bottom: var(--s4); border-bottom: var(--hair) solid var(--rule); }
+.disc-top { margin-bottom: 0; }
+.disc-top .search-field { max-width: var(--measure-s); }
+.disc-kind { display: flex; gap: var(--s1); }
+.disc-provbar { display: flex; gap: var(--s3); align-items: baseline; min-width: 0; }
+.disc-provbar .chips { padding-top: 0; }
+.disc-provlabel, .disc-region { color: var(--t2); }
+.disc-provlabel { font-family: var(--display); font-size: var(--f3); font-weight: 600; letter-spacing: .03em; flex: none; }
+.chips .chip.disc-pchip { padding-left: var(--s1); }
+.disc-pchip img { width: 24px; height: 24px; border-radius: var(--r1); flex: none; }
+.chips .chip.disc-pmore { background: transparent; border-style: dashed; }
+.disc-filters { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.disc-filters select { width: auto; }
+.disc-filters .check { margin: 0; }
+.disc-region { margin: 0; }
+.disc-count { margin-bottom: var(--s4); }
+.disc-shelf .shelf-head h2 { display: flex; align-items: center; gap: var(--s2); }
+.disc-shelflogo { width: 28px; height: 28px; border-radius: var(--r1); }
+.disc-shelf .acq-card { scroll-snap-align: start; }
+.disc-more { height: 1px; }
+.disc-watch { margin-top: var(--s4); padding-top: var(--s3); border-top: var(--hair) solid var(--rule); }
+.disc-watch h3 { font-size: var(--f1); margin-bottom: var(--s2); }
+.disc-provs { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s2); }
+.disc-prov { display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--hit); padding: 0 var(--s3) 0 var(--s1); border: var(--hair) solid var(--rule); border-radius: var(--r1); background: var(--g2); color: var(--t0); font-size: var(--f0); text-decoration: none; }
+.disc-prov:hover, .disc-prov:focus-visible { border-color: var(--amber); }
+.disc-prov img { width: 32px; height: 32px; border-radius: var(--r1); }
+.disc-jw { margin-top: var(--s2); }
+.disc-top .sort-ctl { display: flex; gap: var(--s2); }
+@media (max-width: 860px) {
+  .disc-filters { display: none; }
+  .disc-filters.open { display: flex; }
+  .disc-top .search-field { max-width: none; }
+  .disc-top .sort-ctl { margin-left: auto; }
+}
+@media (max-width: 760px) {
+  .disc-provbar { flex-direction: column; gap: var(--s1); }
+  .disc-provbar .chips { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; padding-bottom: var(--s1); scrollbar-width: none; }
+  .disc-provbar .chip { flex: none; }
+}
 .disc-sec { margin-top: var(--s6); }
 .disc-sec h2 { margin-bottom: var(--s4); }
 .disc-detail { display: flex; gap: var(--s5); align-items: flex-start; }
@@ -1071,3 +1109,61 @@ button.ep-chip:hover, button.ep-chip:focus-visible { border-color: var(--t0); co
 .acq-stat-lists { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s7); }
 .acq-stat-lists ol { margin: var(--s1) 0 0; padding-left: 1.4em; }
 .ml2 { margin-left: var(--s2); }
+
+/* ============================================================ acquisition settings */
+/* the head carries the on/off state; the overview ledger below it doubles as the tab strip */
+.acq-power { display: inline-flex; align-items: center; gap: var(--s3); min-height: var(--hit); font-weight: 700; cursor: pointer; }
+.acq-dot::before { content: ""; display: inline-block; width: var(--dot-s); height: var(--dot-s); border-radius: var(--round); background: currentColor; margin-right: var(--s2); vertical-align: middle; }
+.acq-dot.ok { color: var(--ok); }
+.acq-dot.off { color: var(--t2); }
+.acq-dot.off::before { background: var(--rule-hi); }
+.acq-ov { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: var(--s2); border-bottom: var(--hair) solid var(--rule); }
+.acq-ov-i { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); min-width: 0; padding: var(--s2) var(--s5) var(--s4); background: none; border: 0; border-left: var(--hair) solid var(--rule); color: var(--t1); font: inherit; text-align: left; cursor: pointer; }
+.acq-ov-i:first-child { border-left: 0; padding-left: 0; }
+.acq-ov-h { font-family: var(--display); font-size: var(--f3); font-weight: 600; letter-spacing: .03em; color: var(--t2); transition: color var(--t-out) var(--ease); }
+.acq-ov-n { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; }
+.acq-ov-n b { font-family: var(--text); font-size: var(--f4); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--t0); line-height: 1; }
+.acq-ov-n span { color: var(--t2); font-size: var(--f0); }
+.acq-ov-i small { max-width: 100%; font-size: var(--f0); color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acq-ov-i small.warn { color: var(--danger); }
+.acq-ov-i:hover .acq-ov-h { color: var(--t0); }
+.acq-ov-i.on .acq-ov-h { color: var(--amber); }
+.acq-ov-i::after { content: ""; position: absolute; left: var(--s5); right: var(--s5); bottom: calc(-1 * var(--hair)); height: 2px; background: transparent; transition: background var(--t-out) var(--ease); }
+.acq-ov-i:first-child::after { left: 0; }
+.acq-ov-i.on::after { background: var(--amber); }
+.acq-pane > .a-split:first-child { border-top: 0; }
+
+/* download clients: one ruled entry each, with where films and series end up */
+.acq-clients { border-top: var(--hair) solid var(--rule); }
+.acq-client { padding: var(--s4) 0; border-bottom: var(--hair) solid var(--rule); }
+.acq-client-h { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s4); }
+.acq-client-t { flex: 1 1 14rem; min-width: 0; }
+.acq-client-t h3 { font-family: var(--text); font-size: var(--f2); font-weight: 700; }
+.acq-client-t p { margin: var(--s1) 0 0; overflow-wrap: anywhere; }
+.acq-client.is-off .acq-client-t h3, .acq-client.is-off .acq-route dd { color: var(--t2); }
+.acq-route { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: var(--s2) var(--s5); margin: var(--s4) 0 0; }
+.acq-route dt { display: flex; align-items: center; gap: var(--s2); color: var(--t2); font-size: var(--f0); }
+.acq-route dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.acq-route svg, .acq-cat svg, .acq-route-col h4 svg { width: var(--i-s); height: var(--i-s); flex: none; }
+.acq-route svg { align-self: center; }
+.acq-cat { display: inline-flex; align-items: center; gap: var(--s1); font-weight: 700; color: var(--t0); }
+.acq-cat svg { color: var(--t2); }
+
+/* the client sheet: connection, then films and series side by side */
+.acq-sub { font-family: var(--display); font-size: var(--f3); font-weight: 600; letter-spacing: .03em; color: var(--t2); padding-bottom: var(--s1); margin: var(--s5) 0 var(--s3); border-bottom: var(--hair) solid var(--rule); }
+.acq-cdlg > .acq-sub:first-child { margin-top: 0; }
+.acq-where { margin: 0 0 var(--s4); }
+.acq-route-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s3) var(--s5); }
+.acq-route-col { min-width: 0; }
+.acq-route-col + .acq-route-col { padding-left: var(--s5); border-left: var(--hair) solid var(--rule); }
+.acq-route-col h4 { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s3); font-family: var(--text); font-size: var(--f1); font-weight: 700; color: var(--t0); }
+.acq-route-col .hint { margin: 0; }
+.acq-adv { margin-top: var(--s4); border-top: var(--hair) solid var(--rule); }
+@media (max-width: 760px) {
+  .acq-ov { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .acq-ov-i:nth-child(odd) { border-left: 0; padding-left: 0; }
+  .acq-ov-i:nth-child(odd)::after { left: 0; }
+  .acq-ov-i:nth-child(n + 3) { border-top: var(--hair) solid var(--rule); padding-top: var(--s3); }
+  .acq-route-grid { grid-template-columns: minmax(0, 1fr); }
+  .acq-route-col + .acq-route-col { padding: var(--s3) 0 0; border-left: 0; border-top: var(--hair) solid var(--rule); }
+}
