@@ -966,6 +966,8 @@
    "Figyelve": "Followed",
    "Visszavonod a kérést?": "Withdraw the request?",
    "Visszavonás": "Withdraw",
+   "Eltávolítás": "Remove",
+   "{0} – most népszerű": "{0} – popular now",
    "kérte: {0}": "requested by {0}",
    "Van belőle a könyvtárban.": "Some of it is in the library.",
    "Ez a film már megvan a könyvtárban.": "This film is already in the library.",

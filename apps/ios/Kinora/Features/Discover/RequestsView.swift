@@ -28,6 +28,13 @@ struct RequestsView: View {
                                 .swipeActions {
                                     if r.cancellable {
                                         Button(L("Visszavonás"), role: .destructive) { cancelling = r }.tint(Theme.danger)
+                                    } else if r.removable {
+                                        Button(L("Eltávolítás"), role: .destructive) { Task { await cancel(r) } }.tint(Theme.danger)
+                                    }
+                                }
+                                .contextMenu {
+                                    if r.removable {
+                                        Button(L("Eltávolítás"), systemImage: "trash", role: .destructive) { Task { await cancel(r) } }
                                     }
                                 }
                         }
@@ -104,7 +111,8 @@ struct RequestsView: View {
 
     private func load() async {
         do {
-            list = try await model.api { try await $0.myRequests() }
+            // a withdrawn request has nothing left to show
+            list = try await model.api { try await $0.myRequests() }.filter { $0.status != .canceled }
             error = nil
         } catch is CancellationError {
         } catch {

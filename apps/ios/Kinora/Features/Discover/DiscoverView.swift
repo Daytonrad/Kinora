@@ -31,6 +31,9 @@ struct DiscoverView: View {
     @State private var kind = Kind.movies
     @State private var query = ""
     @State private var shelves: [Kind: [(DiscoverList, [DiscoverItem])]] = [:]
+    /// What the four big streaming services have, per kind (after the first list, like the web page).
+    @State private var services: [Kind: [(WatchProvider, [DiscoverItem])]] = [:]
+    @State private var options: DiscoverOptions?
     @State private var shelfError: String?
     @State private var results: (movies: [DiscoverItem], series: [DiscoverItem])?
     @State private var searchError: String?
@@ -94,8 +97,13 @@ struct DiscoverView: View {
                         .font(.callout).foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, metrics.gutter)
-                    ForEach(rows, id: \.0) { list, items in
-                        if !items.isEmpty { shelf(list.title, items) }
+                    ForEach(Array(rows.enumerated()), id: \.element.0) { i, row in
+                        if !row.1.isEmpty { shelf(row.0.title, row.1) }
+                        if i == 0 {
+                            ForEach(services[kind] ?? [], id: \.0.id) { p, items in
+                                if !items.isEmpty { shelf(L("{0} – most népszerű", BigProvider.label(for: p)), items, logo: p.logo) }
+                            }
+                        }
                     }
                 }
             } else {
@@ -105,12 +113,20 @@ struct DiscoverView: View {
         .padding(.vertical, 12)
     }
 
-    private func shelf(_ title: String, _ items: [DiscoverItem]) -> some View {
+    private func shelf(_ title: String, _ items: [DiscoverItem], logo: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(Theme.display(metrics.sectionTitle))
-                .accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, metrics.gutter)
+            HStack(spacing: 10) {
+                if let logo, let url = URL(string: logo) {
+                    AsyncImage(url: url) { $0.resizable().scaledToFit() } placeholder: { Theme.raised }
+                        .frame(width: 30, height: 30)
+                        .clipShape(.rect(cornerRadius: 6))
+                        .accessibilityHidden(true)
+                }
+                Text(title)
+                    .font(Theme.display(metrics.sectionTitle))
+                    .accessibilityAddTraits(.isHeader)
+            }
+            .padding(.horizontal, metrics.gutter)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: metrics.spacing) {
                     ForEach(items, id: \.key) { it in
@@ -145,10 +161,29 @@ struct DiscoverView: View {
             }
             shelfError = nil
             shelves[k] = rows
+            await loadServices(k)
         } catch is CancellationError {
         } catch {
             shelfError = error.localizedDescription
         }
+    }
+
+    /// The four big services' shelves; a service the region lacks, or one that fails, is left out.
+    private func loadServices(_ k: Kind) async {
+        guard let client = model.client else { return }
+        if options == nil { options = try? await client.discoverOptions() }
+        let provs = options?.bigProviders ?? []
+        guard !provs.isEmpty else { services[k] = []; return }
+        let series = k == .series
+        let got = await withTaskGroup(of: (Int, [DiscoverItem]).self) { group in
+            for (i, p) in provs.enumerated() {
+                group.addTask { (i, (try? await client.discoverBrowse(provider: p.id, series: series).results) ?? []) }
+            }
+            var out: [Int: [DiscoverItem]] = [:]
+            for await (i, items) in group { out[i] = items }
+            return out
+        }
+        services[k] = provs.enumerated().map { ($0.element, got[$0.offset] ?? []) }
     }
 
     // MARK: - search

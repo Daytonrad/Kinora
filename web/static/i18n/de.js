@@ -960,6 +960,8 @@
    "Figyelve": "Verfolgt",
    "Visszavonod a kérést?": "Wunsch zurückziehen?",
    "Visszavonás": "Zurückziehen",
+   "Eltávolítás": "Entfernen",
+   "{0} – most népszerű": "{0} – gerade beliebt",
    "kérte: {0}": "gewünscht von {0}",
    "Van belőle a könyvtárban.": "Teilweise in der Bibliothek.",
    "Ez a film már megvan a könyvtárban.": "Dieser Film ist schon in der Bibliothek.",

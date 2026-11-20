@@ -207,6 +207,11 @@ struct DiscoverDetailSheet: View {
                     Button(role: .destructive) { confirmCancel = true } label: { Text(L("Visszavonás")) }
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(busy)
+                } else if r.removable && r.userId == model.me?.user.id {
+                    // it ended without the film: clear it away, and the title can be asked for again
+                    Button(role: .destructive) { Task { await cancel() } } label: { Label(L("Eltávolítás"), systemImage: "trash") }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(busy)
                 }
             } else {
                 Button { Task { await request(d) } } label: {

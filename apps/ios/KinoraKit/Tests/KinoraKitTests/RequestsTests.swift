@@ -57,6 +57,28 @@ import Testing
         #expect(seasonsLabel("all") == "Minden évad")
     }
 
+    @Test func removableStates() throws {
+        let list = try decode("""
+        [{"id":1,"kind":"movie","tmdb_id":5,"title":"A","status":"failed"},{"id":2,"kind":"movie","tmdb_id":6,"title":"B","status":"denied"},
+         {"id":3,"kind":"movie","tmdb_id":7,"title":"C","status":"pending"},{"id":4,"kind":"movie","tmdb_id":8,"title":"D","status":"available"}]
+        """, as: [AcqRequest].self)
+        #expect(list.map(\.removable) == [true, true, false, false])
+        #expect(list.map(\.cancellable) == [false, false, true, false])
+    }
+
+    @Test func bigProviders() throws {
+        let o = try decode("""
+        {"region":"HU","providers":[{"id":1899,"name":"HBO Max","logo":"x"},{"id":1796,"name":"Netflix basic with Ads"},
+         {"id":337,"name":"Disney Plus"},{"id":8,"name":"Netflix"},{"id":2,"name":"Apple TV"},{"id":119,"name":"Amazon Prime Video"}],
+         "movie_genres":[],"series_genres":[]}
+        """, as: DiscoverOptions.self)
+        #expect(o.bigProviders.map(\.id) == [8, 1899, 337, 119])
+        #expect(BigProvider.label(for: o.bigProviders[2]) == "Disney+")
+        #expect(try decode(#"{"providers":[]}"#, as: DiscoverOptions.self).bigProviders.isEmpty)
+        let page = try decode(#"{"results":[{"id":603,"title":"M","kind":"movie"}],"page":1,"total_pages":3,"total":55}"#, as: DiscoverPage.self)
+        #expect(page.results.count == 1 && page.totalPages == 3 && page.total == 55)
+    }
+
     @Test func libraries() throws {
         let l = try decode(#"{"movies":[{"id":1,"name":"Filmek"}],"shows":[]}"#, as: RequestLibraries.self)
         #expect(l.movies.first?.name == "Filmek" && l.shows.isEmpty)

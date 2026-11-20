@@ -82,6 +82,8 @@ public struct AcqRequest: Codable, Sendable, Identifiable, Hashable {
     public var isOpen: Bool { [.pending, .approved, .waiting, .downloading].contains(status) }
     /// The requester may still take it back (a running download only an admin can stop).
     public var cancellable: Bool { [.pending, .approved, .waiting].contains(status) }
+    /// It ended without the film: the requester can clear it away (the server deletes it), then ask again.
+    public var removable: Bool { [.failed, .denied].contains(status) }
 }
 
 extension AcqRequest.Status {
@@ -195,6 +197,54 @@ public enum DiscoverList: String, CaseIterable, Sendable {
     }
 }
 
+/// GET /api/discover/options (only the services are used here).
+public struct DiscoverOptions: Codable, Sendable {
+    public var region: String?
+    public var providers: [WatchProvider]?
+
+    /// The four big services the Felfedezés shows, in this order, as the region's list names them
+    /// (the ad tiers and the channels sold through them left out) — the web client picks the same.
+    public var bigProviders: [WatchProvider] {
+        let list = providers ?? []
+        return BigProvider.allCases.compactMap { b in list.first { b.matches($0.name) } }
+    }
+}
+
+/// The streaming services the Felfedezés offers.
+public enum BigProvider: CaseIterable, Sendable {
+    case netflix, hboMax, disney, prime
+
+    public func matches(_ name: String) -> Bool {
+        let n = name.lowercased().trimmingCharacters(in: .whitespaces)
+        switch self {
+        case .netflix: return n == "netflix"
+        case .hboMax: return n == "max" || n == "hbo max"
+        case .disney: return n == "disney plus" || n == "disney+" || n == "disneyplus"
+        case .prime: return n == "amazon prime video" || n == "prime video"
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .netflix: "Netflix"
+        case .hboMax: "HBO Max"
+        case .disney: "Disney+"
+        case .prime: "Prime Video"
+        }
+    }
+
+    /// The short name for a service of the list.
+    public static func label(for p: WatchProvider) -> String { allCases.first { $0.matches(p.name) }?.label ?? p.name }
+}
+
+/// One page of GET /api/discover/browse.
+public struct DiscoverPage: Codable, Sendable {
+    public var results: [DiscoverItem]
+    public var page: Int?
+    public var totalPages: Int?
+    public var total: Int?
+}
+
 private struct RequestBody: Encodable, Sendable {
     var kind: String
     var tmdbId: Int
@@ -238,7 +288,16 @@ extension KinoraClient {
 
     public func myRequests() async throws -> [AcqRequest] { try await get("/api/requests") }
 
+    /// Withdraws an open request, or deletes one that failed or was denied.
     public func cancelRequest(_ id: Int) async throws { try await delete("/api/requests/\(id)") }
+
+    /// The streaming services and genres of the server's region (GET /api/discover/options).
+    public func discoverOptions() async throws -> DiscoverOptions { try await get("/api/discover/options") }
+
+    /// What a streaming service has, most popular first (GET /api/discover/browse).
+    public func discoverBrowse(provider: Int, series: Bool) async throws -> DiscoverPage {
+        try await get("/api/discover/browse?kind=\(series ? "series" : "movie")&providers=\(provider)&page=1")
+    }
 
     /// Fulfilled requests the user was not told about yet; asking marks them told.
     public func unseenRequests() async throws -> [AcqRequest] { try await get("/api/requests/unseen") }
