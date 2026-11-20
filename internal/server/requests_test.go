@@ -28,6 +28,10 @@ func fakeTMDB() *httptest.Server {
 		case r.URL.Path == "/watch/providers/tv":
 			fmt.Fprint(w, `{"results":[{"provider_id":8,"provider_name":"Netflix"},{"provider_id":350,"provider_name":"Apple TV+"}]}`)
 		case r.URL.Path == "/genre/movie/list", r.URL.Path == "/genre/tv/list":
+			if r.URL.Query().Get("language") == "en-US" {
+				fmt.Fprint(w, `{"genres":[{"id":18,"name":"Drama"}]}`)
+				return
+			}
 			fmt.Fprint(w, `{"genres":[{"id":18,"name":"Dráma"}]}`)
 		case r.URL.Path == "/movie/603/watch/providers":
 			fmt.Fprint(w, `{"results":{"HU":{"flatrate":[{"provider_id":8,"provider_name":"Netflix"}]}}}`)
@@ -37,6 +41,8 @@ func fakeTMDB() *httptest.Server {
 				return
 			}
 			fmt.Fprint(w, `{"page":1,"total_pages":4,"total_results":70,"results":[{"id":603,"title":"Mátrix","release_date":"1999-03-31"}]}`)
+		case r.URL.Path == "/trending/movie/week" && r.URL.Query().Get("language") == "en-US":
+			fmt.Fprint(w, `{"results":[{"id":603,"title":"The Matrix","release_date":"1999-03-31","poster_path":"/m.jpg"}]}`)
 		case r.URL.Path == "/trending/movie/week", r.URL.Path == "/search/movie":
 			fmt.Fprint(w, `{"results":[{"id":603,"title":"Mátrix","release_date":"1999-03-31","poster_path":"/m.jpg"}]}`)
 		default:
@@ -188,6 +194,40 @@ func TestRequestsAPI(t *testing.T) {
 	anna.do("GET", "/api/me", nil, &me)
 	if me.CanRequest {
 		t.Error("kids profile can_request")
+	}
+}
+
+// Felfedezés follows the client's UI language, like the library's own metadata.
+func TestDiscoverLanguage(t *testing.T) {
+	admin, st, srv := newTestServerFull(t)
+	tm := fakeTMDB()
+	defer tm.Close()
+	srv.Meta.BaseURL, srv.Meta.Delay = tm.URL, 0
+	st.SetSetting("tmdb_key", "test")
+	admin.do("PUT", "/api/admin/acquire/settings", map[string]any{"enabled": true}, nil)
+	var me struct {
+		Profiles []struct{ ID int64 } `json:"profiles"`
+	}
+	admin.do("GET", "/api/me", nil, &me)
+	admin.do("POST", fmt.Sprintf("/api/profiles/%d/select", me.Profiles[0].ID), nil, nil)
+
+	var list []map[string]any
+	if code := admin.do("GET", "/api/discover?list=trending", nil, &list); code != 200 || len(list) != 1 || list[0]["title"] != "Mátrix" {
+		t.Fatalf("discover without a language: %d %v", code, list)
+	}
+	admin.hdr = map[string]string{"X-Kinora-Lang": "en"}
+	if code := admin.do("GET", "/api/discover?list=trending", nil, &list); code != 200 || len(list) != 1 || list[0]["title"] != "The Matrix" {
+		t.Fatalf("discover in English: %d %v", code, list)
+	}
+	var en struct {
+		MovieGenres []struct{ Name string } `json:"movie_genres"`
+	}
+	if code := admin.do("GET", "/api/discover/options", nil, &en); code != 200 || len(en.MovieGenres) != 1 || en.MovieGenres[0].Name != "Drama" {
+		t.Fatalf("genres in English: %d %+v", code, en)
+	}
+	admin.hdr = map[string]string{"X-Kinora-Lang": "hu"}
+	if code := admin.do("GET", "/api/discover/options", nil, &en); code != 200 || len(en.MovieGenres) != 1 || en.MovieGenres[0].Name != "Dráma" {
+		t.Fatalf("genres in Hungarian: %d %+v", code, en)
 	}
 }
 

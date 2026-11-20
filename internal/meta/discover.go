@@ -149,7 +149,7 @@ func (f *Fetcher) WatchProviders(ctx context.Context, kind string) ([]WatchProvi
 // Genres lists the TMDB genres for films or series (cached for a day).
 func (f *Fetcher) Genres(ctx context.Context, kind string) ([]Genre, error) {
 	k := tmdbKind(kind)
-	key := "genre/" + k + "/" + f.st.Setting("metadata_lang")
+	key := "genre/" + k + "/" + f.lang(ctx)
 	if v, ok := f.cacheGet(key); ok {
 		return v.([]Genre), nil
 	}

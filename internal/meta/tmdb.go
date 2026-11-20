@@ -81,6 +81,25 @@ var ErrRunning = errors.New("a metaadat-frissítés már fut")
 // ErrNoKey is returned when no TMDB key is configured.
 var ErrNoKey = errors.New("nincs megadva TMDB API kulcs (Admin → Metaadat)")
 
+type langCtxKey struct{}
+
+// WithLang makes the TMDB calls made with ctx return texts in lang, a TMDB language as ViewLang gives it
+// ("" keeps metadata_lang). For live lookups shown to a viewer (Felfedezés); nothing fetched this way is stored.
+func WithLang(ctx context.Context, lang string) context.Context {
+	if lang == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, langCtxKey{}, lang)
+}
+
+// lang is the TMDB language of a call made with ctx.
+func (f *Fetcher) lang(ctx context.Context) string {
+	if l, _ := ctx.Value(langCtxKey{}).(string); l != "" {
+		return l
+	}
+	return f.st.Setting("metadata_lang")
+}
+
 func (f *Fetcher) get(ctx context.Context, path string, q url.Values, out any) error {
 	key := strings.TrimSpace(f.st.Setting("tmdb_key"))
 	if key == "" {
@@ -90,7 +109,7 @@ func (f *Fetcher) get(ctx context.Context, path string, q url.Values, out any) e
 		q = url.Values{}
 	}
 	if q.Get("language") == "" { // translations ask for their own language
-		q.Set("language", f.st.Setting("metadata_lang"))
+		q.Set("language", f.lang(ctx))
 	}
 	bearer := len(key) > 40
 	if !bearer {

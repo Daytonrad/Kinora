@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -13,6 +14,15 @@ import (
 
 // Felfedezés and requests (acquisition M2): anyone with an account may ask for a film,
 // except from a kids profile; an admin approves (or requests are approved automatically).
+
+// viewCtx is r's context with the viewer's metadata language, so Felfedezés shows TMDB titles, overviews
+// and genres in the client's UI language (X-Kinora-Lang). Requests themselves keep metadata_lang.
+func viewCtx(r *http.Request, c *reqCtx) context.Context {
+	if c.Profile == nil {
+		return r.Context()
+	}
+	return meta.WithLang(r.Context(), c.Profile.MetaLang)
+}
 
 func requester(c *reqCtx) acquire.Requester {
 	r := acquire.Requester{UserID: c.User.ID, IsAdmin: c.User.IsAdmin && c.ProfileLock == 0}
@@ -65,7 +75,7 @@ func (s *Server) handleDiscover(w http.ResponseWriter, r *http.Request, c *reqCt
 		writeErr(w, http.StatusBadRequest, "ismeretlen lista")
 		return
 	}
-	res, err := m.Discover(r.Context(), list)
+	res, err := m.Discover(viewCtx(r, c), list)
 	if err != nil {
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
@@ -106,7 +116,7 @@ func (s *Server) handleDiscoverBrowse(w http.ResponseWriter, r *http.Request, c 
 		writeErr(w, http.StatusBadRequest, "ismeretlen rendezés")
 		return
 	}
-	res, err := m.Browse(r.Context(), b)
+	res, err := m.Browse(viewCtx(r, c), b)
 	if err != nil {
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
@@ -120,7 +130,7 @@ func (s *Server) handleDiscoverOptions(w http.ResponseWriter, r *http.Request, c
 	if m == nil {
 		return
 	}
-	o, err := m.Options(r.Context())
+	o, err := m.Options(viewCtx(r, c))
 	if err != nil {
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
@@ -138,7 +148,7 @@ func (s *Server) handleDiscoverSearch(w http.ResponseWriter, r *http.Request, c 
 		writeJSON(w, http.StatusOK, []any{})
 		return
 	}
-	res, err := m.DiscoverSearch(r.Context(), q, r.URL.Query().Get("kind"))
+	res, err := m.DiscoverSearch(viewCtx(r, c), q, r.URL.Query().Get("kind"))
 	if err != nil {
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
@@ -151,7 +161,7 @@ func (s *Server) handleDiscoverMovie(w http.ResponseWriter, r *http.Request, c *
 	if m == nil {
 		return
 	}
-	d, err := m.DiscoverMovie(r.Context(), pathID(r, "id"))
+	d, err := m.DiscoverMovie(viewCtx(r, c), pathID(r, "id"))
 	if err != nil {
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
@@ -216,7 +226,7 @@ func (s *Server) handleDiscoverSeries(w http.ResponseWriter, r *http.Request, c 
 	if m == nil {
 		return
 	}
-	d, err := m.DiscoverSeries(r.Context(), pathID(r, "id"))
+	d, err := m.DiscoverSeries(viewCtx(r, c), pathID(r, "id"))
 	if err != nil {
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
