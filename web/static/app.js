@@ -151,7 +151,7 @@ const ICONS = {
   eyeOff: 'M3 3l18 18M10.6 6.1A10 10 0 0112 6c6 0 10 6 10 6a17 17 0 01-3 3.5M6.6 7.6C3.8 9.3 2 12 2 12s4 7 10 7a9.5 9.5 0 004.4-1.1', plus: 'M12 5v14M5 12h14', dl: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   lock: 'M7 11V8a5 5 0 0110 0v3M5 11h14v10H5z', people: 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2 20c0-4 3-6 7-6s7 2 7 6M16 4.5a3.5 3.5 0 010 6.5M18 14c2.5.6 4 2.6 4 6', tag: 'M3 12V4h8l10 10-8 8z M7.5 8.5h.01',
   pip: 'M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2zM12.5 12.5h5.5v3.5h-5.5z', list: 'M4 6h16M4 12h16M4 18h10', pencil: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
-  x: 'M6 6l12 12M18 6L6 18', filter: 'M4 5h16l-6 8v6l-4-2v-4z',
+  x: 'M6 6l12 12M18 6L6 18', chevDown: 'M6 9l6 6 6-6', filter: 'M4 5h16l-6 8v6l-4-2v-4z',
   film: 'M4 4h16v16H4zM8 4v16M16 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4', tv: 'M3 6h18v12H3zM8 21h8M12 18v3M9 3l3 3 3-3',
   search: 'M10.5 4a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM20 20l-4.8-4.8', sortAsc: 'M4 7h5M4 12h8M4 17h11M18 19V5M15 8l3-3 3 3', sortDesc: 'M4 7h11M4 12h8M4 17h5M18 5v14M15 16l3 3 3-3',
 };
@@ -328,7 +328,7 @@ function spatialNav(e) {
   const scope = document.querySelector('.modal-back .modal') || document.querySelector('.menu-pop.floating') ||
     (TV && (document.querySelector('.menu-pop:not(.hidden)') || (player && (player.querySelector('.p-pop:not(.hidden)') || player)))) || document;
   const focusables = [...scope.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')]
-    .filter(el => el !== a && !el.disabled && el.offsetParent !== null && !el.closest('.hidden'));
+    .filter(el => el !== a && !el.disabled && el.offsetParent !== null && !el.closest('.hidden, [inert]'));
   if (!a || a === document.body || !scope.contains(a)) {
     const first = scope.querySelector('.card, .who-item') || focusables[0];
     if (first) { e.preventDefault(); first.focus(); }
@@ -446,9 +446,9 @@ function modal(title, body, actions, onClose) {
   setTimeout(() => (box.querySelector('input,select,button') || box).focus(), 30);
   return { close, box };
 }
-function confirmBox(text, yesLabel = T.delete) {
+function confirmBox(text, yesLabel = T.delete, body = null) {
   return new Promise(res => {
-    modal(text, null, close => [h('button.btn', { onclick: () => { res(false); close(); } }, T.cancel), h('button.btn.primary', { onclick: () => { res(true); close(); } }, yesLabel)], () => res(false));
+    modal(text, body, close => [h('button.btn', { onclick: () => { res(false); close(); } }, T.cancel), h('button.btn.primary', { onclick: () => { res(true); close(); } }, yesLabel)], () => res(false));
   });
 }
 
@@ -2071,21 +2071,57 @@ async function viewAdmin(tab) {
   const main = shell('admin');
   const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['languages', T.aLangs], ['settings', T.aSettings], ['acqseries', T.aAcqSeries], ['acqrequests', T.aAcqRequests], ['acqqueue', T.aAcqQueue], ['acqsettings', T.aAcqSettings]];
   const label = Object.fromEntries(tabs);
-  const groups = [[T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], [T.aGroupAccess, ['users', 'invites', 'devices', 'connect']], [T.aGroupAcquire, ['acqrequests', 'acqseries', 'acqqueue', 'acqsettings']], [T.aGroupSystem, ['languages', 'settings']]];
+  const groups = [['library', T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], ['access', T.aGroupAccess, ['users', 'invites', 'devices', 'connect']], ['acquire', T.aGroupAcquire, ['acqrequests', 'acqseries', 'acqqueue', 'acqsettings']], ['system', T.aGroupSystem, ['languages', 'settings']]];
   const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, languages: adminLangs, settings: adminSettings, acqseries: adminAcqSeries, acqrequests: adminAcqRequests, acqqueue: adminAcqQueue, acqsettings: adminAcqSettings }[tab];
   if (!fn) return go('#/admin/dash');
   const body = h('div.a-body', { 'aria-busy': 'true' }, aSkeleton());
-  main.append(h('div.admin', null,
-    h('nav.admin-nav', { 'aria-label': T.admin }, h('div.admin-nav-title', null, T.admin), groups.map(([g, ks]) => [h('div.admin-nav-h', { 'aria-hidden': 'true' }, g),
-      ks.map(k => h('a' + (k === tab ? '.on' : ''), { href: '#/admin/' + k, 'aria-current': k === tab && 'page' }, label[k]))])), body));
-  // phones: the nav is a scrolling strip; bring the current page into view
-  const nav = main.querySelector('.admin-nav'), on = nav.querySelector('a.on');
-  if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft += on.getBoundingClientRect().left - nav.getBoundingClientRect().left - (nav.clientWidth - on.offsetWidth) / 2;
+  const cur = (groups.find(g => g[2].includes(tab)) || groups[0])[0];
+  const link = k => h('a' + (k === tab ? '.on' : ''), { href: '#/admin/' + k, 'aria-current': k === tab && 'page' }, label[k]);
+  main.append(h('div.admin', null, h('div.admin-side', null, adminSideNav(groups, cur, link), adminPhoneNav(groups, cur, link)), body));
+  // phones: the second row scrolls; bring the current page into view
+  const strip = main.querySelector('.admin-mitems'), on = strip.querySelector('a.on');
+  if (on && strip.scrollWidth > strip.clientWidth) strip.scrollLeft += on.getBoundingClientRect().left - strip.getBoundingClientRect().left - (strip.clientWidth - on.offsetWidth) / 2;
   try { await fn(body); }
   catch (e) {
     if (e.status === 401 || e.status === 428) return;
     put(body, aHead(label[tab]), h('div.a-error', { role: 'alert' }, h('p', null, T.aLoadFailed), e.message && h('p.muted.small', null, e.message), h('button.btn', { onclick: () => route() }, T.retry)));
   } finally { body.removeAttribute('aria-busy'); }
+}
+
+// Wide screens: a ruled list of collapsible groups. The current page's group always stays open;
+// which of the others are folded is remembered in the browser.
+const ADMIN_FOLDED = 'kinora-admin-folded';
+function adminSideNav(groups, cur, link) {
+  let folded;
+  try { folded = new Set(JSON.parse(localStorage.getItem(ADMIN_FOLDED) || '[]')); } catch { folded = new Set(); }
+  const save = () => localStorage.setItem(ADMIN_FOLDED, JSON.stringify([...folded]));
+  return h('nav.admin-nav', { 'aria-label': T.admin }, h('div.admin-nav-title', null, T.admin), groups.map(([id, title, ks]) => {
+    const here = id === cur, open = here || !folded.has(id);
+    const items = h('div.admin-nav-items', { id: 'anav-' + id, inert: !open }, h('div', null, ks.map(link)));
+    const grp = h('div.admin-grp' + (open ? '.open' : '') + (here ? '.cur' : ''), null,
+      h('button.admin-nav-h', { type: 'button', 'aria-expanded': String(open), 'aria-controls': 'anav-' + id, 'aria-disabled': here && 'true',
+        onclick: () => {
+          if (here) return;
+          const now = !grp.classList.toggle('open');
+          if (now) folded.add(id); else folded.delete(id);
+          items.inert = now; grp.querySelector('.admin-nav-h').setAttribute('aria-expanded', String(!now)); save();
+        } }, h('span', null, title), h('span.admin-nav-n', null, ks.length), !here && icon('chevDown')),
+      items);
+    return grp;
+  }));
+}
+
+// Phones: two rows instead of one fifteen-item strip: the groups above, the chosen group's pages below.
+function adminPhoneNav(groups, cur, link) {
+  const items = h('div.admin-mitems');
+  const btns = groups.map(([id, title, ks]) => h('button.admin-mgrp-b', { type: 'button', 'aria-pressed': String(id === cur), onclick: () => pick(id) }, title));
+  function pick(id) {
+    groups.forEach(([g], i) => btns[i].setAttribute('aria-pressed', String(g === id)));
+    put(items, groups.find(g => g[0] === id)[2].map(link));
+    items.scrollLeft = 0;
+  }
+  put(items, groups.find(g => g[0] === cur)[2].map(link));
+  return h('nav.admin-mnav', { 'aria-label': T.admin }, h('div.admin-mgrp', null, btns), items);
 }
 
 // shared admin building blocks: page head, sections, tables, states
@@ -2111,6 +2147,11 @@ async function adminDash(body) {
     try { d = await GET('/api/admin/dashboard', { quiet: !first }); }
     catch (e) { if (first) throw e; if (!dead) t = setTimeout(render, 5000); return; } // a blip (restart, Wi-Fi) only delays the refresh
     if (dead) return;
+    if (updWait) { // an update started here: the new version answering ends the wait
+      const a = parseVer(d.version), b = parseVer(updWait.target);
+      if (a && b && a.every((x, i) => x === b[i])) { updWait = null; toast(T.updDone(d.version)); setTimeout(() => location.reload(), 1500); }
+      else if (Date.now() - updWait.since > 5 * 60e3) { updWait = null; toast(T.updSlow, true); }
+    }
     const up = d.uptime_sec, uptime = up < 60 ? T.uptimeUnder1 : up < 3600 ? T.min(Math.floor(up / 60)) : up > 86400 ? T.uptimeDH(Math.floor(up / 86400), Math.floor(up / 3600) % 24) : T.uptimeHM(Math.floor(up / 3600), Math.floor(up / 60) % 60);
     const stat = (v, l) => h('div.stat', null, h('b', { title: String(v) }, v), h('span', null, l));
     const group = (title, stats, foot) => h('div.a-ledger-g', null, h('h2.a-eyebrow', null, title), h('div.a-stats', null, stats), foot);
@@ -2121,6 +2162,12 @@ async function adminDash(body) {
           verLine(d.version, d.update, async btn => {
             btn.disabled = true;
             try { await POST('/api/admin/update-check'); } catch {}
+            if (!dead) { clearTimeout(t); render(); }
+          }, async btn => {
+            if (!await confirmBox(T.updConfirm(d.update.latest), T.updNow, h('p.muted', null, T.updConfirmBody))) return;
+            btn.disabled = true;
+            try { await POST('/api/admin/update-apply'); updWait = { target: d.update.latest, since: Date.now() }; }
+            catch (e) { toast(srv(e.message), true); }
             if (!dead) { clearTimeout(t); render(); }
           }))),
       d.library.missing > 0 && h('p.a-warn', null, T.missingFiles(d.library.missing)),
@@ -2136,7 +2183,10 @@ async function adminDash(body) {
   await render(true);
 }
 // The version footer of the dashboard: the running version, and next to it whether GitHub has a newer release.
-function verLine(version, u, onCheck) {
+// the update the dashboard started ({ target, since }); kept across re-renders and admin page changes
+let updWait = null;
+const parseVer = v => { const m = /(\d+)\.(\d+)\.(\d+)/.exec(v || ''); return m && m.slice(1).map(Number); };
+function verLine(version, u, onCheck, onApply) {
   const day = s => new Date(s * 1000).toLocaleDateString(T.locale);
   const line = h('p.a-ver', null, T.version + ' ', h('span', null, version));
   if (!u || u.disabled) return line;
@@ -2144,13 +2194,17 @@ function verLine(version, u, onCheck) {
   const again = h('button.a-upd-again', { type: 'button', title: checked ? checked + ' · ' + T.updCheckNow : T.updCheckNow, 'aria-label': T.updCheckNow,
     onclick: e => onCheck && onCheck(e.currentTarget) }, '↻');
   if (u.available) {
-    const how = { docker: T.updHowDocker, windows: T.updHowWindows, systemd: T.updHowSystemd }[u.mode] || T.updHowManual;
+    const how = { docker: T.updHowDocker, windows: u.can_apply ? T.updHowWindows : T.updHowManual, systemd: T.updHowSystemd }[u.mode] || T.updHowManual;
+    const running = updWait || u.applying;
+    const failed = !running && u.last_run && !u.last_run.ok;
     line.append(' ', again);
     return h('div.a-upd', null,
       line,
       h('a.a-upd-link', { href: u.url, target: '_blank', rel: 'noopener noreferrer' },
         h('b', null, T.updAvailable(u.latest)), u.published_at ? h('span', null, day(u.published_at)) : null, ' →'),
-      h('p.a-upd-how', null, how));
+      running ? h('p.a-upd-run', { role: 'status' }, T.updRunning(u.latest)) : h('p.a-upd-how', null, how),
+      failed && h('p.a-upd-fail', null, T.updLastFailed(u.last_run.at, u.last_run.line)),
+      u.can_apply && !running && onApply && h('button.btn.primary.small.a-upd-now', { type: 'button', onclick: e => onApply(e.currentTarget) }, T.updNow));
   }
   if (u.checked_at) line.append(h('span.a-upd-ok', { title: checked }, ' · ' + T.updLatest));
   else if (u.error) line.append(h('span.a-upd-ok', null, ' · ' + T.updFailed));

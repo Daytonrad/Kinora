@@ -2,7 +2,8 @@ package server
 
 // Release check for the admin dashboard: the server asks GitHub for the latest published release (not the main
 // branch) at most every few hours, in the background, and the dashboard shows whether a newer one exists.
-// Nothing is downloaded or installed here; the admin updates the way their install mode updates.
+// Nothing is downloaded or installed here; the admin updates the way their install mode updates
+// (on Windows the dashboard can start update.ps1, see selfupdate.go).
 
 import (
 	"context"
@@ -38,6 +39,9 @@ type releaseInfo struct {
 	Error     bool   `json:"error,omitempty"`
 	Disabled  bool   `json:"disabled,omitempty"` // dev build or KINORA_UPDATE_CHECK=0
 	Mode      string `json:"mode"`               // install mode, so the UI can say how to update
+	CanApply  bool       `json:"can_apply,omitempty"` // Windows: the dashboard can start update.ps1 itself
+	Applying  bool       `json:"applying,omitempty"`  // an update started from the dashboard is running
+	LastRun   *updateRun `json:"last_run,omitempty"`  // outcome of the last update.ps1 run (update.log)
 }
 
 type releaseChecker struct {
@@ -47,6 +51,7 @@ type releaseChecker struct {
 	next    time.Time
 	last    time.Time // when the last check started
 	running bool
+	applied time.Time // when the dashboard last started update.ps1
 }
 
 func newReleaseChecker() *releaseChecker {
@@ -97,7 +102,7 @@ func (rc *releaseChecker) Status(ctx context.Context) releaseInfo {
 		rc.running, rc.last = true, time.Now()
 		go rc.check(ctx)
 	}
-	return withAvailable(info)
+	return rc.withApply(withAvailable(info))
 }
 
 func withAvailable(info releaseInfo) releaseInfo {

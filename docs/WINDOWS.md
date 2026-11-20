@@ -49,7 +49,13 @@ Az ütemezett feladat naponta egyszer (04:00 és 04:30 között) SYSTEM-ként fu
 
 A frissítés naplója: `C:\Program Files\Kinora\update.log`. A szerver naplója: `C:\ProgramData\Kinora\kinora.log`.
 
-Kézi frissítés (rendszergazdaként):
+**Frissítés a webes felületről:** ha van újabb kiadás, az **Admin → Irányítópult** a verziószám alatt jelzi,
+és megjelenik a **Frissítés most** gomb. Megerősítés után a szerver a háttérben elindítja ugyanezt az `update.ps1`-et
+(mentés, csere, állapotellenőrzés, hiba esetén visszaállás); a szolgáltatás kb. egy percre leáll, az oldal megvárja
+az új verziót, majd újratölt. Ha az előző frissítés nem sikerült, az irányítópult az `update.log` hibaüzenetét mutatja.
+PowerShell ehhez nem kell, és akkor is működik, ha az automatikus frissítés ki van kapcsolva (`-NoAutoUpdate`).
+
+Kézi frissítés parancssorból (rendszergazdaként):
 
 ```powershell
 & "C:\Program Files\Kinora\update.ps1"          # csak ha van újabb kiadás

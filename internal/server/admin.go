@@ -421,6 +421,20 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request, c *reqC
 	writeJSON(w, http.StatusOK, d)
 }
 
+// handleUpdateApply is the dashboard's "update now" button on Windows: it starts update.ps1 in the background.
+// The service stops for the swap, so the answer comes before that; the dashboard then waits for the new version.
+func (s *Server) handleUpdateApply(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	if st := s.updates.Status(s.bgCtx); !st.Available {
+		s.updates.CheckNow(r.Context()) // the dashboard may be showing an older answer than this server has
+	}
+	if ok, reason := s.updates.Apply(); !ok {
+		writeErr(w, http.StatusConflict, reason)
+		return
+	}
+	s.log.Info("update started from the dashboard", "user", c.User.Username)
+	writeJSON(w, http.StatusAccepted, map[string]bool{"started": true})
+}
+
 // handleUpdateCheck is the dashboard's "check now" button: it asks GitHub for the latest release and returns the result.
 func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	writeJSON(w, http.StatusOK, s.updates.CheckNow(r.Context()))

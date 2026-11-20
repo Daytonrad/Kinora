@@ -96,6 +96,7 @@ func (s *Server) routes() {
 	m.HandleFunc("DELETE /api/admin/languages/{code}", s.admin(s.handleLangDelete))
 	m.HandleFunc("GET /api/admin/dashboard", s.admin(s.handleDashboard))
 	m.HandleFunc("POST /api/admin/update-check", s.admin(s.handleUpdateCheck))
+	m.HandleFunc("POST /api/admin/update-apply", s.admin(s.handleUpdateApply))
 	m.HandleFunc("GET /api/admin/devices", s.admin(s.handleAdminDevices))
 	m.HandleFunc("GET /api/admin/segments", s.admin(s.handleSegmentStatus))
 	m.HandleFunc("POST /api/admin/segments/analyze", s.admin(s.handleSegmentAnalyze))
