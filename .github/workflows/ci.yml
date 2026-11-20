@@ -14,7 +14,13 @@ permissions:
 env:
   IMAGE: ghcr.io/scotylucas/kinora
 
+# A newer push to the same branch/PR cancels the run still in progress (tags and main always finish).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')) }}
+
 jobs:
+  # test and smoke run in parallel; build waits for both.
   test:
     runs-on: ubuntu-24.04
     steps:
@@ -22,27 +28,41 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.27"
-      - name: ffmpeg
+      - name: ffmpeg (tests that probe media)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - name: container smoke test
-        run: SMOKE_LOGS=1 bash scripts/smoke.sh
       - run: go vet ./...
       - run: go test -race -count=1 ./...
 
   smoke:
-    needs: test
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: ffmpeg (test media + segment check)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: test media cache
+        uses: actions/cache@v4
+        with:
+          path: testmedia
+          key: testmedia-${{ hashFiles('scripts/mkmedia.sh') }}
+      - uses: docker/setup-buildx-action@v3
+      # Same image smoke.sh would build, but with the GHA layer cache (the runtime apt layer is the slow part).
+      - name: build smoke image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          build-args: VERSION=smoke
+          tags: kinora:smoke
+          load: true
+          cache-from: type=gha,scope=smoke
+          cache-to: type=gha,mode=max,scope=smoke
       - name: container smoke test
-        run: SMOKE_LOGS=1 bash scripts/smoke.sh
+        run: SMOKE_LOGS=1 SMOKE_PREBUILT=1 bash scripts/smoke.sh
 
   # One native build per architecture and variant (no QEMU: cgo/sqlite builds natively on the arm runner),
   # pushed by digest and stitched into multi-arch manifests by the merge job.
   build:
-    needs: smoke
+    needs: [test, smoke]
     if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false

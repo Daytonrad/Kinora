@@ -62,8 +62,13 @@ fi
 
 # ------------------------------------------------------------------ start
 if [ -z "${SMOKE_NATIVE:-}" ]; then
-    say "building image"
-    docker build -q --target runtime --build-arg VERSION=smoke -t "$IMAGE" . >/dev/null
+    if [ -n "${SMOKE_PREBUILT:-}" ]; then
+        say "using prebuilt image $IMAGE"
+        docker image inspect "$IMAGE" >/dev/null || die "SMOKE_PREBUILT set but $IMAGE is missing"
+    else
+        say "building image"
+        docker build -q --target runtime --build-arg VERSION=smoke -t "$IMAGE" . >/dev/null
+    fi
     docker rm -f "$NAME" >/dev/null 2>&1 || true
     media="$ROOT/testmedia"
     if command -v cygpath >/dev/null; then media="$(cygpath -w "$media")"; fi
