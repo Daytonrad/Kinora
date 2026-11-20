@@ -45,9 +45,13 @@ type Indexer struct {
 	hc     *http.Client
 	mu     sync.Mutex
 	in     bool // signed in
+	// Solver gets the pages a browser check blocks (nil: none); ua is then the solving browser's User-Agent.
+	Solver *FlareSolverr
+	ua     string
 }
 
-const userAgent = "Mozilla/5.0 (compatible; Kinora)"
+// a browser's: many sites turn away anything else
+const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 const maxPage = 8 << 20
 
 // New makes an indexer from a definition and the admin's values (missing ones get the definition's defaults).
@@ -84,7 +88,11 @@ func (ix *Indexer) resolve(base, ref string) (string, error) {
 }
 
 func (ix *Indexer) headers(req *http.Request, h map[string]any, ctx *templateCtx) {
-	req.Header.Set("User-Agent", userAgent)
+	ua := userAgent
+	if ix.ua != "" {
+		ua = ix.ua
+	}
+	req.Header.Set("User-Agent", ua)
 	for k, v := range h {
 		for _, s := range argList(v) {
 			if r, err := render(s, ctx); err == nil {
@@ -97,6 +105,7 @@ func (ix *Indexer) headers(req *http.Request, h map[string]any, ctx *templateCtx
 // fetch sends a request and reads the answer (bounded).
 func (ix *Indexer) fetch(ctx context.Context, method, u string, form url.Values, raw string, hdr map[string]any, tctx *templateCtx) ([]byte, *http.Response, error) {
 	var body io.Reader
+	post := ""
 	if method == "POST" {
 		enc := form.Encode()
 		if raw != "" {
@@ -105,7 +114,7 @@ func (ix *Indexer) fetch(ctx context.Context, method, u string, form url.Values,
 			}
 			enc += raw
 		}
-		body = strings.NewReader(enc)
+		body, post = strings.NewReader(enc), enc
 	} else if len(form) > 0 || raw != "" {
 		sep := "?"
 		if strings.Contains(u, "?") {
@@ -142,6 +151,12 @@ func (ix *Indexer) fetch(ctx context.Context, method, u string, form url.Values,
 		return nil, nil, err
 	}
 	if resp.StatusCode >= 400 {
+		if challenged(resp, b) {
+			if ix.Solver != nil {
+				return ix.solveVia(ctx, req, post)
+			}
+			return b, resp, fmt.Errorf("%s: az oldalt böngészőellenőrzés (Cloudflare) védi; a beállításokban adj meg egy FlareSolverr-címet", ix.Def.Name)
+		}
 		return b, resp, fmt.Errorf("%s: HTTP %d", ix.Def.Name, resp.StatusCode)
 	}
 	return b, resp, nil
@@ -397,7 +412,7 @@ func (ix *Indexer) value(sel Selector, s *goquery.Selection, ctx *templateCtx) (
 }
 
 // jsonValue reads a field from a JSON row: a dotted path ("info.size"), a text template, case or default.
-func (ix *Indexer) jsonValue(sel Selector, row any, ctx *templateCtx) (string, error) {
+func (ix *Indexer) jsonValue(sel Selector, row, parent any, ctx *templateCtx) (string, error) {
 	var v string
 	switch {
 	case sel.Text != nil:
@@ -407,7 +422,12 @@ func (ix *Indexer) jsonValue(sel Selector, row any, ctx *templateCtx) (string, e
 		}
 		v = r
 	case sel.Selector != "":
-		x := jsonPath(row, sel.Selector)
+		var x any
+		if strings.HasPrefix(sel.Selector, "..") { // a field of the enclosing object (rows.attribute)
+			x = jsonPath(parent, sel.Selector[2:])
+		} else {
+			x = jsonPath(row, sel.Selector)
+		}
 		if x == nil {
 			if sel.Default != nil {
 				return render(*sel.Default, ctx)
@@ -504,7 +524,7 @@ func (ix *Indexer) search(ctx context.Context, q Query) ([]Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	tctx.Keywords, tctx.Query.Keywords = kw, kw
+	tctx.Keywords, tctx.Query["Keywords"] = kw, kw
 	fields, _ := ix.Def.FieldList()
 	var out []Row
 	seen := map[string]bool{}
@@ -516,6 +536,7 @@ func (ix *Indexer) search(ctx context.Context, q Query) ([]Row, error) {
 		if err != nil {
 			return nil, err
 		}
+		path = strings.ReplaceAll(strings.TrimSpace(path), " ", "%20") // keywords in the path itself
 		u, err := ix.resolve(ix.Def.SiteLink(), path)
 		if err != nil {
 			return nil, err
@@ -629,25 +650,33 @@ func (ix *Indexer) jsonRows(body []byte, fields []Field, tctx *templateCtx, page
 	if err := json.Unmarshal(body, &root); err != nil {
 		return nil, fmt.Errorf("%s: érthetetlen JSON-válasz", ix.Def.Name)
 	}
-	list := jsonPath(root, ix.Def.Search.Rows.Selector)
+	rs := ix.Def.Search.Rows
+	sel, err := render(rs.Selector, tctx)
+	if err != nil {
+		return nil, err
+	}
+	if i := strings.Index(sel, ":has("); i >= 0 { // a JSONPath filter Kinora does not apply
+		sel = sel[:i]
+	}
 	var items []any
-	switch v := list.(type) {
-	case []any:
-		items = v
-	case map[string]any:
-		for _, x := range v {
-			items = append(items, x)
+	for _, v := range jsonItems(jsonPath(root, sel)) {
+		if rs.Attribute == "" {
+			items = append(items, jsonRow{v: v})
+			continue
 		}
-	case nil:
-		return nil, nil
+		// rows.attribute: each row is an element of the object's attribute, with the object as its parent ("..x")
+		for _, sub := range jsonItems(jsonPath(v, rs.Attribute)) {
+			items = append(items, jsonRow{v: sub, parent: v})
+		}
 	}
 	var out []Row
-	for _, it := range items {
+	for _, x := range items {
+		it := x.(jsonRow)
 		rc := *tctx
 		rc.Result = map[string]string{}
 		ok := true
 		for _, f := range fields {
-			v, err := ix.jsonValue(f.Selector, it, &rc)
+			v, err := ix.jsonValue(f.Selector, it.v, it.parent, &rc)
 			if err != nil {
 				if isKeyField(f.Name) {
 					ok = false
@@ -664,6 +693,23 @@ func (ix *Indexer) jsonRows(body []byte, fields []Field, tctx *templateCtx, page
 		}
 	}
 	return out, nil
+}
+
+type jsonRow struct{ v, parent any }
+
+// jsonItems is a JSON value as a list of rows: an array's elements, an object's values.
+func jsonItems(x any) []any {
+	switch v := x.(type) {
+	case []any:
+		return v
+	case map[string]any:
+		out := make([]any, 0, len(v))
+		for _, y := range v {
+			out = append(out, y)
+		}
+		return out
+	}
+	return nil
 }
 
 func isKeyField(name string) bool {
@@ -698,7 +744,10 @@ func (ix *Indexer) toRow(f map[string]string, pageURL string) (Row, bool) {
 	r.Leechers = atoiLoose(f["leechers"])
 	r.Grabs = atoiLoose(f["grabs"])
 	if d := firstOf(f["date"], f["publishdate"]); d != "" {
-		if t, err := time.Parse(time.RFC3339, d); err == nil {
+		if reUnix.MatchString(d) {
+			n, _ := strconv.ParseInt(d, 10, 64)
+			r.Date = time.Unix(n, 0).UTC()
+		} else if t, err := time.Parse(time.RFC3339, d); err == nil {
 			r.Date = t
 		} else if t, err := fuzzyTime(d); err == nil {
 			r.Date = t
@@ -719,6 +768,9 @@ func (ix *Indexer) toRow(f map[string]string, pageURL string) (Row, bool) {
 	}
 	r.Freeleech = f["downloadvolumefactor"] == "0"
 	r.Description = f["description"]
+	if r.Download == "" && r.Magnet == "" && reHash.MatchString(r.InfoHash) { // an API that gives only the hash
+		r.Magnet = "magnet:?xt=urn:btih:" + r.InfoHash + "&dn=" + url.QueryEscape(r.Title) + magnetTrackers
+	}
 	return r, r.Title != "" && (r.Download != "" || r.Magnet != "")
 }
 
@@ -737,7 +789,15 @@ func atoiLoose(s string) int {
 	return n
 }
 
-var reIMDb = regexpMust(`tt\d{7,10}`)
+var (
+	reIMDb = regexpMust(`tt\d{7,10}`)
+	reHash = regexpMust(`^[0-9a-f]{40}$`)
+	reUnix = regexpMust(`^\d{9,10}$`)
+)
+
+// magnetTrackers are added to a magnet made from a bare info hash, so the client finds peers without DHT too.
+const magnetTrackers = "&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce&tr=udp%3A%2F%2Fopen.demonii.com%3A1337%2Fannounce" +
+	"&tr=udp%3A%2F%2Fopen.stealth.si%3A80%2Fannounce&tr=udp%3A%2F%2Fexodus.desync.com%3A6969%2Fannounce"
 
 // ------------------------------------------------------------------ download
 

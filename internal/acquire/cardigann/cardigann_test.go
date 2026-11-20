@@ -310,8 +310,23 @@ func TestParseErrorsAndHelpers(t *testing.T) {
 	if v, _ := applyFilter("Size: 12 GB", Filter{Name: "regexp", Args: `(\d+) GB`}, nil); v != "12" {
 		t.Errorf("regexp: %q", v)
 	}
-	if _, err := applyFilter("x", Filter{Name: "re_replace", Args: []any{"(?<=a)b", ""}}, nil); err == nil {
-		t.Error("a lookbehind should fail with a clear error")
+	// definitions are written for .NET: lookarounds, Unicode blocks and "$1" replacements work
+	if v, err := applyFilter("ab cb", Filter{Name: "re_replace", Args: []any{"(?<=a)b", "X"}}, nil); err != nil || v != "aX cb" {
+		t.Errorf("lookbehind: %q %v", v, err)
+	}
+	if v, err := applyFilter("Mátrix 黑客帝国", Filter{Name: "re_replace", Args: []any{`([\p{IsCJKUnifiedIdeographs}\W]+)`, "."}}, nil); err != nil || v != "Mátrix." {
+		t.Errorf("unicode block: %q %v", v, err)
+	}
+	if _, err := applyFilter("x", Filter{Name: "re_replace", Args: []any{"(a", ""}}, nil); err == nil {
+		t.Error("a broken pattern should fail with a clear error")
+	}
+	// a .NET pattern inside a template literal, a dashed setting name, a filter argument that is a template
+	ctx := newCtx(map[string]any{"cat-id": "0_0", "y": true}, Query{Keywords: "Show 01"}, nil)
+	if v, err := render(`{{ re_replace .Keywords "\b0(\d)\b" "$1" }}-{{ .Config.cat-id }}`, ctx); err != nil || v != "Show 1-0_0" {
+		t.Errorf("template: %q %v", v, err)
+	}
+	if v, _ := applyFilter("a", Filter{Name: "append", Args: "{{ if .Config.y }}!{{ end }}"}, ctx); v != "a!" {
+		t.Errorf("templated argument: %q", v)
 	}
 	if v, err := render(`{{ re_replace .Keywords "\\s+" "+" }}|{{ join .Categories "," }}|{{ if .Query.IMDBID }}i{{ else }}k{{ end }}`,
 		newCtx(nil, Query{Keywords: "a  b c"}, []string{"1", "2"})); err != nil || v != "a+b+c|1,2|k" {

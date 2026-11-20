@@ -555,6 +555,12 @@ func (s *Store) SetRequestStatus(id int64, status, note string, nextTry int64) e
 	return err
 }
 
+// DeleteAcqRequest removes a request; its grabs keep their history (request_id becomes NULL).
+func (s *Store) DeleteAcqRequest(id int64) error {
+	_, err := s.DB.Exec(`DELETE FROM acq_requests WHERE id=?`, id)
+	return err
+}
+
 // DecideRequest records an admin's approval or refusal.
 func (s *Store) DecideRequest(id int64, status, note string, adminID int64) error {
 	_, err := s.DB.Exec(`UPDATE acq_requests SET status=?, note=?, decided_by=?, updated_at=? WHERE id=?`, status, note, adminID, now(), id)

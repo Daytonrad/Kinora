@@ -85,6 +85,7 @@ func (s *Server) handleAcqSettings(w http.ResponseWriter, r *http.Request, c *re
 		"auto_approve": s.st.Setting("acq_auto_approve"),
 		"quota_week":   s.st.SettingInt("acq_quota_week", 0),
 		"retry_hours":  s.st.SettingInt("acq_retry_hours", 6),
+		"flaresolverr": s.st.Setting(acquire.SettingFlareSolverr),
 		"tv_libraries": tvLibs,
 		"profiles":     profiles,
 		"indexers":     outI,
@@ -102,6 +103,7 @@ func (s *Server) handleAcqSettingsPut(w http.ResponseWriter, r *http.Request, c 
 		AutoApprove *string          `json:"auto_approve"`
 		QuotaWeek   *int             `json:"quota_week"`
 		RetryHours  *int             `json:"retry_hours"`
+		FlareSolver *string          `json:"flaresolverr"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -128,6 +130,14 @@ func (s *Server) handleAcqSettingsPut(w http.ResponseWriter, r *http.Request, c 
 		}
 		b, _ := json.Marshal(p)
 		s.st.SetSetting("acq_profile", string(b))
+	}
+	if in.FlareSolver != nil {
+		u := strings.TrimRight(strings.TrimSpace(*in.FlareSolver), "/")
+		if u != "" && !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+			writeErr(w, http.StatusBadRequest, "a FlareSolverr címe http:// vagy https:// kezdetű legyen")
+			return
+		}
+		s.st.SetSetting(acquire.SettingFlareSolverr, u)
 	}
 	if in.ImportMode != nil {
 		if *in.ImportMode != "hardlink" && *in.ImportMode != "copy" {

@@ -77,6 +77,24 @@ type ErrorSel struct {
 	Message  *Selector `yaml:"message"`
 }
 
+// UnmarshalYAML keeps a default as written ("0_0" is a category id, not the number 0); only true/false become booleans.
+func (s *Setting) UnmarshalYAML(n *yaml.Node) error {
+	type plain Setting
+	if err := n.Decode((*plain)(s)); err != nil {
+		return err
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if d := n.Content[i+1]; n.Content[i].Value == "default" && d.Kind == yaml.ScalarNode {
+			if d.Tag == "!!bool" {
+				s.Default = strings.EqualFold(d.Value, "true")
+			} else {
+				s.Default = d.Value
+			}
+		}
+	}
+	return nil
+}
+
 // LoginTest is a page that shows a selector only when signed in.
 type LoginTest struct {
 	Path     string `yaml:"path"`

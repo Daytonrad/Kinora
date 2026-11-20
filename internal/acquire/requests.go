@@ -113,7 +113,8 @@ func (m *Manager) Decide(id, adminID int64, approve bool, note string) error {
 	return nil
 }
 
-// CancelRequest withdraws a request that has not started downloading.
+// CancelRequest withdraws a request that has not started downloading. A closed one that did
+// not bring the film (failed, denied, canceled) is deleted, so it leaves the requester's list.
 func (m *Manager) CancelRequest(id int64, who Requester) error {
 	q, err := m.st.AcqRequest(id)
 	if err != nil {
@@ -125,7 +126,12 @@ func (m *Manager) CancelRequest(id int64, who Requester) error {
 	switch q.Status {
 	case store.ReqPending, store.ReqApproved, store.ReqWaiting:
 		return m.st.SetRequestStatus(id, store.ReqCanceled, "", 0)
+	case store.ReqFailed, store.ReqDenied, store.ReqCanceled:
+		return m.st.DeleteAcqRequest(id)
 	case store.ReqDownloading:
+		if who.IsAdmin {
+			return errors.New("a letöltést a letöltési sorban lehet megszakítani")
+		}
 		return ErrRequestBusy
 	}
 	return errors.New("ez a kérés már lezárult")

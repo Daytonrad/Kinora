@@ -17,6 +17,9 @@ import (
 // The built-in indexer engine (M5): an indexer of kind "cardigann" runs an uploaded definition instead of
 // calling a Torznab API. Searching, scoring and downloading go through the same paths as Torznab results.
 
+// SettingFlareSolverr is the address of a FlareSolverr service for sites behind a browser check ("" = none).
+const SettingFlareSolverr = "acq_flaresolverr_url"
+
 type engineEntry struct {
 	key string // definition + settings: a change makes a new engine (and a new session)
 	ix  sites.Engine
@@ -40,6 +43,8 @@ func (m *Manager) engine(ix Indexer) (sites.Engine, error) {
 		}
 		key = strconv.Itoa(len(d.YAML)) + "|" + strconv.FormatInt(d.CreatedAt, 10) + "|" + ix.Config
 	}
+	solver := strings.TrimSpace(m.st.Setting(SettingFlareSolverr))
+	key += "|" + solver
 	m.eng.mu.Lock()
 	defer m.eng.mu.Unlock()
 	if m.eng.m == nil {
@@ -62,7 +67,9 @@ func (m *Manager) engine(ix Indexer) (sites.Engine, error) {
 		if err != nil {
 			return nil, err
 		}
-		e = cardigann.New(def, values, m.hc)
+		ce := cardigann.New(def, values, m.hc)
+		ce.Solver = cardigann.NewFlareSolverr(solver)
+		e = ce
 	}
 	if ix.ID != 0 {
 		m.eng.m[ix.ID] = engineEntry{key: key, ix: e}

@@ -47,10 +47,20 @@ func applyFilters(v string, filters []Filter, ctx *templateCtx) (string, error) 
 }
 
 func applyFilter(v string, f Filter, ctx *templateCtx) (string, error) {
-	a0 := arg(f.Args, 0)
-	if ctx != nil && strings.Contains(a0, "{{") {
-		a0, _ = render(a0, ctx)
+	// arguments may be templates too ("{{ if .Config.x }}…{{ end }}")
+	if ctx != nil {
+		if l := argList(f.Args); len(l) > 0 {
+			args := make([]any, len(l))
+			for i, x := range l {
+				if strings.Contains(x, "{{") {
+					x, _ = render(x, ctx)
+				}
+				args[i] = x
+			}
+			f.Args = args
+		}
 	}
+	a0 := arg(f.Args, 0)
 	switch strings.ToLower(f.Name) {
 	case "querystring":
 		u, err := url.Parse(strings.TrimSpace(v))
@@ -69,13 +79,13 @@ func applyFilter(v string, f Filter, ctx *templateCtx) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return re.ReplaceAllString(v, dotnetReplacement(arg(f.Args, 1))), nil
+		return re.replace(v, arg(f.Args, 1))
 	case "regexp":
 		re, err := compileRegexp(a0)
 		if err != nil {
 			return "", err
 		}
-		m := re.FindStringSubmatch(v)
+		m := re.submatch(v)
 		switch {
 		case m == nil:
 			return "", nil

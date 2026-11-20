@@ -7,13 +7,15 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ScotyLucas/kinora/internal/acquire"
 	"github.com/ScotyLucas/kinora/internal/acquire/cardigann"
 	"github.com/ScotyLucas/kinora/internal/acquire/sites"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 // Built-in indexer engine (M5): the admin uploads indexer definitions (Cardigann YAML, the Jackett / Prowlarr
-// format) and adds indexers that run them. Kinora ships none.
+// format) and adds indexers that run them. Kinora ships none: the admin uploads them, or adds them from the
+// catalogue (the community collection Prowlarr keeps, fetched on demand).
 
 const maxDefinitionSize = 1 << 20
 
@@ -196,4 +198,100 @@ func maskPassword(v string) string {
 		return ""
 	}
 	return strings.Repeat(maskChar, 8)
+}
+
+// ------------------------------------------------------------------ the catalogue
+
+type catalogItem struct {
+	*acquire.CatalogEntry
+	Installed bool `json:"installed"` // a definition with this id is saved
+	Outdated  bool `json:"outdated"`  // …and the catalogue has a different version
+}
+
+func (s *Server) handleAcqCatalog(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acq(w)
+	if m == nil {
+		return
+	}
+	list, err := m.Catalog(r.Context(), r.URL.Query().Get("refresh") == "1")
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	have := map[string]string{}
+	if defs, err := s.st.AcqDefinitions(); err == nil {
+		for _, d := range defs {
+			have[d.ID] = d.YAML
+		}
+	}
+	out := make([]catalogItem, len(list))
+	for i, e := range list {
+		y, ok := have[e.ID]
+		out[i] = catalogItem{CatalogEntry: e, Installed: ok, Outdated: ok && y != e.YAML}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleAcqCatalogInstall saves a catalogue definition (a newer version replaces the saved one).
+func (s *Server) handleAcqCatalogInstall(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acq(w)
+	if m == nil {
+		return
+	}
+	e, err := m.CatalogEntry(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, err.Error())
+		return
+	}
+	d := &store.AcqDefinition{ID: e.ID, Name: e.Name, Type: e.Type, YAML: e.YAML}
+	if err := s.st.SaveAcqDefinition(d); err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	info, _ := definitionSummary(d)
+	writeJSON(w, http.StatusOK, info)
+}
+
+// handleAcqCatalogUpdate brings the saved definitions that came from the catalogue up to its version.
+func (s *Server) handleAcqCatalogUpdate(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	m := s.acq(w)
+	if m == nil {
+		return
+	}
+	if _, err := m.Catalog(r.Context(), true); err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	defs, _ := s.st.AcqDefinitions()
+	n := 0
+	for _, d := range defs {
+		e, err := m.CatalogEntry(r.Context(), d.ID)
+		if err != nil || e.YAML == d.YAML {
+			continue
+		}
+		if s.st.SaveAcqDefinition(&store.AcqDefinition{ID: e.ID, Name: e.Name, Type: e.Type, YAML: e.YAML}) == nil {
+			n++
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"updated": n})
+}
+
+func (s *Server) handleAcqFlareSolverrTest(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	var in struct {
+		URL string `json:"url"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	f := cardigann.NewFlareSolverr(in.URL)
+	if f == nil {
+		writeErr(w, http.StatusBadRequest, "add meg a FlareSolverr címét")
+		return
+	}
+	v, err := f.Test(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"server": "FlareSolverr " + v})
 }

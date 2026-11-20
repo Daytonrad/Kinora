@@ -812,6 +812,15 @@ func TestRequests(t *testing.T) {
 	if err := m.CancelRequest(r3.ID, Requester{UserID: cili}); err != nil {
 		t.Errorf("cancel: %v", err)
 	}
+	// a failed request can be removed by its owner
+	r4, _ := m.Request(ctx, Requester{UserID: cili}, 779, 0)
+	st.SetRequestStatus(r4.ID, store.ReqFailed, "nincs kiadás", 0)
+	if err := m.CancelRequest(r4.ID, Requester{UserID: cili}); err != nil {
+		t.Errorf("remove failed: %v", err)
+	}
+	if _, err := st.AcqRequest(r4.ID); err == nil {
+		t.Error("failed request still there")
+	}
 	_ = libRow
 }
 

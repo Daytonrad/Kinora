@@ -54,6 +54,7 @@ type Manager struct {
 	seriesMu sync.Mutex
 	lastRSS  time.Time
 	eng      engines
+	cat      catalog
 }
 
 type cachedClient struct {

@@ -13,6 +13,7 @@ require golang.org/x/sys v0.50.0
 
 require (
 	github.com/PuerkitoBio/goquery v1.14.0
+	github.com/dlclark/regexp2 v1.12.0
 	github.com/evanw/esbuild v0.28.2
 	gopkg.in/yaml.v3 v3.0.1
 )
