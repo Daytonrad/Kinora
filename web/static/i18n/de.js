@@ -158,6 +158,8 @@
   "discOnlyNew": "Nur was ich noch nicht habe",
   "discServices": "Streaming",
   "discRegion": "Streamingangebot von: {0}",
+  "discSortBy": "Sortierung:",
+  "discRegionShort": "Angebot: {0}",
   "discTvPopular": "Beliebte Serien",
   "discTop": "Die Besten aller Zeiten",
   "discOnService": "{0} – gerade beliebt",

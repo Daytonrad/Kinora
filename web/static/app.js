@@ -3256,40 +3256,59 @@ async function viewDiscover(q) {
 
   // ---- the bar: search, films / series, sort; then the streaming services; then the rest
   const input = h('input', { type: 'search', placeholder: T.discSearchPh, 'aria-label': T.discSearchPh, value: f.q });
-  const kindTabs = h('div.disc-kind', { role: 'tablist', 'aria-label': T.discKind });
+  const kindTabs = h('div.seg.disc-kind', { role: 'tablist', 'aria-label': T.discKind });
   const sortSel = h('select', { 'aria-label': T.sort });
+  const sortCtl = h('label.disc-sort', null, h('span', null, T.discSortBy), sortSel);
   const genreSel = h('select', { 'aria-label': T.genres });
   const yearSel = h('select', { 'aria-label': T.year }, DISC_YEARS().map(([v, l]) => h('option', { value: v, selected: f.y === v }, l)));
   const rateSel = h('select', { 'aria-label': T.minRating }, [['', T.discAnyRating], ['6', '★ 6+'], ['7', '★ 7+'], ['8', '★ 8+']].map(([v, l]) => h('option', { value: v, selected: f.r === v }, l)));
   const langSel = h('select', { 'aria-label': T.discLang }, h('option', { value: '' }, T.discAnyLang), DISC_LANGS.map(c => h('option', { value: c, selected: f.lang === c }, isoName(c, 'language'))));
-  const fresh = h('input', { type: 'checkbox', checked: f.fresh });
-  const clearBtn = h('button.btn.ghost', { type: 'button' }, icon('x'), T.clear);
-  const provBox = h('div.disc-provbar', { role: 'group', 'aria-label': T.discServices });
+  const fresh = h('button.fchip', { type: 'button', 'aria-pressed': String(f.fresh) });
+  const clearBtn = h('button.disc-clear', { type: 'button' }, icon('x'), T.clear);
+  const provBox = h('div.menu-pop.disc-spop', { role: 'group', 'aria-label': T.discServices, hidden: true });
+  const provBtn = h('button.fchip.disc-sbtn', { type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false' });
+  const provClose = e => { if (!provMenu.contains(e.target)) setProvOpen(false); };
+  const setProvOpen = open => {
+    provBox.hidden = !open; provBtn.setAttribute('aria-expanded', String(open));
+    document[open ? 'addEventListener' : 'removeEventListener']('mousedown', provClose);
+  };
+  provBtn.addEventListener('click', () => setProvOpen(provBox.hidden));
+  provBox.addEventListener('keydown', e => { if (e.key === 'Escape') { setProvOpen(false); provBtn.focus(); } });
+  onCleanup(() => document.removeEventListener('mousedown', provClose));
+  const provMenu = h('div.menu.disc-stream', null, provBtn, provBox);
   const moreFilters = h('div.disc-filters');
   const filtersBtn = h('button.btn.filters-toggle', { type: 'button', 'aria-expanded': 'false', onclick: () => filtersBtn.setAttribute('aria-expanded', String(moreFilters.classList.toggle('open'))) });
   const body = h('div', { 'aria-live': 'polite' });
   const sentinel = h('div.disc-more');
 
   const paintKind = () => put(kindTabs, [['movie', T.discMovies], ['series', T.discSeries]].map(([k, l]) =>
-    h('button.chip' + (f.kind === k ? '.on' : ''), { type: 'button', role: 'tab', 'aria-selected': String(f.kind === k), onclick: () => { if (f.kind !== k) { f.kind = k; f.g = ''; changed(); } } }, l)));
+    h('button' + (f.kind === k ? '.on' : ''), { type: 'button', role: 'tab', 'aria-selected': String(f.kind === k), onclick: () => { if (f.kind !== k) { f.kind = k; f.g = ''; changed(); } } }, l)));
   const paintSelects = () => {
     put(sortSel, [['', T.discSortPopular], ['new', T.discSortNew], ['top', T.discSortTop]].map(([v, l]) => h('option', { value: v, selected: f.sort === v }, l)));
     const gs = f.kind === 'series' ? opts.series_genres : opts.movie_genres;
     put(genreSel, h('option', { value: '' }, T.discAnyGenre), gs.map(g => h('option', { value: g.id, selected: f.g === String(g.id) }, g.name)));
     genreSel.style.display = gs.length ? '' : 'none';
   };
+  const provName = p => BIG_PROVIDERS.find(([re]) => re.test(p.name))?.[1] || p.name;
   const paintProv = () => {
-    if (!bigProvs.length) return put(provBox);
+    provMenu.style.display = bigProvs.length ? '' : 'none';
+    const sel = bigProvs.filter(p => f.p.has(String(p.id)));
+    provBtn.classList.toggle('on', sel.length > 0);
+    put(provBtn, sel.length === 1 && sel[0].logo ? h('img', { src: sel[0].logo, alt: '' }) : null,
+      sel.length === 0 ? T.discServices : sel.length === 1 ? provName(sel[0]) : T.discServices + ' · ' + sel.length, icon('chevDown'));
     put(provBox, bigProvs.map(p => {
       const on = f.p.has(String(p.id));
-      return h('button.disc-ptile' + (on ? '.on' : ''), { type: 'button', 'aria-pressed': String(on), title: p.name, onclick: () => {
+      return h('label.disc-sitem', null, h('input', { type: 'checkbox', checked: on, onchange: () => {
         on ? f.p.delete(String(p.id)) : f.p.add(String(p.id)); changed();
-      } }, p.logo ? h('img', { src: p.logo, alt: '', loading: 'lazy' }) : null, h('span', null, BIG_PROVIDERS.find(([re]) => re.test(p.name))?.[1] || p.name));
-    }));
+      } }), p.logo ? h('img', { src: p.logo, alt: '', loading: 'lazy' }) : h('span.disc-snologo'), h('span', null, provName(p)));
+    }), opts.region && h('p.disc-region', null, T.discRegion(isoName(opts.region, 'region'))));
   };
   const paintBar = () => {
-    paintKind(); paintSelects(); paintProv(); clearBtn.style.display = filtered() ? '' : 'none';
-    const n = nFilters() - f.p.size + (f.fresh ? 1 : 0);
+    paintKind(); paintSelects(); paintProv(); clearBtn.style.display = filtered() || f.fresh ? '' : 'none';
+    [genreSel, yearSel, rateSel, langSel].forEach(s => s.classList.toggle('on', !!s.value));
+    fresh.setAttribute('aria-pressed', String(f.fresh)); fresh.classList.toggle('on', f.fresh);
+    put(fresh, f.fresh ? icon('check') : null, T.discOnlyNew);
+    const n = nFilters() + (f.fresh ? 1 : 0);
     put(filtersBtn, icon('filter'), T.filters, n ? h('span.n', null, '· ' + n) : null);
   };
 
@@ -3298,9 +3317,9 @@ async function viewDiscover(q) {
   yearSel.addEventListener('change', () => { f.y = yearSel.value; changed(); });
   rateSel.addEventListener('change', () => { f.r = rateSel.value; changed(); });
   langSel.addEventListener('change', () => { f.lang = langSel.value; changed(); });
-  fresh.addEventListener('change', () => { f.fresh = fresh.checked; changed(); });
+  fresh.addEventListener('click', () => { f.fresh = !f.fresh; changed(); });
   clearBtn.addEventListener('click', () => {
-    f.p.clear(); f.g = f.sort = f.y = f.r = f.lang = '';
+    f.p.clear(); f.g = f.sort = f.y = f.r = f.lang = ''; f.fresh = false;
     yearSel.value = rateSel.value = langSel.value = '';
     changed();
   });
@@ -3309,10 +3328,9 @@ async function viewDiscover(q) {
   main.append(h('div.page-head', null, h('h1', null, T.discover), h('a.btn', { href: '#/requests' }, T.myRequests)),
     h('p.muted.disc-lede', null, T.discLede),
     h('div.disc-bar', null,
-      h('div.toolbar.disc-top', null, searchField(input, 'disc-search'), kindTabs, h('div.sort-ctl', null, filtersBtn, sortSel)),
-      provBox,
-      add(moreFilters, [genreSel, yearSel, rateSel, langSel, h('label.check', null, fresh, T.discOnlyNew), clearBtn]),
-      opts.region && h('p.muted.small.disc-region', null, T.discRegion(isoName(opts.region, 'region')))),
+      searchField(input, 'disc-search'),
+      h('div.disc-view', null, kindTabs, h('div.disc-view-r', null, filtersBtn, sortCtl)),
+      add(moreFilters, [provMenu, genreSel, yearSel, rateSel, langSel, fresh, clearBtn])),
     body, sentinel);
 
   // ---- results

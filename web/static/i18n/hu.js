@@ -158,6 +158,8 @@
   "discOnlyNew": "Csak ami még nincs meg",
   "discServices": "Streaming",
   "discRegion": "A streaming-kínálat országa: {0}",
+  "discSortBy": "Rendezés:",
+  "discRegionShort": "{0} kínálata",
   "discTvPopular": "Népszerű sorozatok",
   "discTop": "Minden idők legjobbjai",
   "discOnService": "{0} – most népszerű",

@@ -158,6 +158,8 @@
   "discOnlyNew": "Only what I don't have",
   "discServices": "Streaming",
   "discRegion": "Streaming catalogue of: {0}",
+  "discSortBy": "Sort:",
+  "discRegionShort": "{0} catalogue",
   "discTvPopular": "Popular shows",
   "discTop": "All-time best",
   "discOnService": "{0} – popular now",
