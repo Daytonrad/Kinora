@@ -1,11 +1,21 @@
 name: Discord értesítések
 
+# Release-ek: a ci.yml hívja a GitHub Release elkészülte után (workflow_call). A GITHUB_TOKEN-nel
+# létrehozott release nem indít "release: published" eseményt, ezért nincs ilyen trigger.
 on:
-  release:
-    types: [published]
   issues:
     types: [opened, closed, reopened]
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag újraküldéshez (pl. v1.0.19); üresen tesztüzenet"
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -16,10 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts
       - name: Küldés Discordra
         run: python3 .github/scripts/discord_notify.py
         env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GITHUB_TOKEN: ${{ github.token }}
           DISCORD_WEBHOOK_CHANGELOG_HU: ${{ secrets.DISCORD_WEBHOOK_CHANGELOG_HU }}
           DISCORD_WEBHOOK_CHANGELOG_EN: ${{ secrets.DISCORD_WEBHOOK_CHANGELOG_EN }}
           DISCORD_WEBHOOK_CHANGELOG_DE: ${{ secrets.DISCORD_WEBHOOK_CHANGELOG_DE }}

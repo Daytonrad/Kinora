@@ -46,13 +46,33 @@ def post(url, embed=None, content=None):
     sys.exit("Discord rate limit, feladva.")
 
 
+HEADINGS = {"hu": "Magyar", "en": "English", "de": "Deutsch"}
+HEADING_RE = r"^##[ \t]*(?:Magyar|English|Deutsch)[ \t]*$.*?(?=^##[ \t]|\Z)"
+
+
 def section(body, lang):
     m = re.search(rf"<!--\s*{lang}\s*-->(.*?)<!--\s*/{lang}\s*-->", body, re.S | re.I)
-    return m.group(1).strip() if m else None
+    if m:
+        return m.group(1).strip()
+    # docs/releases/<tag>.md: "## Magyar" / "## English" / "## Deutsch" szakaszok
+    m = re.search(rf"^##[ \t]*{HEADINGS[lang]}[ \t]*$(.*?)(?=^##[ \t]|\Z)", body, re.S | re.M | re.I)
+    return m.group(1).strip() if m and m.group(1).strip() else None
 
 
 def strip_sections(body):
-    return re.sub(r"<!--\s*(\w{2})\s*-->.*?<!--\s*/\1\s*-->", "", body, flags=re.S | re.I).strip()
+    body = re.sub(r"<!--\s*(\w{2})\s*-->.*?<!--\s*/\1\s*-->", "", body, flags=re.S | re.I)
+    return re.sub(HEADING_RE, "", body, flags=re.S | re.M | re.I).strip()
+
+
+def fetch_release(tag):
+    repo = os.environ["GITHUB_REPOSITORY"]
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "kinora-notify"}
+    if os.environ.get("GITHUB_TOKEN"):
+        headers["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
+    req = urllib.request.Request(
+        f"https://api.github.com/repos/{repo}/releases/tags/{urllib.parse.quote(tag, safe='')}", headers=headers)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
 
 
 def deepl(text, lang):
@@ -85,7 +105,7 @@ def fit(text, limit, url, cut_label):
 def on_release(ev):
     rel = ev["release"]
     body = rel.get("body") or ""
-    common = strip_sections(body)
+    common = strip_sections(body) or section(body, "en") or body
     name = rel.get("name") or rel["tag_name"]
     for lang in LANGS:
         url = hook(f"DISCORD_WEBHOOK_CHANGELOG_{lang.upper()}")
@@ -137,6 +157,11 @@ def on_test():
 
 
 def main():
+    # a CI hívja a release után (workflow_call), vagy kézi futtatás tag megadásával
+    tag = os.environ.get("RELEASE_TAG", "").strip()
+    if tag:
+        on_release({"release": fetch_release(tag)})
+        return
     event = os.environ["GITHUB_EVENT_NAME"]
     with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
         ev = json.load(f)
