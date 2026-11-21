@@ -424,7 +424,7 @@ struct SeenBlock: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.headline).foregroundStyle(Theme.plasterBright)
                     if let d = watched.date {
-                        Text(L("utoljára {0}", d.formatted(date: .abbreviated, time: .omitted)))
+                        Text(L("utoljára {0}", d.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(Language.shared.locale))))
                             .font(.caption).foregroundStyle(Theme.muted)
                     }
                 }
