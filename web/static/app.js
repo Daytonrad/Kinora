@@ -2413,8 +2413,15 @@ async function adminInvites(body) {
 }
 
 // keys: [key, label, kind, options, hint] rows; a string or { h, hint } starts a titled section (two-column layout)
+// settings whose value is an API key the admin page can test (service name for /api/admin/keytest)
+const KEY_TEST = { tmdb_key: 'tmdb', omdb_key: 'omdb', opensubtitles_key: 'opensubtitles' };
+// the last result per field, so it survives the page redrawing itself after a save
+const keyChecks = {};
+const KEY_STATE = { ok: 'keyStateOk', invalid: 'keyStateInvalid', login: 'keyStateLogin', limit: 'keyStateLimit', network: 'keyStateNetwork', missing: 'keyStateMissing', error: 'keyStateError' };
+
 function settingsForm(values, env, keys, onSaved) {
   const inputs = {};
+  const keyTests = []; // API-key fields re-check themselves after a save
   const isRow = Array.isArray;
   const fields = keys.filter(isRow);
   const row = ([k, label, kind, opts, hint]) => {
@@ -2427,13 +2434,38 @@ function settingsForm(values, env, keys, onSaved) {
     if (kind === 'select') el = h('select', { disabled: !!locked }, opts.map(([v, l]) => h('option', { value: v, selected: values[k] === v }, l)));
     else el = h('input', { type: kind || 'text', value: values[k] ?? '', disabled: !!locked });
     inputs[k] = el;
+    const svc = KEY_TEST[k];
+    if (svc) {
+      // a whole example URL pasted (…&apikey=abcd1234): keep only the key
+      const status = h('div.key-status');
+      const show = c => { status.className = 'key-status' + (c ? ' ' + c.cls : ''); status.textContent = c ? c.text : ''; };
+      show(keyChecks[k]);
+      el.addEventListener('input', () => {
+        const m = /[?&](?:apikey|api_key)=([^&#\s]+)/i.exec(el.value);
+        if (m) el.value = decodeURIComponent(m[1]);
+        delete keyChecks[k]; show(null);
+      });
+      const btn = h('button.btn.small', { type: 'button', onclick: () => runTest() }, T.keyTest);
+      const runTest = async () => {
+        btn.disabled = true; show({ cls: '', text: T.keyTesting });
+        try {
+          const r = await POST('/api/admin/keytest', { service: svc, key: el.value,
+            user: inputs.opensubtitles_user ? inputs.opensubtitles_user.value : '', pass: inputs.opensubtitles_pass ? inputs.opensubtitles_pass.value : '' });
+          keyChecks[k] = { cls: r.ok ? 'ok' : r.state === 'limit' || r.state === 'network' ? 'warn' : 'bad',
+            text: (T[KEY_STATE[r.state]] || T.keyStateError) + (r.detail && !r.ok ? ' (' + srv(r.detail) + ')' : '') };
+        } catch (e) { keyChecks[k] = { cls: 'bad', text: e.message || String(e) }; }
+        finally { btn.disabled = false; show(keyChecks[k]); }
+      };
+      keyTests.push(() => el.value.trim() ? runTest() : (delete keyChecks[k], show(null)));
+      return h('label.field', null, h('span', null, label), h('div.key-row', null, el, btn), status, hint && h('div.hint', null, hint), locked && h('div.env-lock', null, T.envLocked(locked)));
+    }
     return h('label.field', null, h('span', null, label), el, hint && h('div.hint', null, hint), locked && h('div.env-lock', null, T.envLocked(locked)));
   };
   const save = h('button.btn.primary', { disabled: fields.every(([k]) => env[k]), onclick: async () => {
     const body = {};
     for (const [k, , kind] of fields) if (!env[k]) body[k] = kind === 'toggle' ? (inputs[k].checked ? '1' : '0') : inputs[k].value;
     save.disabled = true;
-    try { await api('PATCH', '/api/admin/settings', body); toast(T.saved); onSaved && onSaved(); } finally { save.disabled = false; }
+    try { await api('PATCH', '/api/admin/settings', body); toast(T.saved); await Promise.all(keyTests.map(t => t())); onSaved && onSaved(); } finally { save.disabled = false; }
   } }, T.save);
   if (keys.every(isRow)) return h('div.a-form', null, fields.map(row), h('div.a-form-foot', null, save));
   const groups = [];

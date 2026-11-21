@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -223,9 +224,12 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 			continue // environment wins; the UI shows the field as locked
 		}
 		switch k {
-		case "tmdb_key", "opensubtitles_key", "opensubtitles_pass":
+		case "tmdb_key", "opensubtitles_key", "opensubtitles_pass", "omdb_key":
 			if strings.Contains(v, maskChar) {
 				continue // masked value echoed back: keep the stored key
+			}
+			if k != "opensubtitles_pass" {
+				v = meta.ExtractKey(v) // a whole example URL was pasted: keep only its key
 			}
 		case "scan_interval_min":
 			n, err := strconv.Atoi(v)
@@ -285,6 +289,48 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 		}()
 	}
 	s.handleSettings(w, r, c)
+}
+
+// handleKeyTest checks whether an API key works. The key in the body is the one in the form
+// (it may be unsaved); empty or masked means the stored one.
+func (s *Server) handleKeyTest(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	var in struct {
+		Service string `json:"service"` // tmdb | omdb | opensubtitles
+		Key     string `json:"key"`
+		User    string `json:"user"`
+		Pass    string `json:"pass"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	pick := func(v, setting string) string {
+		if v = strings.TrimSpace(v); v == "" || strings.Contains(v, maskChar) {
+			return strings.TrimSpace(s.st.Setting(setting))
+		}
+		return v
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	var res meta.KeyCheck
+	switch in.Service {
+	case "tmdb", "omdb":
+		if s.Meta == nil {
+			writeErr(w, http.StatusServiceUnavailable, "a metaadat-modul nem fut")
+			return
+		}
+		if in.Service == "tmdb" {
+			res = s.Meta.CheckTMDB(ctx, pick(in.Key, "tmdb_key"))
+		} else {
+			res = s.Meta.CheckOmdb(ctx, pick(in.Key, "omdb_key"))
+		}
+	case "opensubtitles":
+		res = s.OpenSubs.CheckKey(ctx, pick(in.Key, "opensubtitles_key"), pick(in.User, "opensubtitles_user"),
+			pick(in.Pass, "opensubtitles_pass"))
+	default:
+		writeErr(w, http.StatusBadRequest, "ismeretlen szolgáltatás")
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // ------------------------------------------------------------------ backup

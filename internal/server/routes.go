@@ -81,6 +81,7 @@ func (s *Server) routes() {
 	m.HandleFunc("DELETE /api/admin/invites/{code}", s.admin(s.handleInviteDelete))
 	m.HandleFunc("GET /api/admin/settings", s.admin(s.handleSettings))
 	m.HandleFunc("PATCH /api/admin/settings", s.admin(s.handleSettingsPatch))
+	m.HandleFunc("POST /api/admin/keytest", s.admin(s.handleKeyTest))
 	m.HandleFunc("GET /api/admin/backup", s.admin(s.handleBackup))
 	m.HandleFunc("GET /api/admin/connect", s.admin(s.handleConnect))
 	m.HandleFunc("GET /api/admin/browse", s.admin(s.handleBrowse))

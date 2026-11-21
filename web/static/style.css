@@ -293,6 +293,12 @@ input[type=file]::file-selector-button {
 }
 input[type=file]::file-selector-button:hover { background: var(--g3); }
 .env-lock { font-size: var(--f0); color: var(--amber-dim); }
+.key-row { display: flex; gap: var(--s2); align-items: center; }
+.key-row > input { flex: 1; min-width: 0; }
+.key-row > .btn { flex: none; min-height: var(--hit); }
+.key-status { font-size: var(--f0); color: var(--t2); margin-top: var(--s1); }
+.key-status:empty { display: none; }
+.key-status.warn { color: var(--amber); }
 .chip {
   display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--hit); padding: 0 var(--s3);
   border: 0; border-bottom: var(--frame) solid transparent; background: transparent; color: var(--t1); font-size: var(--f1);
