@@ -233,3 +233,13 @@ jobs:
             kinora-windows-amd64.zip.sha256
             kinora-setup.exe
             kinora-setup.exe.sha256
+
+  # Discord: the release notes go to the language releases channels once the GitHub Release exists
+  discord:
+    needs: windows
+    permissions:
+      contents: read
+    uses: ./.github/workflows/discord.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
