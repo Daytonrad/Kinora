@@ -1015,8 +1015,23 @@ html.tv .search-field kbd { display: none; }
 .acq-poster span { padding: var(--s3); font-family: var(--display); font-size: var(--f3); color: var(--t1); }
 .acq-card:hover .acq-poster, .acq-card:focus-visible .acq-poster { border-color: var(--amber); }
 html.tv .acq-card:focus .acq-poster { border-color: var(--amber); }
-.acq-card.have .acq-poster { opacity: .6; }
+.acq-card.have .acq-poster > :not(.disc-seen) { opacity: .6; }
 .badge.acq-have { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
+/* watched: the profile has seen this title (also after the file is gone) */
+.acq-poster { position: relative; }
+.acq-poster .disc-seen { position: absolute; top: var(--s2); right: var(--s2); min-width: var(--mark); height: var(--mark); border-radius: var(--round); background: var(--amber); color: var(--amber-ink); display: inline-flex; align-items: center; justify-content: center; gap: 2px; box-shadow: 0 1px 6px rgb(0 0 0 / .45); font-family: var(--text); font-size: var(--f0); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; padding: 0; }
+.acq-poster .disc-seen.eps { padding: 0 var(--s2) 0 var(--s1); border-radius: calc(var(--mark) / 2); }
+.acq-poster .disc-seen svg { width: var(--i-xs); height: var(--i-xs); flex: none; }
+.acq-poster .disc-seen span { padding: 0; font: inherit; color: inherit; }
+.seen-box { margin: var(--s3) 0; padding: var(--s3); border: var(--hair) solid var(--amber-dim); border-radius: var(--r2); background: color-mix(in srgb, var(--amber) 7%, transparent); }
+.seen-head { display: flex; align-items: center; gap: var(--s3); }
+.seen-head b { color: var(--t0); }
+.seen-ico { flex: none; width: calc(var(--mark) * 1.4); height: calc(var(--mark) * 1.4); border-radius: var(--round); background: var(--amber); color: var(--amber-ink); display: grid; place-items: center; }
+.seen-ico svg { width: var(--i-s); height: var(--i-s); }
+.seen-seasons { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s1) var(--s3); align-items: center; margin-top: var(--s3); font-size: var(--f1); }
+.seen-season { display: contents; }
+.seen-bar { height: 6px; border-radius: 3px; background: var(--g2, rgb(255 255 255 / .08)); overflow: hidden; }
+.seen-bar i { display: block; height: 100%; border-radius: inherit; background: var(--amber); }
 .badge.acq-hun { color: var(--amber); border-color: var(--amber-dim); }
 .acq-loading { display: flex; gap: var(--s3); align-items: center; padding: var(--s5) 0; }
 .acq-movie { border-top: var(--hair) solid var(--rule-hi); padding-top: var(--s5); }

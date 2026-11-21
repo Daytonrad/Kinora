@@ -10,10 +10,31 @@ import (
 // DiscoverItem is a TMDB film with what Kinora knows about it, for the "Felfedezés" page.
 type DiscoverItem struct {
 	meta.SearchResult
-	Kind     string `json:"kind"`              // movie | series
-	ItemID   int64  `json:"item_id,omitempty"` // already in a library: open this item
-	Request  string `json:"request,omitempty"` // state of the newest request for it
-	Followed bool   `json:"followed,omitempty"`
+	Kind     string         `json:"kind"`              // movie | series
+	ItemID   int64          `json:"item_id,omitempty"` // already in a library: open this item
+	Request  string         `json:"request,omitempty"` // state of the newest request for it
+	Followed bool           `json:"followed,omitempty"`
+	Watched  *store.Watched `json:"watched,omitempty"` // the profile has seen it (even if no longer in the library)
+}
+
+// MarkWatched adds the profile's watch history to discover results.
+func (m *Manager) MarkWatched(profileID int64, items []DiscoverItem) {
+	ids := map[string][]int64{}
+	for _, it := range items {
+		ids[it.Kind] = append(ids[it.Kind], it.ID)
+	}
+	seen := map[string]map[int64]*store.Watched{}
+	for kind, list := range ids {
+		seen[kind] = m.st.WatchedTitles(profileID, kind, list, false)
+	}
+	for i := range items {
+		items[i].Watched = seen[items[i].Kind][items[i].ID]
+	}
+}
+
+// WatchedTitle is the profile's history of one TMDB title (series with per-season counts).
+func (m *Manager) WatchedTitle(profileID int64, kind string, id int64) *store.Watched {
+	return m.st.WatchedTitles(profileID, kind, []int64{id}, kind == "series")[id]
 }
 
 func (m *Manager) mark(res []meta.SearchResult) []DiscoverItem {
@@ -161,6 +182,7 @@ type MovieDetail struct {
 	Watch   *meta.WhereToWatch `json:"watch,omitempty"`
 	ItemID  int64              `json:"item_id,omitempty"`
 	Request *store.AcqRequest  `json:"request,omitempty"` // the open request, or the newest closed one
+	Watched *store.Watched     `json:"watched,omitempty"`
 }
 
 // DiscoverMovie returns a film with its library and request state.
@@ -195,6 +217,7 @@ type SeriesDetail struct {
 	Request  *store.AcqRequest  `json:"request,omitempty"`
 	Followed bool               `json:"followed"`
 	Seasons  []SeasonState      `json:"seasons"`
+	Watched  *store.Watched     `json:"watched,omitempty"`
 }
 
 // DiscoverSeries returns a series with its seasons and how many episodes of each are in the library.

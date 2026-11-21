@@ -262,6 +262,7 @@ struct DiscoverCard: View {
         VStack(alignment: .leading, spacing: 6) {
             RemotePoster(url: item.poster, title: item.title)
                 .overlay(alignment: .topLeading) { badge.padding(6) }
+                .overlay(alignment: .bottomTrailing) { seenMark.padding(6) }
                 .clipShape(.rect(cornerRadius: 8))
                 .pointerLift(cornerRadius: 8)
             Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -269,7 +270,30 @@ struct DiscoverCard: View {
                 .font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityValue(badgeText ?? "")
+        .accessibilityValue([badgeText, seenText].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    private var seenText: String? {
+        guard let w = item.watched else { return nil }
+        return item.isSeries ? L("{0} részt láttál", w.episodes ?? 0) : L("Láttad")
+    }
+
+    /// Seen by this profile: an amber tick (series: with the episodes watched).
+    @ViewBuilder private var seenMark: some View {
+        if let w = item.watched {
+            HStack(spacing: 2) {
+                Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy))
+                if item.isSeries, let n = w.episodes, n > 0 {
+                    Text("\(n)").font(.caption2.weight(.bold).monospacedDigit())
+                }
+            }
+            .foregroundStyle(Theme.amberInk)
+            .padding(.horizontal, item.isSeries ? 7 : 0)
+            .frame(minWidth: 22, minHeight: 22)
+            .background(Theme.amber, in: .capsule)
+            .shadow(color: .black.opacity(0.45), radius: 3, y: 1)
+            .accessibilityHidden(true)
+        }
     }
 
     private var badgeText: String? {

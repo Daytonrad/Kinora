@@ -80,6 +80,7 @@ func (s *Server) handleDiscover(w http.ResponseWriter, r *http.Request, c *reqCt
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
 	}
+	m.MarkWatched(profileID(c), res)
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -121,6 +122,7 @@ func (s *Server) handleDiscoverBrowse(w http.ResponseWriter, r *http.Request, c 
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
 	}
+	m.MarkWatched(profileID(c), res.Results)
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -153,6 +155,7 @@ func (s *Server) handleDiscoverSearch(w http.ResponseWriter, r *http.Request, c 
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
 	}
+	m.MarkWatched(profileID(c), res)
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -166,6 +169,7 @@ func (s *Server) handleDiscoverMovie(w http.ResponseWriter, r *http.Request, c *
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
 	}
+	d.Watched = m.WatchedTitle(profileID(c), "movie", d.ID)
 	writeJSON(w, http.StatusOK, d)
 }
 
@@ -231,6 +235,7 @@ func (s *Server) handleDiscoverSeries(w http.ResponseWriter, r *http.Request, c 
 		writeErr(w, acqErrStatus(err), err.Error())
 		return
 	}
+	d.Watched = m.WatchedTitle(profileID(c), "series", d.ID)
 	writeJSON(w, http.StatusOK, d)
 }
 
@@ -331,4 +336,12 @@ func (s *Server) saveRequestSettings(w http.ResponseWriter, auto *string, quota,
 		s.st.SetSetting("acq_retry_hours", strconv.Itoa(*retry))
 	}
 	return true
+}
+
+// profileID is the active profile of the request (0 if none).
+func profileID(c *reqCtx) int64 {
+	if c.Profile == nil {
+		return 0
+	}
+	return c.Profile.ID
 }

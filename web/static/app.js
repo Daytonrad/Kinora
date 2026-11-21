@@ -3231,11 +3231,42 @@ const reqDrop = (r, done) => ['pending', 'approved', 'waiting', 'failed', 'denie
 function discoverTile(it, onChange) {
   const open = () => it.kind === 'series' ? seriesDialog(it.id, onChange) : discoverDialog(it.id, onChange);
   return h('button.acq-card' + (it.item_id && it.kind !== 'series' ? '.have' : ''), { type: 'button', 'aria-label': it.title + (it.year ? ' (' + it.year + ')' : ''), onclick: open },
-    h('div.acq-poster', null, it.poster ? h('img', { src: it.poster, alt: '', loading: 'lazy' }) : h('span', null, it.title)),
+    h('div.acq-poster', null, it.poster ? h('img', { src: it.poster, alt: '', loading: 'lazy' }) : h('span', null, it.title), seenMark(it)),
     h('b', null, it.title), h('span.muted.small', null, it.year || '–', it.rating > 0 ? ' · ★ ' + num(it.rating, 1) : ''),
     it.request && it.request !== 'canceled' ? h('span.badge' + (it.request === 'denied' || it.request === 'failed' ? '.warn' : ''), null, reqLabel(it.request))
       : it.item_id ? h('span.badge.acq-have', null, it.kind === 'series' ? T.discHaveSeries : T.discHave)
       : it.followed ? h('span.badge', null, T.seriesFollowedShort) : null);
+}
+
+// the profile has seen this title (kept by TMDB id, so it shows even after the file is gone)
+function seenMark(it) {
+  const w = it.watched;
+  if (!w) return null;
+  const series = it.kind === 'series';
+  return h('span.disc-seen' + (series ? '.eps' : ''), { title: series ? T.seenEpisodes(w.episodes) : T.seenMovie },
+    icon('check'), series ? h('span', null, w.episodes) : null);
+}
+
+// the watched panel of a discover dialog: when, and for a series how far in each season
+function seenBlock(w, seasons) {
+  if (!w) return null;
+  const when = w.at > 0 ? T.seenOn(new Date(w.at * 1000).toLocaleDateString(T.locale, { year: 'numeric', month: 'short', day: 'numeric' })) : '';
+  let title = T.seenMovie, rows = null;
+  if (seasons) {
+    const per = w.seasons || {};
+    const full = seasons.length > 0 && seasons.every(s => (per[s.number] || 0) >= s.episode_count && s.episode_count > 0);
+    title = full ? T.seenAll : T.seenEpisodes(w.episodes);
+    const shown = seasons.filter(s => per[s.number] > 0);
+    rows = shown.length > 0 && h('div.seen-seasons', null, shown.map(s => {
+      const n = Math.min(per[s.number], s.episode_count || per[s.number]), of = s.episode_count || n;
+      return h('div.seen-season', null, h('span', null, T.seasonN(s.number)),
+        h('span.seen-bar', { role: 'img', 'aria-label': n + ' / ' + of }, h('i', { style: { width: Math.round(n / of * 100) + '%' } })),
+        h('span.muted.small', null, n + ' / ' + of));
+    }));
+  }
+  return h('div.seen-box', null,
+    h('div.seen-head', null, h('span.seen-ico', null, icon('check')), h('div', null, h('b', null, title), when && h('div.muted.small', null, when))),
+    rows);
 }
 
 // where a request goes: the requester picks among the films libraries (film) or the series libraries (series)
@@ -3275,7 +3306,7 @@ async function discoverDialog(id, onChange) {
   modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.disc-detail', null,
     d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
     h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
-      facts && h('p.muted', null, facts), scores, d.overview && h('p.acq-overview', null, d.overview), box, state_, lc && lc.el,
+      facts && h('p.muted', null, facts), scores, seenBlock(d.watched), d.overview && h('p.acq-overview', null, d.overview), box, state_, lc && lc.el,
       watchBlock(d.watch, 'movie', () => shut()))),
   close => (shut = close, [
     h('button.btn', { onclick: close }, T.close),
@@ -3597,7 +3628,7 @@ async function seriesDialog(id, onChange) {
   modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.disc-detail', null,
     d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
     h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
-      h('p.muted', null, facts), scores, d.overview && h('p.acq-overview', null, d.overview), status,
+      h('p.muted', null, facts), scores, seenBlock(d.watched, d.seasons), d.overview && h('p.acq-overview', null, d.overview), status,
       watchBlock(d.watch, 'series', () => shut()),
       !r && d.seasons.length > 0 && picker.el, lc && lc.el)),
   close => (shut = close, [

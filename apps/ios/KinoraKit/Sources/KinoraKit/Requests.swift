@@ -21,6 +21,8 @@ public struct DiscoverItem: Codable, Sendable, Identifiable, Hashable {
     /// State of the newest request for it.
     public var request: String?
     public var followed: Bool?
+    /// The profile has seen it (kept by TMDB id, also after the file is gone).
+    public var watched: Watched?
 
     public init(id: Int, title: String, kind: String = "movie") {
         self.id = id; self.title = title; self.kind = kind
@@ -29,6 +31,34 @@ public struct DiscoverItem: Codable, Sendable, Identifiable, Hashable {
     public var isSeries: Bool { kind == "series" }
     /// Unique across films and series (the TMDB ids of the two overlap).
     public var key: String { "\(kind ?? "movie")/\(id)" }
+}
+
+/// A profile's watch history of one TMDB title.
+public struct Watched: Codable, Sendable, Hashable {
+    /// Last watched, unix seconds (0 when unknown).
+    public var at: Int64?
+    /// Series: distinct episodes watched.
+    public var episodes: Int?
+    /// Series detail: watched episodes per season ("1": 8).
+    public var seasons: [String: Int]?
+
+    public init(at: Int64? = nil, episodes: Int? = nil, seasons: [String: Int]? = nil) {
+        self.at = at; self.episodes = episodes; self.seasons = seasons
+    }
+
+    public var date: Date? {
+        guard let at, at > 0 else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(at))
+    }
+
+    /// Episodes watched of one season.
+    public func episodes(inSeason n: Int) -> Int { seasons?[String(n)] ?? 0 }
+
+    /// Every season (with a known episode count) watched to the end.
+    public func complete(_ list: [SeasonState]) -> Bool {
+        let known = list.filter { ($0.episodeCount ?? 0) > 0 }
+        return !known.isEmpty && known.allSatisfy { episodes(inSeason: $0.number) >= ($0.episodeCount ?? 0) }
+    }
 }
 
 /// A streaming service (TMDB, data by JustWatch).
@@ -135,6 +165,7 @@ public struct DiscoverMovie: Codable, Sendable {
     public var itemId: Int?
     /// The open request, or the newest closed one.
     public var request: AcqRequest?
+    public var watched: Watched?
 }
 
 /// One season of a series on TMDB, with what the library has of it.
@@ -164,6 +195,7 @@ public struct DiscoverSeries: Codable, Sendable {
     public var request: AcqRequest?
     public var followed: Bool?
     public var seasons: [SeasonState]?
+    public var watched: Watched?
 }
 
 /// GET /api/discover/libraries: where a request can go.

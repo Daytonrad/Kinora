@@ -471,6 +471,27 @@ CREATE TABLE title_langs(
   PRIMARY KEY(profile_id, title_id)
 );
 `,
+	// 14: what a profile has watched, by TMDB id, so it survives the file and the library
+	// (the Felfedezés page shows it); movies are season 0 episode 0
+	`
+CREATE TABLE watch_history(
+  profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK(kind IN ('movie','series')),
+  tmdb_id INTEGER NOT NULL,
+  season INTEGER NOT NULL DEFAULT 0,
+  episode INTEGER NOT NULL DEFAULT 0,
+  watched_at INTEGER NOT NULL,
+  PRIMARY KEY(profile_id, kind, tmdb_id, season, episode)
+);
+INSERT OR IGNORE INTO watch_history(profile_id,kind,tmdb_id,season,episode,watched_at)
+  SELECT u.profile_id, 'movie', i.tmdb_id, 0, 0, COALESCE(u.last_played_at, i.updated_at)
+  FROM user_data u JOIN items i ON i.id=u.item_id
+  WHERE u.played=1 AND i.kind='movie' AND i.tmdb_id>0;
+INSERT OR IGNORE INTO watch_history(profile_id,kind,tmdb_id,season,episode,watched_at)
+  SELECT u.profile_id, 'series', s.tmdb_id, e.season_num, e.episode_num, COALESCE(u.last_played_at, e.updated_at)
+  FROM user_data u JOIN items e ON e.id=u.item_id JOIN items s ON s.id=e.series_id
+  WHERE u.played=1 AND e.kind='episode' AND s.tmdb_id>0 AND e.season_num IS NOT NULL AND e.episode_num IS NOT NULL;
+`,
 }
 
 func (s *Store) migrate() error {

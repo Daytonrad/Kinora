@@ -42,6 +42,8 @@ struct DiscoverDetailSheet: View {
         var request: AcqRequest?
         var followed: Bool
         var seasons: [SeasonState]
+        /// The profile's watch history of it (also after the file is gone).
+        var watched: Watched?
     }
 
     var body: some View {
@@ -96,6 +98,10 @@ struct DiscoverDetailSheet: View {
 
             if let s = scores, !s.ratings.isEmpty {
                 ScoresStrip(ratings: s.ratings, style: .compact, columns: hSize == .regular ? 4 : 2)
+            }
+
+            if let w = d.watched {
+                SeenBlock(watched: w, series: item.isSeries, seasons: d.seasons)
             }
 
             status(d)
@@ -275,14 +281,14 @@ struct DiscoverDetailSheet: View {
                                  (s.genres ?? []).prefix(3).joined(separator: ", "), s.ended == true ? L("befejeződött") : nil]
                     return Detail(id: s.id, title: s.title, originalTitle: s.originalTitle, facts: Self.join(facts), rating: nil, overview: s.overview,
                                   poster: s.poster, watch: s.watch, itemId: s.itemId, request: s.request,
-                                  followed: s.followed == true, seasons: seasons)
+                                  followed: s.followed == true, seasons: seasons, watched: s.watched)
                 }
                 let m = try await client.discoverMovie(item.id)
                 let runtime = (m.runtime ?? 0) > 0 ? L("{0} perc", m.runtime ?? 0) : nil
                 let facts: [String?] = [m.year.map(String.init), runtime, (m.genres ?? []).prefix(3).joined(separator: ", ")]
                 return Detail(id: m.id, title: m.title, originalTitle: m.originalTitle, facts: Self.join(facts), rating: m.rating,
                               overview: m.overview,
-                              poster: m.poster, watch: m.watch, itemId: m.itemId, request: m.request, followed: false, seasons: [])
+                              poster: m.poster, watch: m.watch, itemId: m.itemId, request: m.request, followed: false, seasons: [], watched: m.watched)
             }
             if d.itemId == nil && d.request == nil && libraries == nil {
                 let libs = try await model.api { try await $0.requestLibraries() }
@@ -383,5 +389,66 @@ struct WatchBlock: View {
                 }
             }
         }
+    }
+}
+
+/// "You have seen this": when, and for a series how far into each season.
+struct SeenBlock: View {
+    var watched: Watched
+    var series: Bool
+    var seasons: [SeasonState]
+
+    private var title: String {
+        guard series else { return L("Láttad") }
+        return watched.complete(seasons) ? L("Végignézted") : L("{0} részt láttál", watched.episodes ?? 0)
+    }
+
+    private var seen: [(season: SeasonState, n: Int, of: Int)] {
+        seasons.compactMap { s in
+            let n = watched.episodes(inSeason: s.number)
+            guard n > 0 else { return nil }
+            let of = max(s.episodeCount ?? n, 1)
+            return (s, min(n, of), of)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.amberInk)
+                    .frame(width: 34, height: 34)
+                    .background(Theme.amber, in: .circle)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline).foregroundStyle(Theme.plasterBright)
+                    if let d = watched.date {
+                        Text(L("utoljára {0}", d.formatted(date: .abbreviated, time: .omitted)))
+                            .font(.caption).foregroundStyle(Theme.muted)
+                    }
+                }
+            }
+            if series && !seen.isEmpty {
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                    ForEach(seen, id: \.season.number) { row in
+                        GridRow {
+                            Text(L("{0}. évad", row.season.number)).font(.subheadline).foregroundStyle(Theme.plaster)
+                            ProgressView(value: Double(row.n), total: Double(row.of))
+                                .tint(Theme.amber)
+                                .accessibilityHidden(true)
+                            Text("\(row.n) / \(row.of)").font(.caption.monospacedDigit()).foregroundStyle(Theme.muted)
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(L("{0}. évad", row.season.number) + ", " + "\(row.n) / \(row.of)")
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.amber.opacity(0.07), in: .rect(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.amber.opacity(0.45), lineWidth: 1))
+        .accessibilityElement(children: .contain)
     }
 }

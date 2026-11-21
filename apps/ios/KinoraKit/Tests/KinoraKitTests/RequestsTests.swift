@@ -45,6 +45,23 @@ import Testing
         #expect(d.seasons?.map(\.number) == [1, 2] && d.seasons?.first?.have == 3)
     }
 
+    @Test func watchedHistory() throws {
+        let list = try decode("""
+        [{"id":603,"title":"Mátrix","kind":"movie","watched":{"at":1763600000}},
+         {"id":1399,"title":"Trónok harca","kind":"series","watched":{"at":1763600000,"episodes":12}},
+         {"id":7,"title":"Új","kind":"movie"}]
+        """, as: [DiscoverItem].self)
+        #expect(list[0].watched?.date != nil && list[0].watched?.episodes == nil)
+        #expect(list[1].watched?.episodes == 12 && list[2].watched == nil)
+        let d = try decode("""
+        {"id":1399,"title":"T","seasons":[{"number":1,"episode_count":10},{"number":2,"episode_count":10}],
+         "watched":{"at":0,"episodes":20,"seasons":{"1":10,"2":10}}}
+        """, as: DiscoverSeries.self)
+        #expect(d.watched?.date == nil && d.watched?.episodes(inSeason: 2) == 10)
+        #expect(d.watched?.complete(d.seasons ?? []) == true)
+        #expect(Watched(seasons: ["1": 10, "2": 3]).complete(d.seasons ?? []) == false)
+    }
+
     @Test func requestStates() throws {
         let list = try decode("""
         [{"id":1,"kind":"series","tmdb_id":1399,"title":"T","year":2011,"poster":"","user_id":null,"status":"downloading","seasons":"1,2","progress":0.4},
