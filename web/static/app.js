@@ -2748,8 +2748,15 @@ async function adminAcqQueue(body) {
     const acts = g => h('div.row-gap.q-acts', null,
       g.status === 'failed' && h('button.btn.small', { onclick: async () => { await POST(`/api/admin/acquire/grabs/${g.id}/retry`); render(); } }, T.retry),
       g.status !== 'removed' && h('button.btn.small.danger', { onclick: async () => {
-        if (!await confirmBox(g.status === 'done' ? T.acqForgetAsk(g.title) : T.acqRemoveAsk(g.title), g.status === 'done' ? T.acqForget : T.acqRemove)) return;
-        await api('DELETE', `/api/admin/acquire/grabs/${g.id}?files=${g.status === 'done' ? 0 : 1}`); render();
+        const done = g.status === 'done';
+        // a finished download: the box can also delete the torrent's data and the film from the library
+        const wipe = done && h('input', { type: 'checkbox', checked: true });
+        if (!await confirmBox(done ? T.acqForgetAsk(g.title) : T.acqRemoveAsk(g.title), done ? T.acqForget : T.acqRemove,
+          wipe && h('div', null, h('label.check', null, wipe, T.acqDeleteFiles), h('div.hint.mt1', null, T.acqDeleteFilesHint)))) return;
+        const all = done && wipe.checked;
+        try { await api('DELETE', `/api/admin/acquire/grabs/${g.id}?files=${!done || all ? 1 : 0}&library=${all ? 1 : 0}`); }
+        catch { /* api() already showed the error */ }
+        render();
       } }, g.status === 'done' ? T.acqForget : T.acqRemove));
     const badge = g => h('span.badge' + (g.status === 'failed' ? '.warn' : g.status === 'done' ? '.acq-have' : ''), null, acqStateLabel(g.status));
     const prog = g => (g.status === 'downloading' || g.status === 'importing') && h('div.q-prog', null, aBar(g.progress, 1),

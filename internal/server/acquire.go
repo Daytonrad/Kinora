@@ -476,7 +476,7 @@ func (s *Server) handleAcqRemove(w http.ResponseWriter, r *http.Request, c *reqC
 	if m == nil {
 		return
 	}
-	if err := m.Remove(r.Context(), pathID(r, "id"), r.URL.Query().Get("files") == "1"); err != nil {
+	if err := m.Remove(r.Context(), pathID(r, "id"), r.URL.Query().Get("files") == "1", r.URL.Query().Get("library") == "1"); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeErr(w, http.StatusNotFound, "nincs ilyen letöltés")
 			return

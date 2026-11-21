@@ -684,7 +684,7 @@ func TestManagerFlow(t *testing.T) {
 	if err := m.Retry(ctx, g3.ID); err != nil {
 		t.Error(err)
 	}
-	if err := m.Remove(ctx, g.ID, false); err != nil {
+	if err := m.Remove(ctx, g.ID, false, false); err != nil {
 		t.Error(err)
 	}
 	if g, _ = st.AcqGrab(g.ID); g.Status != store.GrabRemoved {

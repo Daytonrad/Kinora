@@ -544,11 +544,16 @@ func (m *Manager) Retry(ctx context.Context, id int64) error {
 	return nil
 }
 
-// Remove stops following a download and takes it out of the client (with its files when asked).
-func (m *Manager) Remove(ctx context.Context, id int64, deleteFiles bool) error {
+// Remove takes a grab off the queue and out of the download client, the downloaded data too when
+// deleteFiles is set. deleteLibrary (a finished grab only) also deletes what it put into the library.
+func (m *Manager) Remove(ctx context.Context, id int64, deleteFiles, deleteLibrary bool) error {
 	g, err := m.st.AcqGrab(id)
 	if err != nil {
 		return err
+	}
+	deleteLibrary = deleteLibrary && g.Status == store.GrabDone && g.LibraryID != nil
+	if deleteLibrary {
+		deleteFiles = true
 	}
 	if g.ClientID != nil && g.Status != store.GrabRemoved {
 		if cfg, err := m.st.AcqClient(*g.ClientID); err == nil {
@@ -562,7 +567,24 @@ func (m *Manager) Remove(ctx context.Context, id int64, deleteFiles bool) error 
 	if g.RequestID != nil && g.Status != store.GrabDone {
 		m.st.SetRequestStatus(*g.RequestID, store.ReqFailed, "az admin megszakította a letöltést", 0)
 	}
-	return m.st.SetAcqGrabStatus(g.ID, store.GrabRemoved, "", "")
+	if err := m.st.SetAcqGrabStatus(g.ID, store.GrabRemoved, "", ""); err != nil {
+		return err
+	}
+	if !deleteLibrary {
+		return nil
+	}
+	lib, err := m.st.Library(*g.LibraryID)
+	if err != nil {
+		return errors.New("a célkönyvtár már nem létezik, a könyvtárból nem töröltem semmit")
+	}
+	if err := deleteImported(g, lib.Path); err != nil {
+		return fmt.Errorf("a letöltőkliensből töröltem, de a könyvtárból nem: %w", err)
+	}
+	m.log.Info("acquire: deleted from the library", "title", g.Title, "path", g.TargetPath)
+	if m.scan != nil {
+		m.scan(lib.ID)
+	}
+	return nil
 }
 
 // TestIndexer checks an indexer configuration without saving it.
