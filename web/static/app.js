@@ -911,6 +911,61 @@ async function titleLangsDialog(it) {
   } }, T.save)]);
 }
 
+// ---- ratings from other sites and the box office (GET …/scores, filled in after the page renders)
+const SCORE_SITES = { imdb: 'IMDb', rt: 'Rotten Tomatoes', metacritic: 'Metacritic', tmdb: 'TMDB' };
+const compactNum = v => new Intl.NumberFormat(T.locale, { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+const usd = (v, compact) => new Intl.NumberFormat(T.locale, { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol',
+  notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 1 : 0 }).format(v);
+
+/** A row of site scores: the figure on the site's own scale, a hairline meter, the site and what it counts. */
+function scoreStrip(ratings) {
+  if (!ratings || !ratings.length) return null;
+  return h('ul.scores', { 'aria-label': T.scoresLabel }, ratings.map(r => {
+    const site = SCORE_SITES[r.source] || r.source;
+    const pct = r.max === 100;
+    const fig = h('span.score-fig', null, pct ? num(r.value, 0) : num(r.value, 1), h('small', null, pct ? (r.source === 'rt' ? '%' : '/100') : '/10'));
+    const sub = r.votes ? T.scoreVotes(compactNum(r.votes)) : (r.source === 'rt' || r.source === 'metacritic') ? T.scoreCritics : '';
+    const kids = [fig, h('span.score-meter', { style: '--v:' + Math.max(0, Math.min(1, r.value / r.max)).toFixed(3), 'aria-hidden': 'true' }),
+      h('span.score-site', null, site), sub && h('span.score-sub', null, sub)];
+    return h('li', null, r.url
+      ? h('a.score', { href: r.url, target: '_blank', rel: 'noopener noreferrer', title: T.scoreOpen(site) }, kids)
+      : h('div.score', null, kids));
+  }));
+}
+
+/** Budget against worldwide gross: two ledger figures and two bars on one scale. */
+function boxOfficeBlock(s, compact) {
+  if (!s || !(s.budget > 0 || s.revenue > 0)) return null;
+  const top = Math.max(s.budget || 0, s.revenue || 0);
+  const row = (label, v, cls) => v > 0 && h('div.box-row' + cls, null,
+    h('span.box-label', null, label),
+    h('span.box-bar', { 'aria-hidden': 'true' }, h('i', { style: '--v:' + (v / top).toFixed(3) })),
+    h('b.box-fig', { title: usd(v, false) }, usd(v, true)));
+  const ratio = s.budget > 0 && s.revenue > 0 ? s.revenue / s.budget : 0;
+  return h('div.box' + (compact ? '.compact' : ''), null,
+    row(T.budget, s.budget, '.budget'),
+    row(T.revenue + (compact ? '' : ' · ' + T.revenueHint), s.revenue, '.revenue'),
+    ratio > 0 && h('p.box-ratio', null, ratio >= 1 ? T.boxRatio(num(ratio, ratio >= 10 ? 0 : 1)) : T.boxShort(num(ratio * 100, 0))),
+    !compact && h('p.muted.small', null, T.boxNote));
+}
+
+/** Loads the scores into the given slots; slots stay empty (and hidden) when nothing is known. */
+async function fillScores(url, ratingsSlot, boxSlot, compact, onRatings) {
+  let s;
+  try { s = await GET(url); } catch { return; }
+  const strip = scoreStrip(s.ratings);
+  if (ratingsSlot) {
+    const hint = !s.omdb && state.me.user.is_admin && !compact && h('p.muted.small.score-hint', null, T.scoresOmdbHint);
+    put(ratingsSlot, strip, hint);
+    ratingsSlot.hidden = !strip && !hint;
+  }
+  if (strip && onRatings) onRatings();
+  if (boxSlot) {
+    const box = boxOfficeBlock(s, compact);
+    if (box) { put(boxSlot, compact ? box : [h('h2', null, T.boxOffice), box]); boxSlot.hidden = false; }
+  }
+}
+
 async function viewItem(id) {
   const main = shell('item');
   const d = await GET('/api/items/' + id);
@@ -945,7 +1000,12 @@ async function viewItem(id) {
     it.year && h('span.badge', null, it.year), it.content_rating && h('span.badge', null, it.content_rating),
     it.runtime_sec > 0 && it.kind !== 'series' && h('span.badge', null, fmtRuntime(it.runtime_sec)),
     it.height > 0 && h('span.badge', null, resLabel(it.width, it.height)), it.hdr && h('span.badge.hot', null, it.hdr),
-    it.video_codec && h('span.badge', null, it.video_codec.toUpperCase()), it.community_rating && h('span.badge', null, icon('star'), num(it.community_rating, 1)));
+    it.video_codec && h('span.badge', null, it.video_codec.toUpperCase()), it.community_rating && h('span.badge.own-rating', null, icon('star'), num(it.community_rating, 1)));
+  // films and series get the sites' scores under the facts (the lone star goes once they arrive) and the money below
+  const hasScores = it.kind === 'movie' || it.kind === 'series';
+  const scoresSlot = hasScores && h('div.scores-slot', { hidden: true });
+  const boxSlot = hasScores && it.kind === 'movie' && h('section.box-sec', { hidden: true });
+  if (hasScores) fillScores(`/api/items/${it.id}/scores`, scoresSlot, boxSlot, false, () => { const b = facts.querySelector('.own-rating'); b && b.remove(); });
 
   const playedBtn = h('button.btn.icon' + (ud.played ? '.on' : ''), { 'aria-pressed': ud.played ? 'true' : 'false', title: ud.played ? T.markUnplayed : T.markPlayed, 'aria-label': ud.played ? T.markUnplayed : T.markPlayed, onclick: async () => {
     await POST(`/api/items/${it.id}/played`, { played: !ud.played }); viewItem(id);
@@ -990,13 +1050,14 @@ async function viewItem(id) {
 
   main.append(h('section.detail-hero', null, bg, h('div.detail', null,
     h('div.poster', null, artImg(it, it.kind === 'episode' ? 'thumb' : 'poster', it.title)),
-    h('div', null, titleBlock, facts, it.overview && h('p.overview', null, it.overview),
+    h('div', null, titleBlock, facts, scoresSlot, it.overview && h('p.overview', null, it.overview),
       d.versions && h('div.versions-wrap', null, h('div.vhead', null, T.versionsN(d.versions.length)), versionPicker(it, d.versions)),
       h('div.actions', null,
         playTarget && h('button.btn.primary.big', { onclick: () => go('#/play/' + playTarget.id) }, icon('play'), playLabel),
         playedBtn, favBtn, hideBtn, stars, langBtn, moreBtn)))));
   main.append(h('div.below', null,
     sideInfo.childElementCount > 0 && h('section', null, h('h2', null, T.data), sideInfo), // a series without metadata has nothing to list
+    boxSlot,
     tagBox && h('section', null, h('h2', null, T.tags), tagBox)));
 
   if (it.kind === 'series' && d.seasons) {
@@ -2167,7 +2228,7 @@ async function adminDash(body) {
             if (!await confirmBox(T.updConfirm(d.update.latest), T.updNow, h('p.muted', null, T.updConfirmBody))) return;
             btn.disabled = true;
             try { await POST('/api/admin/update-apply'); updWait = { target: d.update.latest, since: Date.now() }; }
-            catch (e) { toast(srv(e.message), true); }
+            catch { /* api() already showed the error */ }
             if (!dead) { clearTimeout(t); render(); }
           }))),
       d.library.missing > 0 && h('p.a-warn', null, T.missingFiles(d.library.missing)),
@@ -2420,7 +2481,7 @@ async function adminMeta(body) {
   let t;
   put(body, aHead(T.aMeta, T.aLedeMeta),
     aSplit('TMDB', T.metaHint,
-      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]], T.metaLangHint], ['watch_region', T.watchRegion, 'text', null, T.watchRegionHint]], () => setTimeout(() => adminMeta(body), 400))),
+      settingsForm(s.values, s.env, [['tmdb_key', T.tmdbKey, 'password'], ['omdb_key', T.omdbKey, 'password', null, T.omdbKeyHint], ['metadata_lang', T.metaLang, 'select', [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]], T.metaLangHint], ['watch_region', T.watchRegion, 'text', null, T.watchRegionHint]], () => setTimeout(() => adminMeta(body), 400))),
     aSplit('OpenSubtitles', T.osHint,
       settingsForm(s.values, s.env, [['opensubtitles_key', T.osKey, 'password', null, T.osKeyHint], ['opensubtitles_user', T.osUser, 'text', null, T.osUserHint], ['opensubtitles_pass', T.osPass, 'password']])),
     aSplit(T.refreshMeta, T.refreshMetaHint,
@@ -3209,10 +3270,12 @@ async function discoverDialog(id, onChange) {
     : null;
   let shut = () => {};
   const drop = mine && reqDrop(r, () => { shut(); onChange && onChange(); });
+  const scores = h('div.scores-slot.compact', { hidden: true }), box = h('div.box-slot', { hidden: true });
+  fillScores(`/api/discover/movies/${d.id}/scores`, scores, box, true);
   modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.disc-detail', null,
     d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
     h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
-      facts && h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), state_, lc && lc.el,
+      facts && h('p.muted', null, facts), scores, d.overview && h('p.acq-overview', null, d.overview), box, state_, lc && lc.el,
       watchBlock(d.watch, 'movie', () => shut()))),
   close => (shut = close, [
     h('button.btn', { onclick: close }, T.close),
@@ -3529,10 +3592,12 @@ async function seriesDialog(id, onChange) {
       r.user_name && !mine ? h('span.muted.small', null, ' · ' + T.reqBy(r.user_name)) : null, r.note ? h('div.muted.small', null, srv(r.note)) : null)
     : d.followed ? h('p.ok', null, T.seriesFollowed) : null;
   let shut = () => {};
+  const scores = h('div.scores-slot.compact', { hidden: true });
+  fillScores(`/api/discover/series/${d.id}/scores`, scores, null, true);
   modal(d.title + (d.year ? ' (' + d.year + ')' : ''), h('div.disc-detail', null,
     d.poster && h('img.acq-mposter', { src: d.poster, alt: '' }),
     h('div.acq-mbody', null, d.original_title && d.original_title !== d.title && h('p.muted.small', null, d.original_title),
-      h('p.muted', null, facts), d.overview && h('p.acq-overview', null, d.overview), status,
+      h('p.muted', null, facts), scores, d.overview && h('p.acq-overview', null, d.overview), status,
       watchBlock(d.watch, 'series', () => shut()),
       !r && d.seasons.length > 0 && picker.el, lc && lc.el)),
   close => (shut = close, [

@@ -24,6 +24,8 @@ struct ItemDetailView: View {
     @State private var selectedVersion: Int?
     @State private var subSearch: Item?
     @State private var langsFor: Item?
+    /// Other sites' ratings and the box office (films and series), loaded after the page.
+    @State private var scores: Scores?
 
     private struct Notice {
         var title: String
@@ -37,7 +39,9 @@ struct ItemDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 actions
+                ratings
                 overview
+                boxOffice
                 if current.kind == .series || current.kind == .season { episodesSection }
                 if let similar = detail?.similar, !similar.isEmpty { similarSection(similar) }
                 if let error, detail == nil {
@@ -51,6 +55,7 @@ struct ItemDetailView: View {
         .task { await load() }
         .onChange(of: model.playbackGeneration) { Task { await load() } }
         .task(id: season) { await loadEpisodes() }
+        .task(id: current.id) { await loadScores() }
         .confirmationDialog(L("Évad letöltése"), isPresented: $askSeasonQuality, titleVisibility: .visible) {
             ForEach(DownloadButton.qualities, id: \.0) { q in
                 Button(q.1) { downloadSeason(q.0) }
@@ -98,7 +103,7 @@ struct ItemDetailView: View {
                         .font(Theme.display(metrics.regular ? 48 : 32, weight: .bold))
                         .lineLimit(3)
                         .minimumScaleFactor(0.7)
-                    let meta = Format.meta(current)
+                    let meta = Format.meta(current, rating: scores?.ratings.isEmpty != false)
                     if !meta.isEmpty { Text(meta).font(.footnote).foregroundStyle(Theme.plaster) }
                     if let g = current.genres, !g.isEmpty {
                         Text(g.joined(separator: ", ")).font(.footnote).foregroundStyle(Theme.muted)
@@ -240,6 +245,37 @@ struct ItemDetailView: View {
         if t.progress != nil { return L("Folytatás") }
         if t.kind == .episode, current.kind != .episode, let l = t.episodeLabel { return L("{0} lejátszása", l) }
         return L("Lejátszás")
+    }
+
+    @ViewBuilder private var ratings: some View {
+        if let s = scores, !s.ratings.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                ScoresStrip(ratings: s.ratings, style: .page, columns: metrics.regular ? 4 : 2)
+                if !s.omdb, model.me?.user.isAdmin == true { OmdbHint() }
+            }
+            .frame(maxWidth: metrics.readableWidth, alignment: .leading)
+            .padding(.horizontal, metrics.gutter)
+            .transition(.opacity)
+        }
+    }
+
+    @ViewBuilder private var boxOffice: some View {
+        if let s = scores, s.hasBoxOffice, current.kind == .movie {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(L("Költségvetés és bevétel")).font(Theme.display(metrics.sectionTitle, weight: .bold))
+                BoxOfficeView(scores: s, style: .page)
+            }
+            .frame(maxWidth: metrics.readableWidth, alignment: .leading)
+            .padding(.horizontal, metrics.gutter)
+            .transition(.opacity)
+        }
+    }
+
+    /// Films and series only; offline or on an older server the page simply goes without.
+    private func loadScores() async {
+        guard current.kind == .movie || current.kind == .series, scores == nil else { return }
+        let found = try? await model.api { [id = current.id] in try await $0.itemScores(id) }
+        withAnimation(.easeOut(duration: 0.25)) { scores = found }
     }
 
     @ViewBuilder private var overview: some View {

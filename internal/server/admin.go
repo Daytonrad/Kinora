@@ -152,10 +152,10 @@ func (s *Server) handleInviteDelete(w http.ResponseWriter, r *http.Request, c *r
 
 var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder", "video_codec",
 	"quickconnect_enabled", "discovery_enabled", "brand_accent", "intro_detection", "intro_window_min",
-	"opensubtitles_key", "opensubtitles_user", "opensubtitles_pass", "watch_region"}
+	"opensubtitles_key", "opensubtitles_user", "opensubtitles_pass", "watch_region", "omdb_key"}
 
 // secretSettings are shown masked and kept when the masked value comes back.
-var secretSettings = map[string]bool{"tmdb_key": true, "opensubtitles_key": true, "opensubtitles_pass": true}
+var secretSettings = map[string]bool{"tmdb_key": true, "opensubtitles_key": true, "opensubtitles_pass": true, "omdb_key": true}
 
 // SettingEnv maps settings to the environment variables that can force them.
 var SettingEnv = map[string]string{
@@ -175,6 +175,7 @@ var SettingEnv = map[string]string{
 	"opensubtitles_user":   "KINORA_OPENSUBTITLES_USER",
 	"opensubtitles_pass":   "KINORA_OPENSUBTITLES_PASS",
 	"watch_region":         "KINORA_WATCH_REGION",
+	"omdb_key":             "KINORA_OMDB_KEY",
 }
 
 const maskChar = "•"

@@ -23,6 +23,9 @@ struct DiscoverDetailSheet: View {
     @State private var actionError: String?
     @State private var sent: String?
     @State private var confirmCancel = false
+    /// Other sites' ratings and the box office, loaded after the details.
+    @State private var scores: Scores?
+    @Environment(\.horizontalSizeClass) private var hSize
 
     /// The film and series details in one shape.
     struct Detail {
@@ -30,6 +33,8 @@ struct DiscoverDetailSheet: View {
         var title: String
         var originalTitle: String?
         var facts: String
+        /// TMDB's score, shown in the facts until the ratings strip arrives.
+        var rating: Double?
         var overview: String?
         var poster: String?
         var watch: WhereToWatch?
@@ -65,6 +70,7 @@ struct DiscoverDetailSheet: View {
         .presentationDetents([.large])
         .presentationBackground(Theme.black)
         .task { if detail == nil { await load() } }
+        .task { await loadScores() }
     }
 
     // MARK: - content
@@ -81,10 +87,15 @@ struct DiscoverDetailSheet: View {
                     if let o = d.originalTitle, !o.isEmpty, o != d.title {
                         Text(o).font(.subheadline).foregroundStyle(Theme.muted)
                     }
-                    if !d.facts.isEmpty {
-                        Text(d.facts).font(.subheadline).foregroundStyle(Theme.plaster)
+                    let facts = facts(d)
+                    if !facts.isEmpty {
+                        Text(facts).font(.subheadline).foregroundStyle(Theme.plaster)
                     }
                 }
+            }
+
+            if let s = scores, !s.ratings.isEmpty {
+                ScoresStrip(ratings: s.ratings, style: .compact, columns: hSize == .regular ? 4 : 2)
             }
 
             status(d)
@@ -98,8 +109,27 @@ struct DiscoverDetailSheet: View {
                 libraryPicker
             }
 
+            if let s = scores, s.hasBoxOffice, !item.isSeries {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L("Költségvetés és bevétel")).font(.headline)
+                    BoxOfficeView(scores: s, style: .compact)
+                }
+            }
+
             if let w = d.watch { WatchBlock(watch: w) }
         }
+    }
+
+    /// The facts line, with TMDB's star while no ratings strip stands in for it.
+    private func facts(_ d: Detail) -> String {
+        let star = (d.rating ?? 0) > 0 && scores?.ratings.isEmpty != false ? String(format: "★ %.1f", d.rating ?? 0) : nil
+        return Self.join([d.facts.isEmpty ? nil : d.facts, star])
+    }
+
+    private func loadScores() async {
+        guard scores == nil else { return }
+        let found = try? await model.api { [item] in try await $0.discoverScores(item.id, series: item.isSeries) }
+        withAnimation(.easeOut(duration: 0.25)) { scores = found }
     }
 
     @ViewBuilder private func status(_ d: Detail) -> some View {
@@ -243,15 +273,15 @@ struct DiscoverDetailSheet: View {
                     let seasons = s.seasons ?? []
                     let facts = [s.year.map(String.init), seasons.isEmpty ? nil : L("{0} évad", seasons.count),
                                  (s.genres ?? []).prefix(3).joined(separator: ", "), s.ended == true ? L("befejeződött") : nil]
-                    return Detail(id: s.id, title: s.title, originalTitle: s.originalTitle, facts: Self.join(facts), overview: s.overview,
+                    return Detail(id: s.id, title: s.title, originalTitle: s.originalTitle, facts: Self.join(facts), rating: nil, overview: s.overview,
                                   poster: s.poster, watch: s.watch, itemId: s.itemId, request: s.request,
                                   followed: s.followed == true, seasons: seasons)
                 }
                 let m = try await client.discoverMovie(item.id)
                 let runtime = (m.runtime ?? 0) > 0 ? L("{0} perc", m.runtime ?? 0) : nil
-                let facts = [m.year.map(String.init), runtime, (m.genres ?? []).prefix(3).joined(separator: ", "),
-                             (m.rating ?? 0) > 0 ? String(format: "★ %.1f", m.rating ?? 0) : nil]
-                return Detail(id: m.id, title: m.title, originalTitle: m.originalTitle, facts: Self.join(facts), overview: m.overview,
+                let facts: [String?] = [m.year.map(String.init), runtime, (m.genres ?? []).prefix(3).joined(separator: ", ")]
+                return Detail(id: m.id, title: m.title, originalTitle: m.originalTitle, facts: Self.join(facts), rating: m.rating,
+                              overview: m.overview,
                               poster: m.poster, watch: m.watch, itemId: m.itemId, request: m.request, followed: false, seasons: [])
             }
             if d.itemId == nil && d.request == nil && libraries == nil {

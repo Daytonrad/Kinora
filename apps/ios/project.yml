@@ -140,6 +140,7 @@ targets:
       - Kinora/App/ProgressQueue.swift
       - Kinora/App/Theme.swift
       - Kinora/Features/Browse/Artwork.swift
+      - Kinora/Features/Browse/ScoresViews.swift
       - Kinora/Features/Player/PlayerModel.swift
       - Kinora/Features/Party/PartySession.swift
       - Kinora/Features/Party/PartyViews.swift

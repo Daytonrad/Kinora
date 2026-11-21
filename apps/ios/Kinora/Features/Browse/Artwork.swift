@@ -256,12 +256,13 @@ enum Format {
     }
 
     /// "2019 · 1 ó 32 perc · PG-13 · ★ 7.9"
-    static func meta(_ item: Item) -> String {
+    /// `rating: false` leaves the star out, when a ratings strip shows the scores.
+    static func meta(_ item: Item, rating: Bool = true) -> String {
         var parts: [String] = []
         if let y = item.year { parts.append(String(y)) }
         if item.kind == .movie || item.kind == .episode, let r = runtime(item.runtimeSec) { parts.append(r) }
         if let c = item.contentRating, !c.isEmpty { parts.append(c) }
-        if let r = item.communityRating, r > 0 { parts.append("★ " + r.formatted(.number.precision(.fractionLength(1)))) }
+        if rating, let r = item.communityRating, r > 0 { parts.append("★ " + r.formatted(.number.precision(.fractionLength(1)))) }
         if let w = item.width, let h = item.height { parts.append(resolution(w, h)) }
         return parts.joined(separator: " · ")
     }

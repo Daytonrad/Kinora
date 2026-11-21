@@ -250,6 +250,8 @@ struct TVDetailView: View {
     @State private var selectedVersion: Int?
     @State private var askVersion = false
     @State private var subSearch: Item?
+    /// Other sites' ratings and the box office (films and series), loaded after the page.
+    @State private var scores: Scores?
 
     private var current: Item { detail?.item ?? item }
 
@@ -294,6 +296,7 @@ struct TVDetailView: View {
         .task { await load() }
         .onChange(of: model.playbackGeneration) { Task { await load() } }
         .task(id: season) { await loadEpisodes() }
+        .task(id: current.id) { await loadScores() }
         .confirmationDialog(L("Változat"), isPresented: $askVersion, titleVisibility: .visible) {
             ForEach(versions) { v in
                 Button((v.id == chosenVersion?.id ? "✓ " : "") + [v.title, v.details].filter { !$0.isEmpty }.joined(separator: " — ")) {
@@ -313,7 +316,8 @@ struct TVDetailView: View {
                 Text(s).font(.title3.weight(.semibold)).foregroundStyle(Theme.amber)
             }
             Text(current.title).font(Theme.display(84)).lineLimit(2)
-            Text([current.kind == .episode ? current.episodeLabel : nil, Format.meta(current)]
+            Text([current.kind == .episode ? current.episodeLabel : nil,
+                  Format.meta(current, rating: scores?.ratings.isEmpty != false)]
                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.callout).foregroundStyle(Theme.plaster)
             if let g = current.genres, !g.isEmpty {
@@ -322,6 +326,7 @@ struct TVDetailView: View {
             if let o = current.overview, !o.isEmpty {
                 Text(o).font(.callout).foregroundStyle(Theme.plaster).lineLimit(5).frame(maxWidth: 1100, alignment: .leading)
             }
+            reception
             if let v = chosenVersion {
                 Text([L("Változat: {0}", v.title), v.details].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.callout).foregroundStyle(Theme.plaster)
@@ -372,6 +377,36 @@ struct TVDetailView: View {
             .focusSection()
         }
         .padding(.horizontal, 80)
+    }
+
+    /// Ratings beside the budget and gross, read at a glance above the buttons.
+    @ViewBuilder private var reception: some View {
+        let ratings = scores?.ratings ?? []
+        let box = scores.flatMap { $0.hasBoxOffice && current.kind == .movie ? $0 : nil }
+        if !ratings.isEmpty || box != nil {
+            HStack(alignment: .top, spacing: 60) {
+                if !ratings.isEmpty {
+                    ScoresStrip(ratings: ratings, style: .tv)
+                        .frame(maxWidth: CGFloat(ratings.count) * 290, alignment: .leading)
+                }
+                if let box {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(L("Költségvetés és bevétel")).font(.callout.weight(.semibold)).foregroundStyle(Theme.plaster)
+                        BoxOfficeView(scores: box, style: .tv)
+                    }
+                    .frame(width: 600, alignment: .leading)
+                }
+            }
+            .padding(.top, 10)
+            .transition(.opacity)
+        }
+    }
+
+    /// Films and series only; on an older server the page simply goes without.
+    private func loadScores() async {
+        guard current.kind == .movie || current.kind == .series, scores == nil else { return }
+        let found = try? await model.api { [id = current.id] in try await $0.itemScores(id) }
+        withAnimation(.easeOut(duration: 0.3)) { scores = found }
     }
 
     private var playLabel: String {

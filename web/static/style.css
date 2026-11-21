@@ -1248,3 +1248,53 @@ button.ep-chip:hover, button.ep-chip:focus-visible { border-color: var(--t0); co
   .cat-row { flex-direction: column; align-items: flex-start; gap: var(--s2); }
   .cat-desc { white-space: normal; }
 }
+
+/* ---- site scores and box office (detail page, Felfedezés dialog). Ledger figures over muted labels,
+   hairline meters in plaster: a score is information, not something live, so no amber until focus. */
+.scores-slot, .box-slot { margin-bottom: var(--s4); animation: a-in var(--t-in) var(--ease) both; opacity: 0; }
+.scores-slot[hidden], .box-slot[hidden], .box-sec[hidden] { display: none; }
+.scores { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; row-gap: var(--s4); }
+.scores li { display: flex; }
+.scores li + li { border-left: var(--hair) solid var(--rule-hi); }
+.score { display: flex; flex-direction: column; gap: var(--s1); min-width: 7.5rem; padding: 0 var(--s5); color: var(--t1); text-decoration: none; border-radius: var(--r1); }
+.scores li:first-child .score { padding-left: 0; }
+.score-fig { font-family: var(--text); font-size: var(--f4); font-weight: 700; line-height: 1; color: var(--t0); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.score-fig small { font-size: var(--f0); font-weight: 400; color: var(--t1); }
+.score-meter { position: relative; display: block; height: var(--frame); margin: var(--s1) 0 var(--s1); background: var(--rule-hi); overflow: hidden; }
+.score-meter::before, .box-bar i { content: ""; position: absolute; inset: 0; transform-origin: left; transform: scaleX(var(--v)); animation: meter-grow calc(var(--t-in) * 2) var(--ease) both; }
+.score-meter::before { background: var(--t1); }
+.score-site { font-size: var(--f0); font-weight: 700; color: var(--t0); transition: color var(--t-out) var(--ease); }
+.score-sub { font-size: var(--f0); color: var(--t1); font-variant-numeric: tabular-nums; }
+a.score:hover .score-site, a.score:focus-visible .score-site { color: var(--amber); }
+a.score:hover .score-meter::before, a.score:focus-visible .score-meter::before { background: var(--amber); }
+a.score:focus-visible { outline: var(--focus-w) solid var(--amber); outline-offset: var(--focus-off); }
+.score-hint { margin: var(--s3) 0 0; max-width: var(--measure-s); }
+@keyframes meter-grow { from { transform: scaleX(0); } }
+
+.box { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s3) var(--s4); align-items: center; }
+.box-row { display: contents; }
+.box-label { font-size: var(--f0); color: var(--t2); white-space: nowrap; }
+.box-bar { position: relative; display: block; height: var(--s2); background: var(--g2); border-radius: var(--r1); overflow: hidden; }
+.box-bar i { background: var(--t2); border-radius: var(--r1); }
+.box-row.revenue .box-bar i { background: var(--t1); }
+.box-fig { font-size: var(--f4); line-height: 1; color: var(--t0); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.box > p { grid-column: 1 / -1; margin: 0; }
+.box-ratio { font-weight: 700; color: var(--t1); padding-top: var(--s2); border-top: var(--hair) solid var(--rule); }
+
+/* the Felfedezés dialog: same pieces, one step smaller */
+.scores-slot.compact .score { min-width: 6rem; padding: 0 var(--s4); }
+.scores-slot.compact .scores li:first-child .score { padding-left: 0; }
+.scores-slot.compact .score-fig, .box.compact .box-fig { font-size: var(--f3); }
+.box.compact { gap: var(--s2) var(--s3); }
+.box.compact .box-ratio { font-size: var(--f0); font-weight: 400; color: var(--t2); border-top: 0; padding-top: 0; }
+
+@media (max-width: 760px) {
+  .scores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .score, .scores-slot.compact .score { min-width: 0; padding: 0 var(--s4); }
+  .scores li:nth-child(2n+1) { border-left: 0; }
+  .scores li:nth-child(2n+1) .score { padding-left: 0; }
+  .score-fig { font-size: var(--f3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scores-slot, .box-slot, .score-meter::before, .box-bar i { animation: none; opacity: 1; }
+}

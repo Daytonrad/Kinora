@@ -34,14 +34,16 @@ type Fetcher struct {
 
 	BaseURL  string
 	ImageURL string
+	OmdbURL  string // "" = DefaultOmdbURL (scores.go)
 	Delay    time.Duration
 
 	mu     sync.Mutex
 	status Status
-	langs  map[string]bool   // viewer languages (metadata_langs), loaded on first use
-	again  bool              // a Kick arrived while a refresh ran: run once more
-	noImdb map[int64]bool    // TMDB movies without an IMDb id (asked once per process)
-	cache  map[string]cached // streaming services and genres (discover.go)
+	langs  map[string]bool        // viewer languages (metadata_langs), loaded on first use
+	again  bool                   // a Kick arrived while a refresh ran: run once more
+	noImdb map[int64]bool         // TMDB movies without an IMDb id (asked once per process)
+	cache  map[string]cached      // streaming services and genres (discover.go)
+	scores map[string]scoresEntry // ratings, budget and gross (scores.go)
 }
 
 // Status is the progress of a refresh.

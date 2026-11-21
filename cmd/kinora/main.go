@@ -160,6 +160,9 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	if v := os.Getenv("KINORA_TMDB_API"); v != "" { // a TMDB proxy or mirror (also used by tests)
 		fetcher.BaseURL = strings.TrimRight(v, "/")
 	}
+	if v := os.Getenv("KINORA_OMDB_API"); v != "" { // an OMDb proxy or mirror (also used by tests)
+		fetcher.OmdbURL = v
+	}
 	sc.OnScanned = func(libID int64) {
 		if !fetcher.Enabled() {
 			return
