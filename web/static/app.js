@@ -2743,7 +2743,7 @@ async function adminAcqQueue(body) {
       if (x.state !== 'removed') count.all++;
     }
     if (!picked && filter === 'active' && !count.active) filter = count.failed ? 'failed' : 'all';
-    const shown = all.filter(x => filter === 'all' ? x.state !== 'removed' : x.state === filter);
+    const shown = all.filter(x => filter === 'all' ? x.state !== 'removed' : x.state === (filter === 'active' ? 'downloading' : filter));
 
     const acts = g => h('div.row-gap.q-acts', null,
       g.status === 'failed' && h('button.btn.small', { onclick: async () => { await POST(`/api/admin/acquire/grabs/${g.id}/retry`); render(); } }, T.retry),
