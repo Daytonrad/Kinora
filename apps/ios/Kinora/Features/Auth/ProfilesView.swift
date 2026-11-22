@@ -27,6 +27,15 @@ struct ProfilesView: View {
                     ProgressView()
                 }
                 ErrorText(message: error)
+                // Profiles belong to one account; another family member signs in with their own.
+                Button { Task { await model.logout() } } label: {
+                    Label(L("Másik felhasználó"), systemImage: "person.crop.circle.badge.plus")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.plaster)
+                        .frame(minHeight: 44)
+                        .contentShape(.rect)
+                }
+                .disabled(busy)
                 OtherServerButton()
             }
             .frame(maxWidth: 700)

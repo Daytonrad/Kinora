@@ -589,7 +589,9 @@ async function viewProfiles(editMode) {
   if (me.profiles.length < 8 && !kidsNow) grid.append(h('button.who-item', { onclick: () => profileEditor(null) }, h('div.face.add', null, icon('plus')), h('span', null, T.addProfile)));
   put(app(), h('div.center', null, h('div.who', null,
     h('h1', null, editMode ? T.editProfiles : T.whoWatches), grid,
-    h('div', { class: 'mt6' }, !kidsNow && h('a.btn.ghost', { href: editMode ? '#/profiles' : '#/profiles/edit' }, editMode ? T.done : T.editProfiles)))));
+    h('div', { class: 'mt6' }, !kidsNow && h('a.btn.ghost', { href: editMode ? '#/profiles' : '#/profiles/edit' }, editMode ? T.done : T.editProfiles),
+      // profiles belong to one account; another family member signs in with their own
+      !editMode && !me.profile_locked && h('button.btn.ghost', { onclick: () => POST('/api/logout').then(() => { state.me = null; go('#/login'); }) }, T.switchUser)))));
   grid.querySelector('button')?.focus();
 }
 

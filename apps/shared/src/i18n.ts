@@ -123,6 +123,7 @@ export const T = {
   server: 'Szerver',
   switchServer: 'Szerverváltás',
   switchProfile: 'Profilváltás',
+  switchUser: 'Másik felhasználó',
   logout: 'Kijelentkezés',
   devices: 'Bejelentkezett eszközök',
   thisDevice: 'ez az eszköz',

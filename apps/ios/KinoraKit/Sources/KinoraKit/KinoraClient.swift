@@ -145,6 +145,11 @@ public actor KinoraClient {
         try await post("/api/profiles/\(id)/select", PinBody(pin: pin))
     }
 
+    /// Clears the session's profile, so the next start asks "who's watching?" again.
+    public func leaveProfile() async throws {
+        try await post("/api/profiles/leave")
+    }
+
     public func logout() async {
         try? await post("/api/logout")
     }

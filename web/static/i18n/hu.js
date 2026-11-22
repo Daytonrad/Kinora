@@ -383,6 +383,7 @@
   "admin": "Admin",
   "searchPh": "Keresés címre, leírásra, címkére",
   "switchProfile": "Profilváltás",
+  "switchUser": "Másik felhasználó",
   "account": "Fiók",
   "logout": "Kijelentkezés",
   "joinParty": "Csatlakozás watch partyhoz",

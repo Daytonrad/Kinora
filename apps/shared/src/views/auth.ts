@@ -4,7 +4,7 @@ import { h, put, icon, toast } from '../dom';
 import { T } from '../i18n';
 import { Api, SavedServer, resolveServer, loadServers, removeServer, setCurrentServer, upsertServer, HTTPError } from '../api';
 import { discover } from '../discover';
-import { state, go, route, sheet, onCleanup, persistServer, loadMe, currentServer, brandMark, Profile, render, setRestore } from '../app';
+import { state, go, route, sheet, onCleanup, persistServer, loadMe, currentServer, brandMark, Profile, render, setRestore, signOut } from '../app';
 import { focusFirst } from '../focus';
 import { APP_VERSION } from '../platform';
 import { mergeURLs } from '../address';
@@ -245,7 +245,9 @@ route('profiles', async (_p, q) => {
       h('span.face', { style: { background: p.color } }, p.name.slice(0, 1).toUpperCase(), p.has_pin && h('span.lock', null, icon('lock'))),
       h('span.who-name', null, p.name), p.is_kids && h('small', null, T.kids))));
   const root = document.getElementById('app')!;
-  put(root, h('div.center.tall', null, h('div.who-page', null, brandMark(), h('h1', null, T.whoWatches), grid)));
+  put(root, h('div.center.tall', null, h('div.who-page', null, brandMark(), h('h1', null, T.whoWatches), grid,
+    // profiles belong to one account; another family member signs in with their own
+    !me.profile_locked && h('div.actions', null, h('button.btn.ghost', { onclick: () => signOut() }, T.switchUser)))));
   const pinFor = +(q.get('pin') || 0);
   const target = me.profiles.filter(p => p.id === pinFor)[0];
   if (target) selectProfile(target);

@@ -2,7 +2,7 @@
 // "connect a device" (approve a TV's Quick Connect code), profile/server switch, logout.
 import { h, put, icon, toast } from '../dom';
 import { T } from '../i18n';
-import { state, api, route, shell, choose, go, confirmBox, loadMe, persistServer, render, sheet, Profile } from '../app';
+import { state, api, route, shell, choose, go, confirmBox, loadMe, persistServer, render, sheet, signOut, Profile } from '../app';
 import { prefGet, prefSet, APP_VERSION, getPlatform } from '../platform';
 import { setCurrentServer, resolveServer, serverURLs } from '../api';
 import { mergeURLs } from '../address';
@@ -87,12 +87,7 @@ route('settings', async () => {
       row(T.addAddress, '', () => addAddress()),
       row(T.switchServer, '', async () => { await setCurrentServer(null); go('#/servers'); }),
       row(T.logout, '', async () => {
-        if (!(await confirmBox(T.logout + '?', T.logout, T.cancel))) return;
-        try { await api().post('/api/logout'); } catch { /* already gone */ }
-        s.token = undefined;
-        await persistServer(s);
-        state.me = null;
-        go('#/login', true);
+        if (await confirmBox(T.logout + '?', T.logout, T.cancel)) await signOut();
       })),
     h('p.muted.small.ver', null, `${T.appName} ${APP_VERSION} · ${T.platforms[getPlatform()] || getPlatform()}`)));
   loadDevices();

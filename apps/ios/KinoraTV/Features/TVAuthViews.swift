@@ -320,8 +320,13 @@ struct TVProfilesView: View {
                 ProgressView()
             }
             TVErrorText(message: error)
-            Button(L("Másik szerver")) { model.showServers() }
-                .buttonStyle(TVPillStyle())
+            HStack(spacing: 40) {
+                // Profiles belong to one account; another family member signs in with their own.
+                Button(L("Másik felhasználó")) { Task { await model.logout() } }
+                    .buttonStyle(TVPillStyle())
+                Button(L("Másik szerver")) { model.showServers() }
+                    .buttonStyle(TVPillStyle())
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { if model.me == nil { try? await model.guarded { try await model.loadMe() } } }

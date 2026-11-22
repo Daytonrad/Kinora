@@ -255,6 +255,16 @@ export async function currentServer(): Promise<SavedServer | null> {
   return list.filter(s => s.id === id)[0] || null;
 }
 
+/** Ends the session on the server and forgets its token here, then shows the login. */
+export async function signOut(): Promise<void> {
+  try { await api().post('/api/logout'); } catch { /* already gone */ }
+  const s = state.api!.server;
+  s.token = undefined;
+  await persistServer(s);
+  state.me = null;
+  go('#/login', true);
+}
+
 export async function persistServer(s: SavedServer): Promise<void> {
   const list = await loadServers();
   const i = list.map(x => x.id).indexOf(s.id);

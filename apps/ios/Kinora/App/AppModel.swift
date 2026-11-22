@@ -299,6 +299,11 @@ final class AppModel {
         homePath = NavigationPath()
         tab = .home
         screen = .profiles
+        // Leave the profile on the server too: otherwise a restart from the picker
+        // drops the user back into the old profile.
+        if let client, me?.profileLocked != true {
+            Task { try? await client.leaveProfile() }
+        }
     }
 
     func logout() async {
