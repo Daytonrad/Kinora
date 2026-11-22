@@ -21,10 +21,46 @@ import Testing
 
     @Test func sourceLanguageNeedsNoFile() {
         let (l, _, _) = temp()
+        l.choice = "hu"
         #expect(l.code == "hu")
         #expect(l.text("Beállítások", []) == "Beállítások")
         #expect(l.text("{0} cím", [3]) == "3 cím")
         #expect(l.server("nincs ilyen nyelv") == "nincs ilyen nyelv")
+    }
+
+    @Test func bundledTextsBeforeAnyDownload() throws {
+        let (l, _, _) = temp()
+        l.choice = "de"
+        #expect(l.code == "de")
+        #expect(l.text("Szerver hozzáadása", []) == "Server hinzufügen")
+        #expect(l.text("Beállítások", []) == "Beállítások") // not built in: the source text
+        // once a language is downloaded, the built-in texts step aside
+        try l.savePack(en)
+        l.saveIndex([LanguageInfo(code: "en", name: "English", version: "v1")], downloaded: ["en": "v1"])
+        l.choice = "en"
+        #expect(l.text("Beállítások", []) == "Settings")
+        #expect(l.text("Szerver hozzáadása", []) == "Szerver hozzáadása")
+    }
+
+    @Test func bundledKeysAreUsed() throws {
+        // every built-in key must still be a text the apps ask for
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        var source = ""
+        for dir in ["Kinora", "KinoraTV", "KinoraKit/Sources"] {
+            let e = FileManager.default.enumerator(at: root.appendingPathComponent(dir), includingPropertiesForKeys: nil)
+            while let u = e?.nextObject() as? URL {
+                guard u.pathExtension == "swift", u.lastPathComponent != "BundledLanguages.swift" else { continue }
+                source += try String(contentsOf: u, encoding: .utf8)
+            }
+        }
+        for (code, pack) in Language.bundled {
+            for key in pack.strings.app.keys {
+                let json = JSONEncoder()
+                json.outputFormatting = .withoutEscapingSlashes
+                let literal = String(data: try json.encode(key), encoding: .utf8)!
+                #expect(source.contains("L(" + literal), "\(code): \(key)")
+            }
+        }
     }
 
     @Test func downloadedLanguage() throws {

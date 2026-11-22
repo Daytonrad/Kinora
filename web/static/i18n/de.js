@@ -1362,6 +1362,7 @@
    "Stáblista átugrása": "Abspann überspringen",
    "Szerver": "Server",
    "Szerver címe": "Serveradresse",
+   "Add meg a Kinora-szerver címét. Elég az IP-cím, pl. 192.168.1.10 – a port alapból 8096. Otthonon kívülről a nyilvános címet (pl. https://kinora.pelda.hu).": "Gib die Adresse deines Kinora-Servers ein. Die IP-Adresse genügt, z. B. 192.168.1.10 – der Port ist standardmäßig 8096. Unterwegs die öffentliche Adresse (z. B. https://kinora.beispiel.de).",
    "Szerver hozzáadása": "Server hinzufügen",
    "Szerver keresése": "Server suchen",
    "Szín": "Farbe",

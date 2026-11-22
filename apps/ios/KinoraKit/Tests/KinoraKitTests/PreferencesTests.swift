@@ -22,7 +22,7 @@ import Testing
 
     @Test func speedsAndChapters() {
         #expect(PlaybackSpeeds.label(1) == "1×")
-        #expect(PlaybackSpeeds.label(1.25) == "1,25×")
+        #expect(PlaybackSpeeds.label(1.25) == "1\(Language.shared.decimalSeparator)25×") // the app language's separator
         let ch = [Chapter(start: 0, title: "A"), Chapter(start: 60, title: "B")]
         #expect(ch.current(at: 30)?.title == "A")
         #expect(ch.current(at: 59.7)?.title == "B")

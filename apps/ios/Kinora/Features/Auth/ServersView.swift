@@ -18,7 +18,7 @@ struct ServersView: View {
             Text(L("Szerver hozzáadása"))
                 .font(Theme.display(40, weight: .bold))
             // Verbatim: the example address must not turn into a tappable link.
-            Text(verbatim: "Add meg a Kinora-szerver címét. Elég az IP-cím, pl. 192.168.1.10 – a port alapból 8096. Otthonon kívülről a nyilvános címet (pl. https://kinora.pelda.hu).")
+            Text(verbatim: L("Add meg a Kinora-szerver címét. Elég az IP-cím, pl. 192.168.1.10 – a port alapból 8096. Otthonon kívülről a nyilvános címet (pl. https://kinora.pelda.hu)."))
                 .foregroundStyle(Theme.plaster)
 
             VStack(alignment: .leading, spacing: 6) {

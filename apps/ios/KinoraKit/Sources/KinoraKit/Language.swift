@@ -150,8 +150,13 @@ public final class Language: @unchecked Sendable {
         let stamp = defaults.integer(forKey: Self.stampKey)
         let codes = available.map(\.code)
         let code = Self.resolve(choice: choice, available: codes)
+        // Nothing downloaded yet (no server reached): the first screens use the few texts built into the app.
+        let firstRun = codes == [Self.source.code]
+        let bundledCode = Self.resolve(choice: choice, available: [Self.source.code] + Self.bundled.keys.sorted())
         let next: Compiled
         if code != Self.source.code, let pack = readPack(code) {
+            next = Compiled(pack)
+        } else if firstRun, let pack = Self.bundled[bundledCode] {
             next = Compiled(pack)
         } else if let pack = readPack(Self.source.code) {
             next = Compiled(pack) // an admin may have overridden some Hungarian texts
