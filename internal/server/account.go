@@ -101,6 +101,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u *store.U
 // (their own origin) keep the token from the response instead.
 func (s *Server) webSessionCookie(w http.ResponseWriter, r *http.Request, tok string) {
 	if o := r.Header.Get("Origin"); o == "" || sameOrigin(r, o) || !s.isAppOrigin(o) {
+		s.rememberActive(w, r, tok) // someone else signed in here: keep them one tap away
 		s.setSessionCookie(w, r, tok)
 	}
 }
@@ -134,8 +135,12 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, c *reqCtx)
 	if c.Token != "" {
 		s.st.DeleteSession(c.Token)
 	}
-	clearSessionCookie(w, r)
-	ok(w)
+	// another account remembered on this browser takes over; otherwise the browser is signed out
+	switched := s.afterLogout(w, r)
+	if !switched {
+		clearSessionCookie(w, r)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "switched": switched})
 }
 
 func (s *Server) handleInviteInfo(w http.ResponseWriter, r *http.Request, c *reqCtx) {
