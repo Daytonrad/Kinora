@@ -1,5 +1,5 @@
 SCREEN RECORDING
-A screen recording from a physical iPhone running the latest iOS is attached below. It starts at app launch and shows: adding the demo server, signing in, choosing a profile, browsing, playback with subtitles, Discover/Requests, downloads, and a watch party with chat, including reporting a message and blocking its sender.
+A screen recording from a physical iPhone running the latest iOS is attached below. It starts at app launch and shows: adding the demo server, choosing a profile, Home, a title page, and a watch party with a second account: chat, synced playback, and blocking that member (press and hold > Block). Reporting a message works the same way (press and hold > Report).
 
 1. PURPOSE AND AUDIENCE
 Kinora is the iOS/tvOS client for Kinora, a free, open-source, self-hosted media server (similar to Jellyfin or Plex). It is for people who run their own Kinora server at home and want to watch their own movies and series on iPhone, iPad and Apple TV. The app contains no content of its own and sells nothing: it streams only the user's own files from the user's own server. Value: a native, ad-free player for a private library, with resume across devices, offline downloads, subtitles, parental profiles and watch parties for family and friends.
@@ -23,7 +23,7 @@ Payments: none. No in-app purchases, subscriptions or paid features.
 
 3. EXTERNAL SERVICES
 - The user's own Kinora server (all accounts, media and streaming).
-- The server (not the app) fetches metadata from TMDB (The Movie Database API), ratings from OMDb, and subtitles from OpenSubtitles, using API keys configured by the server admin. TMDB is named as the source where its data is shown.
+- The server (not the app) fetches metadata from TMDB ratings from OMDb, and subtitles from OpenSubtitles, using API keys configured by the server admin. TMDB is named as the source where its data is shown.
 - Apple frameworks: AVKit/AVFoundation, SharePlay/GroupActivities, WidgetKit/ActivityKit, Bonjour (local server discovery).
 No analytics, advertising, AI or payment services are used.
 
