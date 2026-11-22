@@ -209,3 +209,37 @@ func TestOriginCheck(t *testing.T) {
 		t.Fatal("same origin rejected")
 	}
 }
+
+func TestPartyReport(t *testing.T) {
+	h, room, url := setup(t)
+	got := make(chan Report, 1)
+	h.Report = func(r Report) error { got <- r; return nil }
+	a := dial(t, url, "Anna")
+	b := dial(t, url, "Bela")
+
+	a.send(map[string]any{"t": "chat", "text": "csúnya szó"})
+	line := b.waitFor("chat", nil)
+	id := line["id"].(float64)
+	if id < 1 || line["from"] != "1.65" { // ProfileID is the name's first byte: 'A'
+		t.Fatalf("chat line: %v", line)
+	}
+
+	// the sender cannot report their own line
+	a.send(map[string]any{"t": "report", "id": id})
+	a.waitFor("sys", func(m map[string]any) bool { return strings.Contains(m["text"].(string), "nem lehet") })
+
+	b.send(map[string]any{"t": "report", "id": id, "reason": " sértő "})
+	b.waitFor("sys", func(m map[string]any) bool { return strings.Contains(m["text"].(string), "Jelentés elküldve") })
+	select {
+	case r := <-got:
+		if r.Room != room.Code || r.Sender.Name != "Anna" || r.Reporter.Name != "Bela" || r.Text != "csúnya szó" || r.Reason != "sértő" {
+			t.Fatalf("report: %+v", r)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("report not stored")
+	}
+
+	// an unknown line is refused
+	b.send(map[string]any{"t": "report", "id": 999})
+	b.waitFor("sys", func(m map[string]any) bool { return strings.Contains(m["text"].(string), "nem lehet") })
+}

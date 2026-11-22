@@ -2130,10 +2130,10 @@ function partyClient(code, player, stage, p) {
 async function viewAdmin(tab) {
   if (!state.me.user.is_admin) return go('#/home');
   const main = shell('admin');
-  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['languages', T.aLangs], ['settings', T.aSettings], ['acqrequests', T.aAcqRequests], ['acqqueue', T.aAcqQueue], ['acqsettings', T.aAcqSettings]];
+  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['reports', T.aReports], ['languages', T.aLangs], ['settings', T.aSettings], ['acqrequests', T.aAcqRequests], ['acqqueue', T.aAcqQueue], ['acqsettings', T.aAcqSettings]];
   const label = Object.fromEntries(tabs);
-  const groups = [['library', T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], ['access', T.aGroupAccess, ['users', 'invites', 'devices', 'connect']], ['acquire', T.aGroupAcquire, ['acqrequests', 'acqqueue', 'acqsettings']], ['system', T.aGroupSystem, ['languages', 'settings']]];
-  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, languages: adminLangs, settings: adminSettings, acqrequests: adminAcqRequests, acqqueue: adminAcqQueue, acqsettings: adminAcqSettings }[tab];
+  const groups = [['library', T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], ['access', T.aGroupAccess, ['users', 'invites', 'devices', 'reports', 'connect']], ['acquire', T.aGroupAcquire, ['acqrequests', 'acqqueue', 'acqsettings']], ['system', T.aGroupSystem, ['languages', 'settings']]];
+  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, reports: adminReports, languages: adminLangs, settings: adminSettings, acqrequests: adminAcqRequests, acqqueue: adminAcqQueue, acqsettings: adminAcqSettings }[tab];
   if (!fn) return go('#/admin/dash');
   const body = h('div.a-body', { 'aria-busy': 'true' }, aSkeleton());
   const cur = (groups.find(g => g[2].includes(tab)) || groups[0])[0];
@@ -2233,6 +2233,7 @@ async function adminDash(body) {
             if (!dead) { clearTimeout(t); render(); }
           }))),
       d.library.missing > 0 && h('p.a-warn', null, T.missingFiles(d.library.missing)),
+      d.party_reports > 0 && h('p.a-warn', null, T.aReportsOpen(d.party_reports), ' ', h('a', { href: '#/admin/reports' }, T.aReports + ' →')),
       aSec(T.activeTranscodes, null, null, d.transcodes.length
         ? aTable([T.title, T.aColMode, T.encoder, T.time], d.transcodes.map(s => h('tr', null, tdl('', T.title, h('b', null, s.title)), tdl('', T.aColMode, s.mode), tdl('.mono.small', T.encoder, s.encoder), tdl('', T.time, fmtTime(s.seconds)))), '.a-stack')
         : h('p.a-quiet', null, T.noActiveTranscodes)),
@@ -2551,6 +2552,20 @@ async function adminDevices(body) {
   const r = await GET('/api/admin/devices');
   put(body, aHead(T.aDevices, T.aLedeDevices),
     r.devices.length ? h('div.a-list', null, h('p.a-count', null, T.aDevicesN(r.devices.length)), r.devices.map(d => deviceRow(d, () => adminDevices(body), true))) : emptyNote(T.aNoDevices));
+}
+
+// Watch party chat lines members reported. Deleting the sender's account (Users) removes them;
+// closing a report only takes it off this list.
+async function adminReports(body) {
+  const r = await GET('/api/admin/party-reports');
+  const row = p => h('div.entry', null, h('div', null,
+    h('p', null, h('strong', null, p.sender_name), p.sender_login && h('span.muted', null, ' (' + p.sender_login + ')'), ': ', p.text),
+    h('p.muted.small', null, [T.aReportBy(p.reporter_name), p.reason, T.aReportRoom(p.room), ago(Date.now() / 1000 - Date.parse(p.created_at) / 1000)].filter(Boolean).join(' · '))),
+    h('span.row-gap', null,
+      p.sender_user > 0 && h('a.btn.ghost', { href: '#/admin/users' }, T.aUsers + ' →'),
+      h('button.btn', { onclick: async () => { await api('DELETE', '/api/admin/party-reports/' + p.id); toast(T.aReportClosed); adminReports(body); } }, T.aReportClose)));
+  put(body, aHead(T.aReports, T.aLedeReports),
+    r.reports.length ? h('div.a-list', null, h('p.a-count', null, T.aReportsN(r.reports.length)), r.reports.map(row)) : emptyNote(T.aNoReports));
 }
 
 // ------------------------------------------------------------------ languages (export, import, edit, add)

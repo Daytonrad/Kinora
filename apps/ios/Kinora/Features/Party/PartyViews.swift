@@ -12,6 +12,9 @@ struct PartyPanel: View {
     /// The QR code is shown: by default while nobody else is in the room yet.
     @State private var qr: Bool?
     private var showQR: Bool { qr ?? (party.members.count <= 1) }
+    /// The chat line waiting for "report?" confirmation, and the person waiting for "block?".
+    @State private var reporting: PartySession.Line?
+    @State private var blocking: PartySession.Line?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -90,9 +93,23 @@ struct PartyPanel: View {
                     Text(m.name).lineLimit(1)
                     if m.host { Text(L("házigazda")).font(.caption).foregroundStyle(Theme.muted) }
                     if m.buffering { Text(L("tölt…")).font(.caption).foregroundStyle(Theme.amber) }
+                    if let from = m.from, party.blocked.contains(from) {
+                        Text(L("letiltva")).font(.caption).foregroundStyle(Theme.muted)
+                    }
                 }
                 .font(.subheadline)
                 .accessibilityElement(children: .combine)
+                .contextMenu {
+                    if let from = m.from, !from.isEmpty, m.id != party.myId {
+                        if party.blocked.contains(from) {
+                            Button(L("Tiltás feloldása"), systemImage: "person.crop.circle.badge.checkmark") { party.unblock(from) }
+                        } else {
+                            Button(L("{0} letiltása", m.name), systemImage: "person.crop.circle.badge.xmark", role: .destructive) {
+                                blocking = PartySession.Line(name: m.name, text: "", from: from)
+                            }
+                        }
+                    }
+                }
             }
             if party.isHost {
                 Toggle(L("Mindenki irányíthat"), isOn: Binding(get: { party.everyone }, set: { Haptic.select.play(); party.setEveryone($0) }))
@@ -108,7 +125,11 @@ struct PartyPanel: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
-                    ForEach(party.lines) { line in
+                    if party.visibleLines.contains(where: party.isOthers) {
+                        Text(L("Tarts nyomva egy üzenetet a jelentéshez vagy a küldő letiltásához."))
+                            .font(.caption2).foregroundStyle(Theme.muted)
+                    }
+                    ForEach(party.visibleLines) { line in
                         Group {
                             if let name = line.name {
                                 Text("\(Text(name + ": ").bold().foregroundColor(Color(partyHex: line.color ?? ""))))\(line.text)")
@@ -118,15 +139,47 @@ struct PartyPanel: View {
                         }
                         .font(.footnote)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .contextMenu { lineActions(line) }
+                        .accessibilityActions { lineActions(line) }
                         .id(line.id)
                     }
                 }
             }
-            .onChange(of: party.lines.last?.id) { _, id in
+            .onChange(of: party.visibleLines.last?.id) { _, id in
                 if let id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } }
             }
         }
         .frame(maxHeight: .infinity)
+        .confirmationDialog(L("Jelented ezt az üzenetet?"), isPresented: Binding(get: { reporting != nil }, set: { if !$0 { reporting = nil } }),
+                            titleVisibility: .visible, presenting: reporting) { line in
+            Button(L("Jelentés"), role: .destructive) { Haptic.select.play(); party.report(line) }
+            Button(L("Jelentés és letiltás"), role: .destructive) {
+                Haptic.select.play()
+                party.report(line)
+                party.block(line.from)
+            }
+            Button(L("Mégse"), role: .cancel) {}
+        } message: { _ in
+            Text(L("Az üzenetet és a küldőjét a szerver adminja kapja meg, aki eltávolíthatja a felhasználót."))
+        }
+        .confirmationDialog(L("{0} letiltása", blocking?.name ?? ""), isPresented: Binding(get: { blocking != nil }, set: { if !$0 { blocking = nil } }),
+                            titleVisibility: .visible, presenting: blocking) { line in
+            Button(L("Letiltás"), role: .destructive) { Haptic.select.play(); party.block(line.from) }
+            Button(L("Mégse"), role: .cancel) {}
+        } message: { _ in
+            Text(L("Az üzenetei ezen a szerveren nem jelennek meg többé neked. A tagok listájában feloldhatod."))
+        }
+    }
+
+    /// Report and block, for someone else's chat line (long press, or VoiceOver actions).
+    @ViewBuilder private func lineActions(_ line: PartySession.Line) -> some View {
+        if party.isOthers(line) {
+            if line.lineId > 0 {
+                Button(L("Jelentés"), systemImage: "exclamationmark.bubble") { reporting = line }
+            }
+            Button(L("{0} letiltása", line.name ?? ""), systemImage: "person.crop.circle.badge.xmark", role: .destructive) { blocking = line }
+        }
     }
 
     private var reactions: some View {

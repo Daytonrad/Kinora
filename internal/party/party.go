@@ -45,14 +45,31 @@ type Who struct {
 	Color     string
 }
 
-// ChatMsg is a chat line.
+// ChatMsg is a chat line. ID numbers it within the room (a report names it); From is the
+// sender's stable key (user.profile), so a viewer can block that person across rooms.
 type ChatMsg struct {
 	T     string `json:"t"`
+	ID    int    `json:"id"`
+	From  string `json:"from"`
 	Name  string `json:"name"`
 	Color string `json:"color"`
 	Text  string `json:"text"`
 	At    int64  `json:"at"`
+	who   Who
 }
+
+// Report is a chat line a member flagged as objectionable; the server keeps it for the admin.
+type Report struct {
+	Room     string
+	Reporter Who
+	Sender   Who
+	Text     string
+	Reason   string
+	At       time.Time
+}
+
+// key is the stable identity of a member across rooms and reconnects.
+func (w Who) key() string { return fmt.Sprintf("%d.%d", w.UserID, w.ProfileID) }
 
 type member struct {
 	id        int
@@ -83,6 +100,7 @@ type Room struct {
 	members    []*member
 	nextID     int
 	chat       []ChatMsg
+	chatSeq    int
 	emptySince time.Time
 	hub        *Hub
 }
@@ -92,6 +110,8 @@ type Hub struct {
 	log *slog.Logger
 	// CanSee reports whether a profile may see an item (rating filter).
 	CanSee func(profileID, itemID int64) bool
+	// Report stores a reported chat line for the admin (nil: reports are only logged).
+	Report func(Report) error
 
 	mu    sync.Mutex
 	rooms map[string]*Room
@@ -285,6 +305,7 @@ type memberState struct {
 	Color     string `json:"color"`
 	Buffering bool   `json:"buffering"`
 	Host      bool   `json:"host"`
+	From      string `json:"from"` // same key as ChatMsg.From
 }
 
 func (r *Room) stateLocked() []byte {
@@ -295,7 +316,7 @@ func (r *Room) stateLocked() []byte {
 		st.Waiting = []string{}
 	}
 	for _, m := range r.members {
-		st.Members = append(st.Members, memberState{m.id, m.who.Name, m.who.Color, m.buffering && !m.ignored, m.host})
+		st.Members = append(st.Members, memberState{m.id, m.who.Name, m.who.Color, m.buffering && !m.ignored, m.host, m.who.key()})
 	}
 	b, _ := json.Marshal(st)
 	return b
@@ -364,7 +385,9 @@ type inMsg struct {
 	ItemID int64    `json:"item_id"`
 	Text   string   `json:"text"`
 	Emoji  string   `json:"emoji"`
-	Kind   string   `json:"kind"` // skip: intro | recap | credits
+	Kind   string   `json:"kind"`   // skip: intro | recap | credits
+	ID     int      `json:"id"`     // report: the chat line
+	Reason string   `json:"reason"` // report: optional, from the reporter
 }
 
 var skipNames = map[string]string{"intro": "az intrót", "recap": "az előzményeket", "credits": "a stáblistát"}
@@ -589,13 +612,16 @@ func (h *Hub) handle(r *Room, m *member, in inMsg) {
 		if utf8.RuneCountInString(text) > 500 {
 			text = string([]rune(text)[:500])
 		}
-		c := ChatMsg{T: "chat", Name: m.who.Name, Color: m.who.Color, Text: text, At: now.UnixMilli()}
+		r.chatSeq++
+		c := ChatMsg{T: "chat", ID: r.chatSeq, From: m.who.key(), Name: m.who.Name, Color: m.who.Color, Text: text, At: now.UnixMilli(), who: m.who}
 		r.chat = append(r.chat, c)
 		if len(r.chat) > 50 {
 			r.chat = r.chat[len(r.chat)-50:]
 		}
 		b, _ := json.Marshal(c)
 		r.broadcastLocked(b)
+	case "report":
+		r.reportLocked(m, in.ID, in.Reason, now)
 	case "react":
 		for _, e := range Reactions {
 			if e == in.Emoji {
@@ -612,4 +638,37 @@ func clampPos(p float64) float64 {
 		return 0
 	}
 	return p
+}
+
+// reportLocked hands a chat line to the admin and tells only the reporter it went through.
+// The line must still be in the room's recent chat; a member cannot report their own line.
+func (r *Room) reportLocked(m *member, id int, reason string, now time.Time) {
+	reply := func(text string) {
+		b, _ := json.Marshal(map[string]any{"t": "sys", "text": text})
+		m.push(b)
+	}
+	var line *ChatMsg
+	for i := range r.chat {
+		if r.chat[i].ID == id {
+			line = &r.chat[i]
+		}
+	}
+	if line == nil || line.From == m.who.key() {
+		reply("ezt az üzenetet nem lehet jelenteni")
+		return
+	}
+	reason = strings.TrimSpace(reason)
+	if utf8.RuneCountInString(reason) > 200 {
+		reason = string([]rune(reason)[:200])
+	}
+	rep := Report{Room: r.Code, Reporter: m.who, Sender: line.who, Text: line.Text, Reason: reason, At: now}
+	r.hub.log.Warn("party chat reported", "code", r.Code, "reporter", m.who.Name, "sender", line.who.Name)
+	if r.hub.Report != nil {
+		if err := r.hub.Report(rep); err != nil {
+			r.hub.log.Error("party report", "err", err)
+			reply("a jelentést nem sikerült elmenteni")
+			return
+		}
+	}
+	reply("Jelentés elküldve a szerver adminjának.")
 }

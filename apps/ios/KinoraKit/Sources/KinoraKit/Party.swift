@@ -22,13 +22,16 @@ public struct PartyMember: Codable, Sendable, Equatable, Identifiable {
     public var color: String
     public var buffering: Bool
     public var host: Bool
+    /// The person's stable key (user.profile) on this server; nil from an older server.
+    public var from: String?
 
-    public init(id: Int, name: String, color: String, buffering: Bool = false, host: Bool = false) {
+    public init(id: Int, name: String, color: String, buffering: Bool = false, host: Bool = false, from: String? = nil) {
         self.id = id
         self.name = name
         self.color = color
         self.buffering = buffering
         self.host = host
+        self.from = from
     }
 }
 
@@ -78,7 +81,9 @@ public enum PartyEvent: Sendable, Equatable {
     case hello(id: Int, reactions: [String])
     case pong(client: Double, server: Double)
     case state(PartyState)
-    case chat(name: String, color: String, text: String)
+    /// `id` numbers the line in the room (0 from an older server: it cannot be reported);
+    /// `from` is the sender's stable key, for blocking.
+    case chat(id: Int, from: String, name: String, color: String, text: String)
     case system(String)
     case react(name: String, color: String, emoji: String)
 
@@ -92,6 +97,7 @@ public enum PartyEvent: Sendable, Equatable {
         var color: String?
         var text: String?
         var emoji: String?
+        var from: String?
     }
 
     /// nil for a message this client does not know (newer server) or cannot read.
@@ -103,13 +109,42 @@ public enum PartyEvent: Sendable, Equatable {
             guard let c = w.c, let s = w.s else { return nil }
             return .pong(client: c, server: s)
         case "state": return (try? JSONDecoder.kinora.decode(PartyState.self, from: data)).map(PartyEvent.state)
-        case "chat": return .chat(name: w.name ?? "", color: w.color ?? "", text: w.text ?? "")
+        case "chat": return .chat(id: w.id ?? 0, from: w.from ?? "", name: w.name ?? "", color: w.color ?? "", text: w.text ?? "")
         case "sys": return .system(w.text ?? "")
         case "react":
             guard let e = w.emoji else { return nil }
             return .react(name: w.name ?? "", color: w.color ?? "", emoji: e)
         default: return nil
         }
+    }
+}
+
+/// The people this viewer blocked in watch party chat, per server: their lines are hidden and they
+/// are marked in the member list. Kept on the device; the key is the sender's `from`.
+public struct PartyBlocklist {
+    private let defaults: UserDefaults
+    private let key: String
+
+    /// `server` is the server's id (`SavedServer.id`), which survives address changes.
+    public init(server: String, defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.key = "partyBlocked." + server.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    public var all: Set<String> { Set(defaults.stringArray(forKey: key) ?? []) }
+    public func contains(_ from: String) -> Bool { !from.isEmpty && all.contains(from) }
+
+    public func block(_ from: String) {
+        guard !from.isEmpty else { return }
+        var s = all
+        s.insert(from)
+        defaults.set(s.sorted(), forKey: key)
+    }
+
+    public func unblock(_ from: String) {
+        var s = all
+        s.remove(from)
+        defaults.set(s.sorted(), forKey: key)
     }
 }
 
@@ -126,6 +161,8 @@ public enum PartyCommand: Sendable, Equatable {
     case everyone(Bool)
     case chat(String)
     case react(String)
+    /// Sends a chat line (by its id) to the server admin as objectionable.
+    case report(id: Int, reason: String)
 
     public var json: Data {
         var m: [String: Any]
@@ -140,6 +177,7 @@ public enum PartyCommand: Sendable, Equatable {
         case .everyone(let v): m = ["t": "everyone", "v": v]
         case .chat(let text): m = ["t": "chat", "text": text]
         case .react(let e): m = ["t": "react", "emoji": e]
+        case .report(let id, let reason): m = ["t": "report", "id": id, "reason": reason]
         }
         // NaN/Infinity (a player time before the item is ready) makes JSONSerialization raise an
         // Objective-C exception that `try?` cannot catch: check first.

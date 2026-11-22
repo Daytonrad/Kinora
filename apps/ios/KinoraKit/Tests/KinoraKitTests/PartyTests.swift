@@ -20,6 +20,10 @@ struct PartyTests {
         #expect(PartyEvent.decode(Data(#"{"t":"sys","text":"Anna elindította","at":1}"#.utf8)) == .system("Anna elindította"))
         #expect(PartyEvent.decode(Data(##"{"t":"react","name":"A","color":"#fff","emoji":"🔥"}"##.utf8))
                 == .react(name: "A", color: "#fff", emoji: "🔥"))
+        #expect(PartyEvent.decode(Data(##"{"t":"chat","id":3,"from":"1.2","name":"A","color":"#fff","text":"szia"}"##.utf8))
+                == .chat(id: 3, from: "1.2", name: "A", color: "#fff", text: "szia"))
+        #expect(PartyEvent.decode(Data(##"{"t":"chat","name":"A","color":"#fff","text":"régi"}"##.utf8))
+                == .chat(id: 0, from: "", name: "A", color: "#fff", text: "régi"))
         #expect(PartyEvent.decode(Data(#"{"t":"future"}"#.utf8)) == nil)
         #expect(PartyEvent.decode(Data("nope".utf8)) == nil)
     }
@@ -32,6 +36,7 @@ struct PartyTests {
         #expect(try obj(.skip(to: 90, kind: .intro)) == ["t": "skip", "pos": 90, "kind": "intro"])
         #expect(try obj(.item(7)) == ["t": "item", "item_id": 7, "pos": 0])
         #expect(try obj(.buffering(true)) == ["t": "buffering", "v": true])
+        #expect(try obj(.report(id: 4, reason: "")) == ["t": "report", "id": 4, "reason": ""])
     }
 
     @Test func positionAdvancesOnlyWhilePlaying() {
@@ -87,5 +92,19 @@ struct PartyTests {
         #expect(PartyCommand.pause(at: .nan).json.isEmpty)
         #expect(PartyCommand.seek(to: .infinity).json.isEmpty)
         #expect(!PartyCommand.pause(at: 12.5).json.isEmpty)
+    }
+
+    @Test func blocklistIsPerServer() throws {
+        let d = try #require(UserDefaults(suiteName: "PartyBlocklistTest"))
+        d.removePersistentDomain(forName: "PartyBlocklistTest")
+        let a = PartyBlocklist(server: "https://a.example:8096", defaults: d)
+        let b = PartyBlocklist(server: "https://b.example/", defaults: d)
+        a.block("1.2")
+        a.block("")
+        #expect(a.contains("1.2"))
+        #expect(!a.contains(""))
+        #expect(!b.contains("1.2"))
+        a.unblock("1.2")
+        #expect(a.all.isEmpty)
     }
 }

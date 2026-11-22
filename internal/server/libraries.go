@@ -165,6 +165,7 @@ func (s *Server) handleScanStatus(w http.ResponseWriter, r *http.Request, c *req
 // dashboardExtras adds library/scan/transcode state to the admin dashboard.
 func (s *Server) dashboardExtras(d map[string]any) {
 	d["library"] = s.st.Stats()
+	d["party_reports"] = s.st.CountPartyReports()
 	d["scans"] = s.Scanner.Statuses()
 	d["transcodes"] = s.Media.Sessions()
 	res, at := s.Encoders.Results()

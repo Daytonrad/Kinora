@@ -100,6 +100,8 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/admin/update-check", s.admin(s.handleUpdateCheck))
 	m.HandleFunc("POST /api/admin/update-apply", s.admin(s.handleUpdateApply))
 	m.HandleFunc("GET /api/admin/devices", s.admin(s.handleAdminDevices))
+	m.HandleFunc("GET /api/admin/party-reports", s.admin(s.handlePartyReports))
+	m.HandleFunc("DELETE /api/admin/party-reports/{id}", s.admin(s.handlePartyReportDelete))
 	m.HandleFunc("GET /api/admin/segments", s.admin(s.handleSegmentStatus))
 	m.HandleFunc("POST /api/admin/segments/analyze", s.admin(s.handleSegmentAnalyze))
 	m.HandleFunc("PUT /api/items/{id}/segments/{type}", s.admin(s.handleSegmentSet))

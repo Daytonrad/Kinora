@@ -335,6 +335,27 @@ private struct TVMenuRow: View, Equatable {
                         ForEach(party.reactions, id: \.self) { e in Button(e) { party.react(e) } }
                     }
                     Button(L("Üzenet írása…"), systemImage: "text.bubble") { message = ""; composing = true }
+                    let reportable = party.visibleLines.filter { party.isOthers($0) && $0.lineId > 0 }.suffix(5)
+                    if !reportable.isEmpty {
+                        Menu(L("Üzenet jelentése"), systemImage: "exclamationmark.bubble") {
+                            ForEach(reportable.reversed()) { line in
+                                Button("\(line.name ?? ""): \(line.text)") { party.report(line) }
+                            }
+                        }
+                    }
+                    let others = party.members.filter { ($0.from ?? "").isEmpty == false && $0.id != party.myId }
+                    if !others.isEmpty {
+                        Menu(L("Letiltás"), systemImage: "person.crop.circle.badge.xmark") {
+                            ForEach(others) { m in
+                                let from = m.from ?? ""
+                                if party.blocked.contains(from) {
+                                    Button(L("{0}: tiltás feloldása", m.name)) { party.unblock(from) }
+                                } else {
+                                    Button(L("{0} letiltása", m.name), role: .destructive) { party.block(from) }
+                                }
+                            }
+                        }
+                    }
                     if party.isHost {
                         Button { party.setEveryone(!party.everyone) } label: { check(L("Mindenki irányíthat"), party.everyone) }
                     }
@@ -506,7 +527,7 @@ private struct TVPartyOverlay: View {
             }
             HStack(alignment: .top) {
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    let recent = party.lines.suffix(4).filter { ctx.date.timeIntervalSince($0.at) < 8 }
+                    let recent = party.visibleLines.suffix(4).filter { ctx.date.timeIntervalSince($0.at) < 8 }
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(recent) { line in
                             Group {

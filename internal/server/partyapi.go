@@ -53,3 +53,22 @@ func (s *Server) handlePartyWS(w http.ResponseWriter, r *http.Request, c *reqCtx
 	}
 	s.Party.Serve(w, r, room, party.Who{UserID: c.User.ID, ProfileID: c.Profile.ID, Name: c.Profile.Name, Color: c.Profile.Color})
 }
+
+// ------------------------------------------------------------------ reported chat lines (admin)
+
+func (s *Server) handlePartyReports(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	list, err := s.st.PartyReports()
+	if err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"reports": list})
+}
+
+func (s *Server) handlePartyReportDelete(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	if err := s.st.DeletePartyReport(pathID(r, "id")); err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	ok(w)
+}

@@ -16,6 +16,10 @@ final class PartySession {
         var color: String?
         var text: String
         var at = Date.now
+        /// The room's number for a chat line (0: system line or older server, not reportable).
+        var lineId = 0
+        /// The sender's stable key, for blocking ("" for system lines).
+        var from = ""
     }
 
     struct Floating: Identifiable, Equatable {
@@ -29,6 +33,10 @@ final class PartySession {
     let code: String
     private(set) var members: [PartyMember] = []
     private(set) var lines: [Line] = []
+    /// People this viewer blocked on this server (their `from` keys).
+    private(set) var blocked: Set<String> = []
+    /// The chat as this viewer sees it: lines from blocked people are left out.
+    var visibleLines: [Line] { lines.filter { $0.from.isEmpty || !blocked.contains($0.from) } }
     private(set) var reactions: [String] = []
     private(set) var floating: [Floating] = []
     /// Connection trouble or the members the room waits for.
@@ -66,9 +74,19 @@ final class PartySession {
     /// A next episode this viewer asked for: older states (still on the previous one) are ignored.
     private var pendingItem: Int?
 
+    /// Keyed by the server's id; set as soon as the client answers (right after init).
+    private var blocklist: PartyBlocklist?
+
     init(code: String, client: KinoraClient) {
         self.code = code
         self.client = client
+        Task { [weak self] in
+            let id = await client.server.id
+            guard let self else { return }
+            let list = PartyBlocklist(server: id)
+            blocklist = list
+            blocked = list.all
+        }
     }
 
     // MARK: - connection
@@ -167,8 +185,8 @@ final class PartySession {
             clock.pong(client: c, server: s, now: PartyClock.localNow)
         case .state(let st):
             onState(st)
-        case .chat(let name, let color, let text):
-            add(Line(name: name, color: color, text: text))
+        case .chat(let id, let from, let name, let color, let text):
+            add(Line(name: name, color: color, text: text, lineId: id, from: from))
         case .system(let text):
             add(Line(text: text))
         case .react(let name, _, let emoji):
@@ -184,7 +202,7 @@ final class PartySession {
     private func add(_ line: Line) {
         lines.append(line)
         if lines.count > 60 { lines.removeFirst(lines.count - 60) }
-        if !panelOpen, line.name != nil { unread += 1 }
+        if !panelOpen, line.name != nil, !blocked.contains(line.from) { unread += 1 }
     }
 
     private var waitingText: String? {
@@ -265,6 +283,28 @@ final class PartySession {
     }
 
     func react(_ emoji: String) { send(.react(emoji)) }
+
+    /// Whether this viewer may report or block the sender of a line (not their own, not a system line).
+    func isOthers(_ line: Line) -> Bool { line.name != nil && !line.from.isEmpty && line.from != me?.from }
+
+    /// Sends a line to the server admin; the server answers with a system line.
+    func report(_ line: Line) {
+        guard line.lineId > 0 else { return }
+        send(.report(id: line.lineId, reason: ""))
+    }
+
+    /// Hides this person's chat on this server, now and in later parties.
+    func block(_ from: String) {
+        guard let blocklist else { return }
+        blocklist.block(from)
+        blocked = blocklist.all
+    }
+
+    func unblock(_ from: String) {
+        guard let blocklist else { return }
+        blocklist.unblock(from)
+        blocked = blocklist.all
+    }
 }
 
 extension Color {

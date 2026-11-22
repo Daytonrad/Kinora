@@ -492,6 +492,20 @@ INSERT OR IGNORE INTO watch_history(profile_id,kind,tmdb_id,season,episode,watch
   FROM user_data u JOIN items e ON e.id=u.item_id JOIN items s ON s.id=e.series_id
   WHERE u.played=1 AND e.kind='episode' AND s.tmdb_id>0 AND e.season_num IS NOT NULL AND e.episode_num IS NOT NULL;
 `,
+	// 15: watch party chat lines a member reported, for the admin to review
+	`
+CREATE TABLE party_reports(
+  id INTEGER PRIMARY KEY,
+  room TEXT NOT NULL,
+  reporter_user INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  reporter_name TEXT NOT NULL,
+  sender_user INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  sender_name TEXT NOT NULL,
+  text TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+`,
 }
 
 func (s *Store) migrate() error {

@@ -154,6 +154,10 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 		p, err := st.Profile(profileID)
 		return err == nil && st.ItemVisible(itemID, p)
 	}
+	hub.Report = func(r party.Report) error {
+		return st.AddPartyReport(store.PartyReport{Room: r.Room, ReporterUser: r.Reporter.UserID, ReporterName: r.Reporter.Name,
+			SenderUser: r.Sender.UserID, SenderName: r.Sender.Name, Text: r.Text, Reason: r.Reason, CreatedAt: r.At})
+	}
 	go hub.Run(ctx)
 
 	fetcher := meta.New(st, imgDir, log)
