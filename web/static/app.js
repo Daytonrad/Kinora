@@ -2373,21 +2373,40 @@ async function folderPicker(start, onPick) {
 }
 
 async function adminUsers(body) {
-  const users = await GET('/api/admin/users');
+  const [users, libs] = await Promise.all([GET('/api/admin/users'), GET('/api/libraries')]);
+  state.libs = libs;
   const me = state.me.user.id;
+  const libText = u => u.is_admin || !u.libraries ? h('span.muted', null, T.aLibsAll)
+    : u.libraries.length ? libs.filter(l => u.libraries.includes(l.id)).map(l => l.name).join(', ') || T.aLibsNone
+      : h('span.badge.amber', null, T.aLibsNone);
   put(body, aHead(T.aUsers, T.aLedeUsers, h('button.btn.primary', { onclick: newUser }, icon('plus'), T.newUser)),
-    aTable([T.aColUser, T.aColProfiles, T.aColRole, ''], users.map(u => h('tr', null,
+    aTable([T.aColUser, T.aColProfiles, T.aColRole, T.aColLibs, ''], users.map(u => h('tr', null,
       tdl('', null, h('div.u-cell', null, h('span.u-ini', { 'aria-hidden': 'true' }, (u.username[0] || '?').toUpperCase()), h('b', null, u.username), u.id === me && h('span.muted', null, ' ' + T.you))),
       tdl('.muted', T.aColProfiles, T.profilesN(u.profiles)),
       tdl('', T.aColRole, u.is_admin ? h('span.badge.amber', null, T.isAdmin) : h('span.muted', null, T.aRoleUser)),
+      tdl('', T.aColLibs, libText(u)),
       h('td.acts', null, h('div.row-gap', null,
         h('button.btn', { onclick: () => resetPw(u) }, T.resetPw),
+        !u.is_admin && h('button.btn', { onclick: () => editLibs(u) }, T.aColLibs),
         u.id !== me && h('button.btn', { onclick: async () => { await api('PATCH', '/api/admin/users/' + u.id, { is_admin: !u.is_admin }); adminUsers(body); } }, u.is_admin ? T.revokeAdmin : T.grantAdmin),
         u.id !== me && h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(u.username))) { await api('DELETE', '/api/admin/users/' + u.id); adminUsers(body); } } }, T.delete))))), '.a-stack'));
   function newUser() {
     const un = h('input', { type: 'text' }), pw = h('input', { type: 'password' }), adm = h('input', { type: 'checkbox' });
     modal(T.newUser, h('div', null, field(T.username, un), field(T.password, pw), h('label.check', null, adm, T.isAdmin)), close => [h('button.btn', { onclick: close }, T.cancel),
       h('button.btn.primary', { onclick: async () => { await POST('/api/admin/users', { username: un.value, password: pw.value, is_admin: adm.checked }); close(); adminUsers(body); } }, T.create)]);
+  }
+  function editLibs(u) {
+    const all = h('input', { type: 'checkbox', checked: !u.libraries });
+    const boxes = libs.map(l => [l, h('input', { type: 'checkbox', checked: !u.libraries || u.libraries.includes(l.id) })]);
+    const sync = () => boxes.forEach(([, b]) => { b.disabled = all.checked; });
+    all.onchange = sync; sync();
+    modal(T.aColLibs + ': ' + u.username, h('div', null, h('p.muted.small', null, T.aLibsLede),
+      h('label.check', null, all, T.aLibsAll), ...boxes.map(([l, b]) => h('label.check', null, b, l.name))),
+    close => [h('button.btn', { onclick: close }, T.cancel),
+      h('button.btn.primary', { onclick: async () => {
+        await api('PATCH', '/api/admin/users/' + u.id, { libraries: all.checked ? null : boxes.filter(([, b]) => b.checked).map(([l]) => l.id) });
+        close(); adminUsers(body);
+      } }, T.save)]);
   }
   function resetPw(u) {
     const pw = h('input', { type: 'password' });

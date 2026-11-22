@@ -71,7 +71,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	} else {
 		s.log.Warn("recommend", "err", err)
 	}
-	if libs, err := s.st.Libraries(); err == nil {
+	if libs, err := s.visibleLibraries(c.Profile); err == nil {
 		for _, l := range libs {
 			items, err := s.st.RecentlyAdded(p, l.ID, 20)
 			if err == nil && len(items) > 0 {

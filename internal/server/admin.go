@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -70,11 +71,23 @@ func (s *Server) handleUserUpdate(w http.ResponseWriter, r *http.Request, c *req
 		return
 	}
 	var in struct {
-		Password *string `json:"password"`
-		IsAdmin  *bool   `json:"is_admin"`
+		Password  *string         `json:"password"`
+		IsAdmin   *bool           `json:"is_admin"`
+		Libraries json.RawMessage `json:"libraries"` // null = all libraries, [ids] = only these
 	}
 	if !decode(w, r, &in) {
 		return
+	}
+	if len(in.Libraries) > 0 {
+		var ids []int64
+		if err := json.Unmarshal(in.Libraries, &ids); err != nil {
+			writeErr(w, http.StatusBadRequest, "érvénytelen könyvtárlista")
+			return
+		}
+		if err := s.st.SetUserLibraries(id, ids); err != nil {
+			s.internalErr(w, r, err)
+			return
+		}
 	}
 	if in.Password != nil {
 		if msg := validCredentials("placeholder", *in.Password); msg != "" {

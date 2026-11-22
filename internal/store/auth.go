@@ -89,6 +89,8 @@ type User struct {
 	Username  string `json:"username"`
 	IsAdmin   bool   `json:"is_admin"`
 	CreatedAt int64  `json:"created_at"`
+	// Libraries are the only libraries the account may see; nil = all of them.
+	Libraries []int64 `json:"libraries"`
 	passHash  string
 }
 
@@ -162,16 +164,18 @@ func createUserTx(tx *sql.Tx, username, password string, admin bool) (*User, err
 	return &User{ID: id, Username: username, IsAdmin: admin, CreatedAt: t}, nil
 }
 
-const userCols = `id, username, pass_hash, is_admin, created_at`
+const userCols = `id, username, pass_hash, is_admin, created_at, libraries`
 
 func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
-	if err := row.Scan(&u.ID, &u.Username, &u.passHash, &u.IsAdmin, &u.CreatedAt); err != nil {
+	var libs string
+	if err := row.Scan(&u.ID, &u.Username, &u.passHash, &u.IsAdmin, &u.CreatedAt, &libs); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
+	u.Libraries = parseLibIDs(libs)
 	return u, nil
 }
 
@@ -227,6 +231,37 @@ func (s *Store) SetPassword(userID int64, password, keepToken string) error {
 	}
 	_, err := s.DB.Exec(`DELETE FROM sessions WHERE user_id=? AND token<>?`, userID, hashToken(keepToken))
 	return err
+}
+
+// SetUserLibraries limits an account to the given libraries; nil means all of them.
+// Admins always see everything (the limit is ignored for them).
+func (s *Store) SetUserLibraries(userID int64, ids []int64) error {
+	v := ""
+	if ids != nil {
+		parts := make([]string, 0, len(ids))
+		for _, id := range ids {
+			parts = append(parts, strconv.FormatInt(id, 10))
+		}
+		v = strings.Join(parts, ",")
+		if v == "" {
+			v = "0" // restricted to nothing
+		}
+	}
+	_, err := s.DB.Exec(`UPDATE users SET libraries=? WHERE id=?`, v, userID)
+	return err
+}
+
+func parseLibIDs(v string) []int64 {
+	if v == "" {
+		return nil
+	}
+	out := []int64{}
+	for _, f := range strings.Split(v, ",") {
+		if id, err := strconv.ParseInt(strings.TrimSpace(f), 10, 64); err == nil && id > 0 {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // SetAdmin toggles admin flag.
@@ -301,6 +336,9 @@ type Profile struct {
 	SkipIntro      string `json:"skip_intro"` // manual | auto | off
 	CreatedAt      int64  `json:"created_at"`
 	pinHash        string
+	// Libraries limits the profile to the account's allowed libraries (nil = all).
+	// Loaded with the profile from users.libraries, never sent to clients.
+	Libraries []int64 `json:"-"`
 	// MetaLang is the TMDB language the current request wants titles and overviews in
 	// ("" = the stored metadata_lang ones). Set per request, never stored.
 	MetaLang string `json:"-"`
@@ -339,13 +377,15 @@ func (p *Profile) CheckPIN(pin string) bool {
 	return CheckPassword(p.pinHash, pin)
 }
 
-const profileCols = `id,user_id,name,color,COALESCE(pin_hash,''),is_kids,max_rating_level,sub_langs,audio_langs,sub_mode,autoplay_next,max_bitrate,skip_intro,created_at`
+const profileCols = `id,user_id,name,color,COALESCE(pin_hash,''),is_kids,max_rating_level,sub_langs,audio_langs,sub_mode,autoplay_next,max_bitrate,skip_intro,created_at,
+	COALESCE((SELECT u.libraries FROM users u WHERE u.id=profiles.user_id AND u.is_admin=0),'')`
 
 func scanProfile(row interface{ Scan(...any) error }) (*Profile, error) {
 	p := &Profile{}
 	var lvl sql.NullInt64
+	var libs string
 	if err := row.Scan(&p.ID, &p.UserID, &p.Name, &p.Color, &p.pinHash, &p.IsKids, &lvl,
-		&p.SubLangs, &p.AudioLangs, &p.SubMode, &p.AutoplayNext, &p.MaxBitrate, &p.SkipIntro, &p.CreatedAt); err != nil {
+		&p.SubLangs, &p.AudioLangs, &p.SubMode, &p.AutoplayNext, &p.MaxBitrate, &p.SkipIntro, &p.CreatedAt, &libs); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -356,6 +396,7 @@ func scanProfile(row interface{ Scan(...any) error }) (*Profile, error) {
 		p.MaxRatingLevel = &v
 	}
 	p.HasPIN = p.pinHash != ""
+	p.Libraries = parseLibIDs(libs)
 	return p, nil
 }
 

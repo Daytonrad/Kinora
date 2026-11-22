@@ -216,7 +216,7 @@ func (s *Server) handleDiscoverLibraries(w http.ResponseWriter, r *http.Request,
 		Name string `json:"name"`
 	}
 	out := map[string][]lib{"movies": {}, "shows": {}}
-	libs, _ := s.st.Libraries()
+	libs, _ := s.visibleLibraries(c.Profile)
 	for _, l := range libs {
 		if l.Kind == "movies" || l.Kind == "shows" {
 			out[l.Kind] = append(out[l.Kind], lib{l.ID, l.Name})

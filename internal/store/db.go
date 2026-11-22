@@ -506,6 +506,8 @@ CREATE TABLE party_reports(
   created_at INTEGER NOT NULL
 );
 `,
+	// 16: libraries an account may see ('' = all, else comma-separated library ids)
+	`ALTER TABLE users ADD COLUMN libraries TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate() error {

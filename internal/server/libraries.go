@@ -8,15 +8,31 @@ import (
 	"time"
 
 	"github.com/ScotyLucas/kinora/internal/scanner"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 func (s *Server) handleLibraries(w http.ResponseWriter, r *http.Request, c *reqCtx) {
-	libs, err := s.st.Libraries()
+	libs, err := s.visibleLibraries(c.Profile)
 	if err != nil {
 		s.internalErr(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, libs)
+}
+
+// visibleLibraries lists the libraries the profile's account may see.
+func (s *Server) visibleLibraries(p *store.Profile) ([]*store.Library, error) {
+	libs, err := s.st.Libraries()
+	if err != nil {
+		return nil, err
+	}
+	out := libs[:0]
+	for _, l := range libs {
+		if p.LibraryAllowed(l.ID) {
+			out = append(out, l)
+		}
+	}
+	return out, nil
 }
 
 func (s *Server) handleLibraryCreate(w http.ResponseWriter, r *http.Request, c *reqCtx) {

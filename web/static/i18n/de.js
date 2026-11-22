@@ -2018,6 +2018,10 @@
   "aColMode": "Modus",
   "aColLibrary": "Bibliothek",
   "aColProblems": "Fehlerhafte Dateien",
+  "aColLibs": "Bibliotheken",
+  "aLibsAll": "Alle Bibliotheken",
+  "aLibsNone": "Keine",
+  "aLibsLede": "Dieses Konto sieht nur Titel aus den angehakten Bibliotheken: Startseite, Suche, Wiedergabe, Downloads, Partys. Admins sehen immer alles.",
   "aRoleUser": "Benutzer",
   "aDevicesN": {
     "one": "{0} Gerät",

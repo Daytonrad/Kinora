@@ -996,6 +996,10 @@
   "aColMode": "Mód",
   "aColLibrary": "Könyvtár",
   "aColProblems": "Hibás fájlok",
+  "aColLibs": "Könyvtárak",
+  "aLibsAll": "Minden könyvtár",
+  "aLibsNone": "Semmi",
+  "aLibsLede": "Csak a kipipált könyvtárak címeit látja ez a fiók: kezdőlap, keresés, lejátszás, letöltés, party. Az adminok mindig mindent látnak.",
   "aRoleUser": "Felhasználó",
   "aDevicesN": {
     "other": "{0} eszköz"

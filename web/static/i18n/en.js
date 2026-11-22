@@ -2024,6 +2024,10 @@
   "aColMode": "Mode",
   "aColLibrary": "Library",
   "aColProblems": "Problem files",
+  "aColLibs": "Libraries",
+  "aLibsAll": "All libraries",
+  "aLibsNone": "None",
+  "aLibsLede": "This account sees titles only from the ticked libraries: home, search, playback, downloads, parties. Admins always see everything.",
   "aRoleUser": "User",
   "aDevicesN": {
     "one": "{0} device",

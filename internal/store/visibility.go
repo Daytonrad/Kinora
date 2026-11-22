@@ -1,21 +1,56 @@
 package store
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 // RatingSQL returns a WHERE fragment (starting with " AND") that hides items
-// above the profile's rating limit. alias is the items table alias.
+// the profile may not see: those above its rating limit and those outside the
+// account's allowed libraries. alias is the items table alias.
 // Kids profiles never see items with unknown rating. Every query that exposes
 // items (lists, details, search, recommendations, collections, streams,
 // subtitles, downloads, parties, images) must include it.
 func RatingSQL(p *Profile, alias string) (string, []any) {
+	frag := LibrarySQL(p, alias)
 	limit, strict := p.RatingLimit()
 	if limit < 0 {
-		return "", nil
+		return frag, nil
 	}
 	if strict {
-		return fmt.Sprintf(" AND %[1]s.rating_level IS NOT NULL AND %[1]s.rating_level <= ?", alias), []any{limit}
+		return frag + fmt.Sprintf(" AND %[1]s.rating_level IS NOT NULL AND %[1]s.rating_level <= ?", alias), []any{limit}
 	}
-	return fmt.Sprintf(" AND (%[1]s.rating_level IS NULL OR %[1]s.rating_level <= ?)", alias), []any{limit}
+	return frag + fmt.Sprintf(" AND (%[1]s.rating_level IS NULL OR %[1]s.rating_level <= ?)", alias), []any{limit}
+}
+
+// LibrarySQL returns " AND alias.library_id IN (…)" for a profile limited to some
+// libraries, "" otherwise. The ids are integers, so they are inlined.
+func LibrarySQL(p *Profile, alias string) string {
+	if p == nil || p.Libraries == nil {
+		return ""
+	}
+	if len(p.Libraries) == 0 {
+		return " AND 0"
+	}
+	ids := make([]string, len(p.Libraries))
+	for i, id := range p.Libraries {
+		ids[i] = strconv.FormatInt(id, 10)
+	}
+	return fmt.Sprintf(" AND %s.library_id IN (%s)", alias, strings.Join(ids, ","))
+}
+
+// LibraryAllowed reports whether a profile may see a library.
+func (p *Profile) LibraryAllowed(id int64) bool {
+	if p == nil || p.Libraries == nil {
+		return true
+	}
+	for _, l := range p.Libraries {
+		if l == id {
+			return true
+		}
+	}
+	return false
 }
 
 // ItemVisible reports whether a profile may see an item.
