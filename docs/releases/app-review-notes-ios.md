@@ -9,10 +9,10 @@ Kinora is the iOS/tvOS client for Kinora, a free, open-source, self-hosted media
 2) Enter the demo server address: https://jellystream.projectone.dev/
 3) Sign in with the user name and password in the Sign-In Information fields.
 4) Pick a profile. Home shows the library; tap a title to play it.
-Main features: Home and Libraries, Search, title details with ratings, playback with subtitle search, Downloads (offline), Discover and Requests (ask the server admin to add a title), Watch party (Party tab: create a room or join with a code/QR), Settings.
+Main features: Home and Libraries, Search, title details with ratings, playback with subtitle search, Downloads (offline), Discover and Requests (ask the admin to add a title), Watch party (Party tab: create a room or join with a code/QR), Settings.
 No sample files are needed: the demo account sees only a "demo" library of openly licensed films: Blender Foundation open movies (Agent 327, Big Buck Bunny, Caminandes, Cosmos Laundromat, Elephants Dream, Sintel, Spring, Sprite Fright, Tears of Steel, a Blender reel) and public-domain classics (The General 1926, Nosferatu 1922, His Girl Friday 1940).
 
-Accounts: there is no sign-up in the app. Accounts are created only by the owner (admin) of each private server, and are deleted by that admin on the server. The app does not create accounts, so no in-app account creation exists.
+Accounts: there is no sign-up in the app. Accounts are created and deleted only by the admin of each private server; the app cannot create accounts.
 
 User-generated content: the only user content is the text chat inside a watch party. Rooms are private, joinable only with a code given by the host, and limited to accounts on the same private server. The chat is kept only in memory (last 50 messages) and is gone when the party ends.
 - Report: press and hold any message from someone else > "Report". The message and its sender are stored on the server and shown to the server admin under Admin > Reports, who can remove the user's account.
@@ -31,4 +31,4 @@ No analytics, advertising, AI or payment services are used.
 The app works the same in all regions. The UI is in Hungarian, English and German. Only the "where to watch" information in Discover depends on the region set by the server admin.
 
 5. THIRD-PARTY MATERIAL
-The app does not provide or distribute any copyrighted media. Users play only files they own and store on their own server. Metadata and artwork come from TMDB under its API terms; ratings from OMDb and subtitles from OpenSubtitles under their API terms. The demo server holds only openly licensed media: Blender Foundation open movies under Creative Commons Attribution (CC BY), (c) Blender Foundation, blender.org, and films in the public domain.
+The app does not provide or distribute any copyrighted media. Users play only files they own and store on their own server. Metadata, artwork, ratings and subtitles come from TMDB, OMDb and OpenSubtitles under their API terms. The demo server holds only openly licensed media: Blender Foundation open movies under Creative Commons Attribution (CC BY), (c) Blender Foundation, blender.org, and films in the public domain.
