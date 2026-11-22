@@ -89,9 +89,12 @@ public actor KinoraClient {
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: req)
-        } catch is CancellationError {
-            throw CancellationError()
         } catch {
+            // A cancelled task (typing in search, leaving a page) is not a dead server:
+            // URLSession reports it as URLError.cancelled, so no failover and no error message.
+            if error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled {
+                throw CancellationError()
+            }
             if !retried, await failover() { return try await send(method, path, body: body, retried: true) }
             throw KinoraError.network
         }
