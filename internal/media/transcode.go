@@ -21,6 +21,11 @@ import (
 // IdleTimeout stops a session nobody fetched from for this long.
 const IdleTimeout = 90 * time.Second
 
+// FinishedIdleTimeout is the same for a session whose ffmpeg already finished. A remux
+// finishes long before the film does: the playlist is closed, the player fills its buffer
+// and goes quiet for minutes (or the viewer pauses), yet it still needs the segments.
+const FinishedIdleTimeout = 30 * time.Minute
+
 // Session is one running HLS ffmpeg process.
 type Session struct {
 	ID       string
@@ -232,6 +237,21 @@ func (m *Manager) Get(id string, userID int64) *Session {
 	return s
 }
 
+// TouchItem keeps userID's sessions of itemID alive: a position report says the
+// player is still on it even while it plays from its buffer and fetches nothing.
+func (m *Manager) TouchItem(userID, itemID int64) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, s := range m.sess {
+		if s.UserID == userID && s.ItemID == itemID {
+			s.touch()
+		}
+	}
+}
+
 // Stop kills a session and removes its files.
 func (m *Manager) Stop(id string) {
 	m.mu.Lock()
@@ -280,11 +300,17 @@ func (m *Manager) Reap(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			cut := time.Now().Add(-IdleTimeout).UnixNano()
+			now := time.Now()
+			cut := now.Add(-IdleTimeout).UnixNano()
+			cutFinished := now.Add(-FinishedIdleTimeout).UnixNano()
 			m.mu.Lock()
 			var idle []string
 			for id, s := range m.sess {
-				if s.lastSeen.Load() < cut {
+				c := cut
+				if s.Finished() {
+					c = cutFinished
+				}
+				if s.lastSeen.Load() < c {
 					idle = append(idle, id)
 				}
 			}

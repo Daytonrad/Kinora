@@ -580,6 +580,14 @@ final class PlayerModel: NSObject {
             }
         case .failed:
             loading = false
+            // A server stream that was already playing broke off (its session expired or
+            // the server restarted): pick it up from here once with a new session.
+            if !isOffline, !closed, info?.mode != .direct, position > 1,
+               resumedAt.map({ abs($0 - position) > 5 }) ?? true {
+                resumedAt = position
+                Task { await start(at: position) }
+                return
+            }
             error = message ?? L("A videó nem játszható le.")
         default:
             break

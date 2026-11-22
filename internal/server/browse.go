@@ -283,6 +283,9 @@ func (s *Server) handleItemAction(w http.ResponseWriter, r *http.Request, c *req
 			pos = *in.Position
 		}
 		var played bool
+		if !in.Ended {
+			s.Media.TouchItem(c.User.ID, it.ID)
+		}
 		played, err = s.st.ReportProgress(pid, it, pos, in.Ended)
 		if err == nil {
 			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "played": played})
