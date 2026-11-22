@@ -136,3 +136,31 @@ func TestImdbFromName(t *testing.T) {
 		}
 	}
 }
+
+// Episodes downloaded one by one land in a folder per release; they must still form one show.
+func TestParseReleaseFolders(t *testing.T) {
+	cases := []struct {
+		rel, series, key string
+		season, episode  int
+	}{
+		{"Line.of.Fire.2026.S01E03.1080p.WEB.h264-GRP/Line.of.Fire.2026.S01E03.1080p.WEB.h264-GRP.mkv", "Line of Fire", "flat:lineoffire", 1, 3},
+		{"Line.of.Fire.S01E04.720p.HDTV/Line.of.Fire.S01E04.720p.HDTV.mkv", "Line of Fire", "flat:lineoffire", 1, 4},
+		{"Line.of.Fire.S01E05.1080p.WEB/a8f3c1.mkv", "Line of Fire", "flat:lineoffire", 1, 5},
+		{"Adventure.Time.S08E13.Reboot.1080p/Adventure.Time.S08E13.Reboot.1080p.mkv", "Adventure Time", "flat:adventuretime", 8, 13},
+		{"Sex.and.the.City.S02.1080p.BluRay/Sex.and.the.City.S02E05.1080p.mkv", "Sex and the City", "flat:sexandthecity", 2, 5},
+		{"Sex and the City S03 Complete/07 - Name.mkv", "Sex and the City", "flat:sexandthecity", 3, 7},
+		// the show's own folder above the release folder is kept
+		{"Line of Fire/Line.of.Fire.S01E06.1080p/Line.of.Fire.S01E06.1080p.mkv", "Line of Fire", "series:line of fire", 1, 6},
+		// a classic layout is unchanged
+		{"Dark (2017)/Season 2/Dark.S02E03.mkv", "Dark", "series:dark (2017)", 2, 3},
+	}
+	for _, c := range cases {
+		p := ParseFile(c.rel, "shows")
+		if p.Kind != "episode" || p.Series != c.series || p.SeriesKey != c.key || p.Season != c.season || p.Episode != c.episode {
+			t.Errorf("ParseFile(%q) = %q %q S%dE%d; want %q %q S%dE%d", c.rel, p.Series, p.SeriesKey, p.Season, p.Episode, c.series, c.key, c.season, c.episode)
+		}
+	}
+	if p, ok := EpisodeInMoviesLibrary("Line.of.Fire.S01E05.1080p.WEB/a8f3c1.mkv"); !ok || p.SeriesKey != "flat:lineoffire" {
+		t.Errorf("movies library: %+v %v", p, ok)
+	}
+}

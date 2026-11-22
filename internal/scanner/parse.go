@@ -33,6 +33,8 @@ var (
 		regexp.MustCompile(`(?i)^s(\d{1,3})$`),
 		regexp.MustCompile(`(?i)^(\d{1,3})\.?[ ._-]*(?:évad|evad|season|staffel)$`),
 	}
+	// reSeasonTok finds a season marker inside a release folder name: "Show.S02.1080p", "Show Season 2 Complete".
+	reSeasonTok   = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(?:s(\d{1,2})|season[ ._-]*(\d{1,2})|(\d{1,2})\.?[ ._-]*évad)(?:[^a-z0-9]|$)`)
 	reSpecialsDir = regexp.MustCompile(`(?i)^(?:specials?|extras|különkiadások|bonus)$`)
 	reYear        = regexp.MustCompile(`^(19\d\d|20\d\d)$`)
 	// reIDTag matches an id tag token: imdbid-tt0133093, imdb-tt0133093, tt0133093, tmdbid-603.
@@ -161,7 +163,7 @@ func EpisodeInMoviesLibrary(rel string) (Parsed, bool) {
 	dir, file := path.Split(rel)
 	dir = strings.TrimSuffix(dir, "/")
 	base := strings.TrimSuffix(file, path.Ext(file))
-	if !reSxxEyy.MatchString(base) {
+	if !reSxxEyy.MatchString(base) && !reSxxEyy.MatchString(path.Base(dir)) {
 		return Parsed{}, false
 	}
 	var dirs []string
@@ -194,10 +196,56 @@ func parseMovie(dirs []string, base string) Parsed {
 	return Parsed{Kind: "movie", Title: title, Year: year, ImdbID: imdb}
 }
 
+// releaseFolder reports whether a folder is a downloaded release of one episode or one
+// season ("Line.of.Fire.S01E03.1080p.WEB", "Show.S02.Complete.1080p") rather than the
+// series folder itself: it returns the series name before the marker and the season.
+func releaseFolder(name string) (series string, season, episode int, ok bool) {
+	if _, isSeason := SeasonFromDir(name); isSeason {
+		return "", 0, 0, false
+	}
+	if m := reSxxEyy.FindStringSubmatchIndex(name); m != nil {
+		series, _ = CleanName(name[:m[0]])
+		return series, atoi(name[m[2]:m[3]]), atoi(name[m[4]:m[5]]), series != ""
+	}
+	if m := reSeasonTok.FindStringSubmatchIndex(name); m != nil {
+		for g := 2; g <= 6; g += 2 {
+			if m[g] >= 0 {
+				season = atoi(name[m[g]:m[g+1]])
+			}
+		}
+		series, _ = CleanName(name[:m[0]])
+		return series, season, 0, series != ""
+	}
+	return "", 0, 0, false
+}
+
 func parseEpisode(dirs []string, base string, force bool) (Parsed, bool) {
 	p := Parsed{Kind: "episode", Season: -1}
 	prefix := ""
 	matched := false
+
+	// Release folders ("Line.of.Fire.S01E03.1080p.WEB/…") name a download, not the series:
+	// peel them off so every episode of a show lands in the same series, whichever folder
+	// the torrent client put it in.
+	release := ""
+	releaseSeason, releaseEpisode := -1, 0
+	for len(dirs) > 0 {
+		name, season, episode, ok := releaseFolder(dirs[len(dirs)-1])
+		if !ok {
+			break
+		}
+		if release == "" {
+			releaseSeason, releaseEpisode = season, episode
+		}
+		release = name
+		dirs = dirs[:len(dirs)-1]
+	}
+	if release != "" && len(dirs) > 0 {
+		// keep a parent folder only when it is the show's own folder ("Line of Fire/Line.of.Fire.S01E03…/")
+		if own, _ := CleanName(dirs[len(dirs)-1]); normalize(own) != normalize(release) {
+			dirs = nil
+		}
+	}
 	if m := reSxxEyy.FindStringSubmatchIndex(base); m != nil {
 		p.Season = atoi(base[m[2]:m[3]])
 		p.Episode = atoi(base[m[4]:m[5]])
@@ -234,6 +282,21 @@ func parseEpisode(dirs []string, base string, force bool) (Parsed, bool) {
 			matched = true
 		}
 	}
+	if !matched && seasonIdx < 0 && releaseEpisode > 0 {
+		// "Line.of.Fire.S01E03.1080p/abc123.mkv": the folder names the episode
+		p.Episode = releaseEpisode
+		matched = true
+	} else if !matched && seasonIdx < 0 && release != "" && releaseSeason >= 0 {
+		// "Show.S02.1080p/03 - Name.mkv"
+		if m := reLeadNum.FindStringSubmatch(strings.TrimSpace(base)); m != nil {
+			p.Episode = atoi(m[1])
+			p.Title = cleanEpisodeTitle(m[2])
+			matched = true
+		}
+	}
+	if p.Season < 0 && releaseSeason >= 0 {
+		p.Season = releaseSeason
+	}
 	if !matched && !force {
 		return Parsed{}, false
 	}
@@ -249,6 +312,9 @@ func parseEpisode(dirs []string, base string, force bool) (Parsed, bool) {
 	default:
 		// flat layout: "Seinfeld.S03E10.The.Old.Man.mkv"
 		p.Series, p.SeriesYear = CleanName(prefix)
+		if p.Series == "" && release != "" {
+			p.Series = release
+		}
 	}
 	if p.Series == "" {
 		p.Series, _ = CleanName(prefix)

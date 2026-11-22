@@ -215,3 +215,54 @@ func TestUnavailableRootDeletesNothing(t *testing.T) {
 }
 
 func itoa(i int64) string { return filepath.Base(ImageDir("", i)) }
+
+// Episodes downloaded one by one (a folder per release) form one show, and episodes an
+// earlier scan put under a show of their own move over on the next scan.
+func TestReleaseFoldersFormOneShow(t *testing.T) {
+	st, sc, media := setup(t)
+	ctx := context.Background()
+	src := filepath.Join(media, "Shows", "Test Show (2020)", "Season 01", "Test.Show.S01E01.Pilot.Part.1.mkv")
+	root := filepath.Join(media, "Downloads")
+	for _, rel := range []string{
+		"Line.of.Fire.S01E01.1080p.WEB-GRP/Line.of.Fire.S01E01.1080p.WEB-GRP.mkv",
+		"Line.of.Fire.S01E02.1080p.WEB-GRP/Line.of.Fire.S01E02.1080p.WEB-GRP.mkv",
+		"Line.of.Fire.S01E03.720p.HDTV/x7f2a.mkv",
+	} {
+		dst := filepath.Join(root, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(dst), 0o755)
+		if err := os.Link(src, dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lib, _ := st.CreateLibrary("Letöltések", root, "shows")
+	if _, err := sc.ScanNow(ctx, lib.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, st, `SELECT COUNT(*) FROM items WHERE library_id=? AND kind='series' AND missing=0`, lib.ID); n != 1 {
+		t.Fatalf("series = %d, want 1", n)
+	}
+	if n := count(t, st, `SELECT COUNT(DISTINCT episode_num) FROM items WHERE library_id=? AND kind='episode'`, lib.ID); n != 3 {
+		t.Fatalf("distinct episodes = %d, want 3", n)
+	}
+
+	// simulate the old split: one episode under a show of its own
+	if _, err := st.UpsertContainer(&store.ContainerRecord{LibraryID: lib.ID, Kind: "series", Key: "series:stale", Title: "Stale"}, SortTitle); err != nil {
+		t.Fatal(err)
+	}
+	var stale int64
+	st.DB.QueryRow(`SELECT id FROM items WHERE key='series:stale'`).Scan(&stale)
+	if res, err := st.DB.Exec(`UPDATE items SET series_id=? WHERE library_id=? AND kind='episode' AND episode_num=2`, stale, lib.ID); err != nil {
+		t.Fatal(err)
+	} else if n, _ := res.RowsAffected(); n != 1 || stale == 0 {
+		t.Fatalf("setup: moved %d, stale id %d", n, stale)
+	}
+	if _, err := sc.ScanNow(ctx, lib.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, st, `SELECT COUNT(*) FROM items WHERE kind='episode' AND series_id=?`, stale); n != 0 {
+		t.Fatalf("episode still under the stale show")
+	}
+	if n := count(t, st, `SELECT COUNT(*) FROM items WHERE library_id=? AND kind='series' AND missing=0`, lib.ID); n != 1 {
+		t.Fatalf("visible series = %d, want 1", n)
+	}
+}

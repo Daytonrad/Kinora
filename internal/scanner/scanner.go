@@ -448,6 +448,29 @@ func (sc *Scanner) scan(ctx context.Context, libID int64) error {
 		}
 	}
 
+	// Episodes whose series or season is now another container (an earlier parse split one
+	// show into a series per release folder) are processed again, so they move over.
+	queued := make(map[*fileEntry]bool, len(changed))
+	for _, f := range changed {
+		queued[f] = true
+	}
+	relinked := 0
+	for _, f := range files {
+		k := f.known
+		if f.parsed.Kind != "episode" || k == nil || queued[f] {
+			continue
+		}
+		sid := containerIDs[f.parsed.SeriesKey]
+		pid := containerIDs[fmt.Sprintf("%s/s%d", f.parsed.SeriesKey, f.parsed.Season)]
+		if k.SeriesID != sid || k.ParentID != pid {
+			changed = append(changed, f)
+			relinked++
+		}
+	}
+	if relinked > 0 {
+		sc.update(libID, func(s *Status) { s.Total = len(changed) })
+	}
+
 	// ---- phase 2: probe changed files with a bounded pool
 	workers := min(runtime.NumCPU(), 6)
 	jobs := make(chan *fileEntry)

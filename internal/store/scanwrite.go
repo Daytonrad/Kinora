@@ -14,11 +14,14 @@ type KnownFile struct {
 	Missing bool
 	Sig     string
 	Kind    string // movie | episode: a file parsed differently now is processed again
+	// SeriesID / ParentID: an episode whose series or season changed (a better parse merged
+	// its folder into another show) is processed again.
+	SeriesID, ParentID int64
 }
 
 // KnownFiles returns path → KnownFile for every file-backed item of a library.
 func (s *Store) KnownFiles(libID int64) (map[string]*KnownFile, error) {
-	rows, err := s.DB.Query(`SELECT id,path,size,mtime,missing,sidecar_sig,kind FROM items WHERE library_id=? AND kind IN ('movie','episode')`, libID)
+	rows, err := s.DB.Query(`SELECT id,path,size,mtime,missing,sidecar_sig,kind,COALESCE(series_id,0),COALESCE(parent_id,0) FROM items WHERE library_id=? AND kind IN ('movie','episode')`, libID)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +29,7 @@ func (s *Store) KnownFiles(libID int64) (map[string]*KnownFile, error) {
 	out := map[string]*KnownFile{}
 	for rows.Next() {
 		k := &KnownFile{}
-		if err := rows.Scan(&k.ID, &k.Path, &k.Size, &k.Mtime, &k.Missing, &k.Sig, &k.Kind); err != nil {
+		if err := rows.Scan(&k.ID, &k.Path, &k.Size, &k.Mtime, &k.Missing, &k.Sig, &k.Kind, &k.SeriesID, &k.ParentID); err != nil {
 			return nil, err
 		}
 		out[k.Path] = k
