@@ -278,6 +278,18 @@ final class AppModel {
         me = try await client.me()
     }
 
+    /// The server refuses it from a kids profile, on a device locked to one profile, and past the limit.
+    var canAddProfile: Bool {
+        guard let me else { return false }
+        return me.profiles.count < ProfileCreate.maxProfiles && me.profileLocked != true && me.profile?.isKids != true
+    }
+
+    func createProfile(name: String, isKids: Bool) async throws {
+        guard let client else { return }
+        _ = try await client.createProfile(ProfileCreate(name: name, isKids: isKids))
+        try await loadMe()
+    }
+
     func selectProfile(_ p: Profile, pin: String?) async throws {
         guard let client else { return }
         do {

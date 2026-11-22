@@ -51,6 +51,11 @@ export const T = {
   pin: 'PIN',
   wrongPin: 'Hibás PIN.',
   enter: 'Belépés',
+  addProfile: 'Profil hozzáadása',
+  profileName: 'Profil neve',
+  profileNameNeeded: 'Adj nevet a profilnak.',
+  kidsProfile: 'Gyerekprofil',
+  create: 'Létrehozás',
   // nav
   home: 'Kezdőlap',
   library: 'Könyvtár',

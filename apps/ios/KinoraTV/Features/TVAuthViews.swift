@@ -300,6 +300,7 @@ struct TVQuickConnectView: View {
 struct TVProfilesView: View {
     @Environment(AppModel.self) private var model
     @State private var pinFor: Profile?
+    @State private var adding = false
     @State private var error: String?
     @State private var busy = false
 
@@ -331,6 +332,7 @@ struct TVProfilesView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { if model.me == nil { try? await model.guarded { try await model.loadMe() } } }
         .sheet(item: $pinFor) { TVPinSheet(profile: $0) }
+        .sheet(isPresented: $adding) { TVAddProfileSheet() }
     }
 
     private func profileRow(_ profiles: [Profile]) -> some View {
@@ -338,6 +340,10 @@ struct TVProfilesView: View {
             ForEach(profiles) { p in
                 Button { pick(p) } label: { TVProfileFace(profile: p) }
                     // No .disabled while busy: on tvOS that would throw the focus elsewhere.
+                    .buttonStyle(TVCardStyle())
+            }
+            if model.canAddProfile {
+                Button { adding = true } label: { TVAddProfileFace() }
                     .buttonStyle(TVCardStyle())
             }
         }
@@ -389,6 +395,77 @@ struct TVProfileFace: View {
             }
             if showsName, profile.isKids {
                 Text(L("Gyerek")).font(.callout).foregroundStyle(Theme.muted)
+            }
+        }
+    }
+}
+
+private struct TVAddProfileFace: View {
+    @Environment(\.tvCardFocused) private var focused
+    var size: CGFloat = 220
+
+    var body: some View {
+        VStack(spacing: 22) {
+            Image(systemName: "plus")
+                .font(.system(size: size * 0.32, weight: .semibold))
+                .foregroundStyle(focused ? Theme.plasterBright : Theme.plaster)
+                .frame(width: size, height: size)
+                .overlay {
+                    RoundedRectangle(cornerRadius: size * 0.18)
+                        .strokeBorder(focused ? Theme.plasterBright : Theme.muted,
+                                      style: StrokeStyle(lineWidth: focused ? 6 : 3, dash: focused ? [] : [14, 10]))
+                }
+            Text(L("Profil hozzáadása")).font(.title3.weight(.semibold))
+                .foregroundStyle(focused ? Theme.plasterBright : Theme.plaster)
+        }
+    }
+}
+
+/// A new profile: its name and whether it is a kids profile; the rest is under Settings once it is picked.
+private struct TVAddProfileSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var isKids = false
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(spacing: 40) {
+            Text(L("Profil hozzáadása")).font(.title2.bold())
+            TextField(L("Név"), text: $name)
+                .textInputAutocapitalization(.words)
+                .frame(width: 700)
+                .onSubmit(submit)
+            Button { isKids.toggle() } label: {
+                Label(L("Gyerekprofil"), systemImage: isKids ? "checkmark.circle.fill" : "circle")
+            }
+            .buttonStyle(TVPillStyle())
+            TVErrorText(message: error)
+            TVButtonRow {
+                Button(L("Hozzáadás"), action: submit)
+                    .buttonStyle(TVPillStyle(prominent: true))
+                    .disabled(trimmed.isEmpty || busy)
+                Button(L("Mégse")) { dismiss() }
+                    .buttonStyle(TVPillStyle())
+            }
+        }
+        .padding(80)
+    }
+
+    private var trimmed: String { String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30)) }
+
+    private func submit() {
+        guard !trimmed.isEmpty, !busy else { return }
+        busy = true
+        error = nil
+        Task {
+            defer { busy = false }
+            do {
+                try await model.guarded { try await model.createProfile(name: trimmed, isKids: isKids) }
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
             }
         }
     }

@@ -244,6 +244,10 @@ route('profiles', async (_p, q) => {
     h('button.who', { onclick: () => selectProfile(p), 'aria-label': p.name, 'data-autofocus': (me.profile ? me.profile.id === p.id : i === 0) ? '' : null },
       h('span.face', { style: { background: p.color } }, p.name.slice(0, 1).toUpperCase(), p.has_pin && h('span.lock', null, icon('lock'))),
       h('span.who-name', null, p.name), p.is_kids && h('small', null, T.kids))));
+  // the server refuses it from a kids profile or a device locked to one profile
+  if (me.profiles.length < MAX_PROFILES && !me.profile_locked && !(me.profile && me.profile.is_kids)) grid.appendChild(
+    h('button.who', { onclick: () => addProfile(), 'aria-label': T.addProfile },
+      h('span.face.add', null, icon('plus')), h('span.who-name', null, T.addProfile)));
   const root = document.getElementById('app')!;
   put(root, h('div.center.tall', null, h('div.who-page', null, brandMark(), h('h1', null, T.whoWatches), grid,
     // profiles belong to one account; another family member signs in with their own
@@ -252,6 +256,28 @@ route('profiles', async (_p, q) => {
   const target = me.profiles.filter(p => p.id === pinFor)[0];
   if (target) selectProfile(target);
 });
+
+const MAX_PROFILES = 8;
+const COLORS = ['#c97c5d', '#b5a27a', '#8fa37a', '#7fa6a0', '#c2b4a3', '#a3826b', '#b07a7a', '#8a9a8f'];
+
+// a new profile: name and kids flag here; the rest is under Settings once it is picked
+function addProfile() {
+  const name = h('input', { type: 'text', maxlength: 30, autocapitalize: 'words', 'data-autofocus': '' }) as HTMLInputElement;
+  let kids = false;
+  const kidsBtn = h('button.set-row', { type: 'button', onclick: () => { kids = !kids; kidsBtn.lastChild!.textContent = kids ? T.on : T.off; } },
+    h('span.set-label', null, T.kidsProfile), h('span.set-value', null, T.off));
+  const err = h('p.err', { role: 'alert' });
+  const submit = async () => {
+    if (!name.value.trim()) { err.textContent = T.profileNameNeeded; return; }
+    try {
+      await state.api!.post('/api/profiles', { name: name.value.trim(), is_kids: kids, color: COLORS[Math.floor(Math.random() * COLORS.length)] });
+      l.close(); render();
+    } catch (e: any) { err.textContent = e.message; }
+  };
+  const l = sheet(T.addProfile, h('form', { onsubmit: (e: Event) => { e.preventDefault(); submit(); } },
+    h('label.field', null, h('span', null, T.profileName), name), kidsBtn, err,
+    h('div.actions', null, h('button.btn.primary.big', { type: 'submit' }, T.create))));
+}
 
 async function selectProfile(p: Profile) {
   const done = async () => { await loadMe(); go('#/home', true); };

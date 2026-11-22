@@ -16,6 +16,22 @@ public struct ProfileUpdate: Codable, Sendable, Equatable {
     }
 }
 
+/// POST /api/profiles – a new profile of the account; the rest of its settings are edited later.
+public struct ProfileCreate: Codable, Sendable, Equatable {
+    public var name: String
+    public var color: String
+    public var isKids: Bool
+
+    public init(name: String, color: String = ProfileCreate.colors.randomElement()!, isKids: Bool = false) {
+        self.name = name; self.color = color; self.isKids = isKids
+    }
+
+    /// The web client's profile colours.
+    public static let colors = ["#c97c5d", "#b5a27a", "#8fa37a", "#7fa6a0", "#c2b4a3", "#a3826b", "#b07a7a", "#8a9a8f"]
+    /// The server's limit per account.
+    public static let maxProfiles = 8
+}
+
 /// GET /api/devices – one logged-in device of the user.
 public struct Device: Codable, Sendable, Equatable, Identifiable, Hashable {
     public var id: String
@@ -89,6 +105,10 @@ public enum SettingChoices {
 extension KinoraClient {
     public func updateProfile(_ id: Int, _ update: ProfileUpdate) async throws -> Profile {
         try await patch("/api/profiles/\(id)", update)
+    }
+
+    public func createProfile(_ new: ProfileCreate) async throws -> Profile {
+        try await post("/api/profiles", new)
     }
 
     public func devices() async throws -> [Device] {

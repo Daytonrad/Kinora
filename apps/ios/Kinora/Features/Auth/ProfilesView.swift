@@ -5,6 +5,7 @@ import KinoraKit
 struct ProfilesView: View {
     @Environment(AppModel.self) private var model
     @State private var pinFor: Profile?
+    @State private var adding = false
     @State private var error: String?
     @State private var busy = false
 
@@ -19,6 +20,11 @@ struct ProfilesView: View {
                     LazyVGrid(columns: columns, spacing: 24) {
                         ForEach(profiles) { p in
                             Button { pick(p) } label: { ProfileFace(profile: p) }
+                                .buttonStyle(.plain)
+                                .disabled(busy)
+                        }
+                        if model.canAddProfile {
+                            Button { adding = true } label: { AddProfileFace() }
                                 .buttonStyle(.plain)
                                 .disabled(busy)
                         }
@@ -47,6 +53,11 @@ struct ProfilesView: View {
         }
         .sheet(item: $pinFor) { p in
             PinSheet(profile: p)
+                .presentationDetents([.medium])
+                .presentationBackground(Theme.lacquer)
+        }
+        .sheet(isPresented: $adding) {
+            AddProfileSheet()
                 .presentationDetents([.medium])
                 .presentationBackground(Theme.lacquer)
         }
@@ -91,6 +102,76 @@ struct ProfileFace: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct AddProfileFace: View {
+    var size: CGFloat = 104
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "plus")
+                .font(.system(size: size * 0.36, weight: .semibold))
+                .foregroundStyle(Theme.plaster)
+                .frame(width: size, height: size)
+                .overlay {
+                    RoundedRectangle(cornerRadius: size * 0.18)
+                        .strokeBorder(Theme.muted, style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+                }
+            Text(L("Profil hozzáadása")).font(.headline).lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A new profile: its name and whether it is a kids profile; the rest is under Settings once it is picked.
+private struct AddProfileSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var isKids = false
+    @State private var error: String?
+    @State private var busy = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(L("Profil hozzáadása")).font(.title3.bold())
+            TextField(L("Név"), text: $name)
+                .textInputAutocapitalization(.words)
+                .submitLabel(.done)
+                .focused($focused)
+                .onSubmit(submit)
+                .kinoraField()
+            Toggle(L("Gyerekprofil"), isOn: $isKids)
+                .tint(Theme.amber)
+            ErrorText(message: error)
+            Button(action: submit) {
+                if busy { ProgressView().tint(Theme.amberInk) } else { Text(L("Hozzáadás")) }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(trimmed.isEmpty || busy)
+        }
+        .padding(24)
+        .onAppear { focused = true }
+    }
+
+    private var trimmed: String { String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30)) }
+
+    private func submit() {
+        guard !busy, !trimmed.isEmpty else { return }
+        busy = true
+        error = nil
+        Task {
+            defer { busy = false }
+            do {
+                try await model.guarded { try await model.createProfile(name: trimmed, isKids: isKids) }
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+                Haptic.error.play()
+            }
+        }
     }
 }
 

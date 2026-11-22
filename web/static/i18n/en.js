@@ -972,6 +972,7 @@
    "episode": "Episode"
   },
   "app": {
+   "Profil hozzáadása": "Add profile",
    "letiltva": "blocked",
    "Tiltás feloldása": "Unblock",
    "{0} letiltása": "Block {0}",

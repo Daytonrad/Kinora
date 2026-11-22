@@ -966,6 +966,7 @@
    "episode": "Folge"
   },
   "app": {
+   "Profil hozzáadása": "Profil hinzufügen",
    "letiltva": "blockiert",
    "Tiltás feloldása": "Blockierung aufheben",
    "{0} letiltása": "{0} blockieren",
