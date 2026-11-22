@@ -183,7 +183,7 @@ struct PlayerView: View {
             Text(L("Nem sikerült lejátszani")).font(Theme.display(24, weight: .bold))
             Text(message).multilineTextAlignment(.center).foregroundStyle(Theme.plaster)
             if let reasons = player.info?.reasons, !reasons.isEmpty {
-                Text(reasons.joined(separator: " · ")).font(.caption).foregroundStyle(Theme.muted)
+                Text(reasons.map(Language.shared.server).joined(separator: " · ")).font(.caption).foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)
             }
             HStack {

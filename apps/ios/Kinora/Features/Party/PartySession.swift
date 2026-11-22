@@ -188,7 +188,7 @@ final class PartySession {
         case .chat(let id, let from, let name, let color, let text):
             add(Line(name: name, color: color, text: text, lineId: id, from: from))
         case .system(let text):
-            add(Line(text: text))
+            add(Line(text: Language.shared.server(text)))
         case .react(let name, _, let emoji):
             let f = Floating(emoji: emoji, name: name, x: .random(in: 0.1...0.8))
             floating.append(f)

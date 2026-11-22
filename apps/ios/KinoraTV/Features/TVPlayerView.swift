@@ -172,7 +172,7 @@ struct TVPlayerView: View {
             Text(L("Nem sikerült lejátszani")).font(Theme.display(48, weight: .bold))
             Text(message).font(.title3).multilineTextAlignment(.center).frame(maxWidth: 1100)
             if let reasons = player.info?.reasons, !reasons.isEmpty {
-                Text(reasons.joined(separator: " · ")).font(.callout).foregroundStyle(Theme.muted)
+                Text(reasons.map(Language.shared.server).joined(separator: " · ")).font(.callout).foregroundStyle(Theme.muted)
             }
             HStack(spacing: 24) {
                 Button { player.retry() } label: { Label(L("Újra"), systemImage: "arrow.clockwise") }

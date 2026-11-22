@@ -184,7 +184,7 @@ private struct Shelf: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            if let why = row.reasons?[String(item.id)] { Text(why) }
+                            if let why = row.reasons?[String(item.id)] { Text(Language.shared.server(why)) }
                             if item.kind == .movie || item.kind == .episode {
                                 Button(item.progress != nil ? L("Folytatás") : L("Lejátszás"), systemImage: "play.fill") {
                                     model.play(item)
