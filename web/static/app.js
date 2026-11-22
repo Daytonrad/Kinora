@@ -3111,14 +3111,14 @@ async function adminAcqSettings(body, then) {
     h('div.a-form-foot', null, h('button.btn', { onclick: () => clientDialog(null) }, icon('plus'), T.acqAddClient)));
 
   // quality profile (the built-in one; named profiles below) and import
-  const builtin = profileEditor(s.profile);
+  const builtin = qualityEditor(s.profile);
   const mode = h('select', null, [['hardlink', T.acqModeLink], ['copy', T.acqModeCopy]].map(([v, l]) => h('option', { value: v, selected: s.import_mode === v }, l)));
   const saveProfile = h('button.btn.primary', { onclick: async () => {
     await api('PUT', '/api/admin/acquire/settings', { profile: builtin.value(), import_mode: mode.value }); toast(T.saved); rerender();
   } }, T.save);
   const profileDialog = pr => {
     const isNew = !pr;
-    const ed = profileEditor(pr ? JSON.parse(pr.json) : s.profile);
+    const ed = qualityEditor(pr ? JSON.parse(pr.json) : s.profile);
     const name = h('input', { type: 'text', value: pr ? pr.name : '' });
     const def = h('input.switch', { type: 'checkbox', role: 'switch', checked: !!(pr && pr.is_default) });
     modal(isNew ? T.profAdd : pr.name, h('div.a-form', null, field(T.acqName, name),
@@ -3246,7 +3246,7 @@ async function catalogDialog(added) {
 // the quality profile controls, shared by the built-in profile and the named ones
 const RES_OPTS = () => [[2160, '2160p (4K)'], [1080, '1080p'], [720, '720p'], [576, '576p'], [480, '480p'], [0, T.acqResUnknown]];
 const SRC_OPTS = () => [['remux', 'Remux'], ['bluray', 'BluRay'], ['webdl', 'WEB-DL'], ['webrip', 'WEBRip'], ['hdtv', 'HDTV'], ['', T.profAnySource]];
-function profileEditor(p) {
+function qualityEditor(p) {
   const RES = RES_OPTS();
   const primary = h('select', null, RES.filter(([v]) => v).map(([v, l]) => h('option', { value: v, selected: p.resolutions[0] === v }, l)));
   const resBoxes = RES.map(([v, l]) => [v, h('input', { type: 'checkbox', checked: p.resolutions.includes(v) }), l]);
