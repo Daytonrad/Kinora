@@ -448,6 +448,8 @@ func (sc *Scanner) scan(ctx context.Context, libID int64) error {
 		}
 	}
 
+	sc.joinSameShow(ctx, libID, series, containerIDs, containers)
+
 	// Episodes whose series or season is now another container (an earlier parse split one
 	// show into a series per release folder) are processed again, so they move over.
 	queued := make(map[*fileEntry]bool, len(changed))
@@ -692,6 +694,53 @@ func (sc *Scanner) ensureSeason(ctx context.Context, libID, seriesID int64, se *
 }
 
 // storeArtwork resizes local images into the image cache and records flags.
+// joinSameShow points every copy of a show at one series: folders that metadata matched
+// to the same TMDB show (a downloaded release folder and its copy imported into the show's
+// folder, or the same show under two names) become one card, as versions of a film do.
+// The series with its own folder wins, else the oldest; the others empty and go missing.
+func (sc *Scanner) joinSameShow(ctx context.Context, libID int64, series map[string]*seriesEntry, ids map[string]int64, known map[string]*store.KnownContainer) {
+	tmdb := sc.st.SeriesTmdbIDsOf(libID)
+	groups := map[int64][]*seriesEntry{}
+	for _, se := range series {
+		if t := tmdb[ids[se.key]]; t > 0 {
+			groups[t] = append(groups[t], se)
+		}
+	}
+	for _, g := range groups {
+		if len(g) < 2 {
+			continue
+		}
+		lead := g[0]
+		for _, se := range g[1:] {
+			if (se.dirAbs != "") != (lead.dirAbs != "") {
+				if se.dirAbs != "" {
+					lead = se
+				}
+			} else if ids[se.key] < ids[lead.key] {
+				lead = se
+			}
+		}
+		for _, se := range g {
+			if se == lead {
+				continue
+			}
+			ids[se.key] = ids[lead.key]
+			for num := range se.seasons {
+				key := fmt.Sprintf("%s/s%d", lead.key, num)
+				if _, ok := ids[key]; !ok {
+					sid, err := sc.ensureSeason(ctx, libID, ids[lead.key], lead, num, "", key, known)
+					if err != nil {
+						sc.log.Warn("join show", "series", lead.title, "err", err)
+						continue
+					}
+					ids[key] = sid
+				}
+				ids[fmt.Sprintf("%s/s%d", se.key, num)] = ids[key]
+			}
+		}
+	}
+}
+
 func (sc *Scanner) storeArtwork(ctx context.Context, id int64, poster, backdrop string) {
 	dir := ImageDir(sc.imgDir, id)
 	hasP, hasB := false, false

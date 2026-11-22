@@ -11,8 +11,41 @@ import (
 // shared between them.
 
 // NotAltVersion hides the other versions of a film in item lists (append to a where).
+// It hides the second copy of an episode too (NotAltEpisode).
 const NotAltVersion = ` AND NOT (i.kind='movie' AND i.imdb_id<>'' AND EXISTS(SELECT 1 FROM items v
- WHERE v.imdb_id=i.imdb_id AND v.kind='movie' AND v.library_id=i.library_id AND v.missing=0 AND v.id<i.id))`
+ WHERE v.imdb_id=i.imdb_id AND v.kind='movie' AND v.library_id=i.library_id AND v.missing=0 AND v.id<i.id))` + NotAltEpisode
+
+// NotAltEpisode hides an episode file when the same series has another file of the same
+// episode (a downloaded release folder and its copy imported into the show's folder).
+const NotAltEpisode = ` AND NOT (i.kind='episode' AND i.episode_num IS NOT NULL AND EXISTS(SELECT 1 FROM items v
+ WHERE v.kind='episode' AND v.series_id=i.series_id AND v.season_num=i.season_num AND v.episode_num=i.episode_num
+ AND v.missing=0 AND v.id<i.id))`
+
+// SeriesTmdbIDsOf returns series id → TMDB id for the matched series of a library.
+func (s *Store) SeriesTmdbIDsOf(libID int64) map[int64]int64 {
+	out := map[int64]int64{}
+	rows, err := s.DB.Query(`SELECT id, tmdb_id FROM items WHERE library_id=? AND kind='series' AND COALESCE(tmdb_id,0)>0`, libID)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, t int64
+		if rows.Scan(&id, &t) == nil {
+			out[id] = t
+		}
+	}
+	return out
+}
+
+// HasSplitSeries reports whether two present series of a library are the same TMDB show:
+// a scan joins them (run one after metadata matched a new copy).
+func (s *Store) HasSplitSeries(libID int64) bool {
+	var n int
+	s.DB.QueryRow(`SELECT COUNT(*) FROM (SELECT tmdb_id FROM items WHERE library_id=? AND kind='series' AND missing=0
+		AND COALESCE(tmdb_id,0)>0 GROUP BY tmdb_id HAVING COUNT(*)>1)`, libID).Scan(&n)
+	return n > 0
+}
 
 var reImdb = regexp.MustCompile(`(?i)\btt(\d{7,10})\b`)
 

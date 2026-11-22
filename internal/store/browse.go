@@ -12,7 +12,7 @@ func (s *Store) Children(p *Profile, it *Item) ([]*Item, error) {
 		return s.QueryItems(p, ` AND i.parent_id=? AND i.kind='season' AND i.missing=0`, []any{it.ID},
 			`ORDER BY CASE WHEN i.season_num=0 THEN 1 ELSE 0 END, i.season_num`)
 	case "season":
-		return s.QueryItems(p, ` AND i.parent_id=? AND i.kind='episode' AND i.missing=0`, []any{it.ID},
+		return s.QueryItems(p, ` AND i.parent_id=? AND i.kind='episode' AND i.missing=0`+NotAltEpisode, []any{it.ID},
 			`ORDER BY i.episode_num IS NULL, i.episode_num, i.sort_title`)
 	}
 	return []*Item{}, nil
@@ -26,7 +26,7 @@ func (s *Store) NextEpisode(p *Profile, ep *Item) (*Item, error) {
 	if ep.Kind != "episode" || ep.SeriesID == nil {
 		return nil, nil
 	}
-	eps, err := s.QueryItems(p, ` AND i.series_id=? AND i.kind='episode' AND i.missing=0`, []any{*ep.SeriesID}, episodeOrder)
+	eps, err := s.QueryItems(p, ` AND i.series_id=? AND i.kind='episode' AND i.missing=0`+NotAltEpisode, []any{*ep.SeriesID}, episodeOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func (s *Store) NextEpisode(p *Profile, ep *Item) (*Item, error) {
 // PlayNext picks the episode a "Play" button on a series should start:
 // an in-progress episode, else the next up, else the first episode.
 func (s *Store) PlayNext(p *Profile, seriesID int64) (*Item, error) {
-	eps, err := s.QueryItems(p, ` AND i.series_id=? AND i.kind='episode' AND i.missing=0`, []any{seriesID}, episodeOrder)
+	eps, err := s.QueryItems(p, ` AND i.series_id=? AND i.kind='episode' AND i.missing=0`+NotAltEpisode, []any{seriesID}, episodeOrder)
 	if err != nil || len(eps) == 0 {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (s *Store) NextUp(p *Profile, limit int) ([]*Item, error) {
 		if s.GetUserData(p.ID, sid).Hidden {
 			continue
 		}
-		eps, err := s.QueryItems(p, ` AND i.series_id=? AND i.kind='episode' AND i.missing=0 AND COALESCE(i.season_num,1)<>0`, []any{sid}, episodeOrder)
+		eps, err := s.QueryItems(p, ` AND i.series_id=? AND i.kind='episode' AND i.missing=0 AND COALESCE(i.season_num,1)<>0`+NotAltEpisode, []any{sid}, episodeOrder)
 		if err != nil {
 			return nil, err
 		}

@@ -266,3 +266,81 @@ func TestReleaseFoldersFormOneShow(t *testing.T) {
 		t.Fatalf("visible series = %d, want 1", n)
 	}
 }
+
+// A downloaded release folder and the copy Kinora imported into the show's folder are one
+// show once metadata matched both to the same TMDB id: one card, each episode once.
+func TestSameTmdbShowIsOneCard(t *testing.T) {
+	st, sc, media := setup(t)
+	ctx := context.Background()
+	src := filepath.Join(media, "Shows", "Test Show (2020)", "Season 01", "Test.Show.S01E01.Pilot.Part.1.mkv")
+	root := filepath.Join(media, "Media")
+	for _, rel := range []string{
+		"Downloads/A.Test.S01.1080p.WEB-GRP/A.Test.S01E01.1080p.WEB-GRP.mkv",
+		"Downloads/A.Test.S01.1080p.WEB-GRP/A.Test.S01E02.1080p.WEB-GRP.mkv",
+		"Downloads/A.Test.S01.1080p.WEB-GRP/A.Test.S01E03.1080p.WEB-GRP.mkv",
+		"Sorozatok/A Test (2025)/Season 01/A Test (2025) - S01E01 - 1080p.mkv",
+		"Sorozatok/A Test (2025)/Season 01/A Test (2025) - S01E02 - 1080p.mkv",
+		"Sorozatok/A Test (2025)/Season 01/A Test (2025) - S01E03 - 1080p.mkv",
+	} {
+		dst := filepath.Join(root, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(dst), 0o755)
+		if err := os.Link(src, dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lib, _ := st.CreateLibrary("Média", root, "mixed")
+	if _, err := sc.ScanNow(ctx, lib.ID); err != nil {
+		t.Fatal(err)
+	}
+	visible := func() int {
+		return count(t, st, `SELECT COUNT(*) FROM items WHERE library_id=? AND kind='series' AND missing=0`, lib.ID)
+	}
+	if n := visible(); n != 2 {
+		t.Fatalf("before matching: series = %d, want 2 (different names)", n)
+	}
+	// metadata matched both to the same show
+	st.DB.Exec(`UPDATE items SET tmdb_id=4242 WHERE library_id=? AND kind='series'`, lib.ID)
+	if !st.HasSplitSeries(lib.ID) {
+		t.Fatal("HasSplitSeries = false")
+	}
+	if _, err := sc.ScanNow(ctx, lib.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := visible(); n != 1 || st.HasSplitSeries(lib.ID) {
+		t.Fatalf("after joining: series = %d, want 1", n)
+	}
+	var sid int64
+	st.DB.QueryRow(`SELECT id FROM items WHERE library_id=? AND kind='series' AND missing=0`, lib.ID).Scan(&sid)
+	var path string
+	st.DB.QueryRow(`SELECT path FROM items WHERE id=?`, sid).Scan(&path)
+	if filepath.Base(path) != "A Test (2025)" {
+		t.Errorf("kept series %q, want the show's own folder", path)
+	}
+
+	name := "P"
+	u, _ := st.CreateUser("u", "secret12", true)
+	p, _ := st.CreateProfile(u.ID, store.ProfileInput{Name: &name})
+	series, err := st.ItemFull(sid, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if series.EpisodeCount != 3 {
+		t.Errorf("episode count = %d, want 3", series.EpisodeCount)
+	}
+	seasons, _ := st.Children(p, series)
+	if len(seasons) != 1 {
+		t.Fatalf("seasons = %d, want 1", len(seasons))
+	}
+	eps, _ := st.Children(p, seasons[0])
+	if len(eps) != 3 {
+		t.Errorf("episodes listed = %d, want 3", len(eps))
+	}
+	// stable: another scan keeps it joined and re-probes nothing
+	s3, err := sc.ScanNow(ctx, lib.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := visible(); n != 1 || s3.Changed != 0 {
+		t.Errorf("rescan: series = %d, changed = %d", n, s3.Changed)
+	}
+}

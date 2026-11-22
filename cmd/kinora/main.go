@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -167,6 +168,7 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	if v := os.Getenv("KINORA_OMDB_API"); v != "" { // an OMDb proxy or mirror (also used by tests)
 		fetcher.OmdbURL = v
 	}
+	var rejoin atomic.Bool // one joining rescan at a time, never a loop
 	sc.OnScanned = func(libID int64) {
 		if !fetcher.Enabled() {
 			return
@@ -174,6 +176,11 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 		go func() { // never block the scanner on network I/O
 			if err := fetcher.Refresh(ctx, false); err != nil && !errors.Is(err, meta.ErrRunning) {
 				log.Warn("metadata refresh", "err", err)
+			}
+			// a new copy of a show matched an existing one: scan once more to join them
+			if st.HasSplitSeries(libID) && rejoin.CompareAndSwap(false, true) {
+				defer rejoin.Store(false)
+				sc.ScanNow(ctx, libID)
 			}
 		}()
 	}
