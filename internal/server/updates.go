@@ -30,15 +30,15 @@ const (
 var ReleaseURL = "https://api.github.com/repos/" + releaseRepo + "/releases/latest"
 
 type releaseInfo struct {
-	Current   string `json:"current"`
-	Latest    string `json:"latest,omitempty"`
-	URL       string `json:"url,omitempty"`
-	Published int64  `json:"published_at,omitempty"`
-	Available bool   `json:"available"`
-	CheckedAt int64  `json:"checked_at,omitempty"`
-	Error     bool   `json:"error,omitempty"`
-	Disabled  bool   `json:"disabled,omitempty"` // dev build or KINORA_UPDATE_CHECK=0
-	Mode      string `json:"mode"`               // install mode, so the UI can say how to update
+	Current   string     `json:"current"`
+	Latest    string     `json:"latest,omitempty"`
+	URL       string     `json:"url,omitempty"`
+	Published int64      `json:"published_at,omitempty"`
+	Available bool       `json:"available"`
+	CheckedAt int64      `json:"checked_at,omitempty"`
+	Error     bool       `json:"error,omitempty"`
+	Disabled  bool       `json:"disabled,omitempty"`  // dev build or KINORA_UPDATE_CHECK=0
+	Mode      string     `json:"mode"`                // install mode, so the UI can say how to update
 	CanApply  bool       `json:"can_apply,omitempty"` // Windows: the dashboard can start update.ps1 itself
 	Applying  bool       `json:"applying,omitempty"`  // an update started from the dashboard is running
 	LastRun   *updateRun `json:"last_run,omitempty"`  // outcome of the last update.ps1 run (update.log)

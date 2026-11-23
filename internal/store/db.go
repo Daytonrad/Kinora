@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,9 @@ type Store struct {
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
+	}
+	if strings.ContainsAny(path, "?#") {
+		return nil, fmt.Errorf("az adatbázis útvonalában nem lehet ? vagy # karakter: %s", path)
 	}
 	dsn := path + "?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=10000&_foreign_keys=on&_txlock=immediate"
 	db, err := sql.Open("sqlite3", dsn)
@@ -558,7 +562,38 @@ CREATE TABLE push_live(
 INSERT INTO settings(key,value) VALUES('push_episode_id', COALESCE((SELECT MAX(id) FROM items),0))
   ON CONFLICT(key) DO UPDATE SET value=excluded.value;
 `,
+	// imports from other servers: which external user became which account, and one-time password links
+	// for accounts created without a password
+	`CREATE TABLE import_links(
+  source TEXT NOT NULL,
+  external_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(source, external_id)
+);
+CREATE TABLE password_links(
+  code_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);`,
+	// what an import from Sonarr / Radarr / Prowlarr created, so running it again updates instead of duplicating
+	`CREATE TABLE import_map(
+  source TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  external_id TEXT NOT NULL,
+  local_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(source, kind, external_id)
+);`,
 }
+
+// ErrNewerSchema: the database was written by a newer Kinora (after rolling back an update, for example).
+// Running against a schema this binary does not know can fail later or write rows the newer version misreads.
+var ErrNewerSchema = errors.New("az adatbázist egy újabb Kinora-verzió hozta létre")
+
+// AllowNewerSchema opens such a database anyway (KINORA_ALLOW_NEWER_DB=1).
+var AllowNewerSchema bool
 
 func (s *Store) migrate() error {
 	if _, err := s.DB.Exec(`CREATE TABLE IF NOT EXISTS schema_version(version INTEGER NOT NULL)`); err != nil {
@@ -572,6 +607,10 @@ func (s *Store) migrate() error {
 		}
 	} else if err != nil {
 		return err
+	}
+	if v > len(migrations) && !AllowNewerSchema {
+		return fmt.Errorf("%w (az adatbázis sémája %d, ez a verzió %d-ig ismeri): frissítsd a Kinorát, vagy állíts vissza egy mentést; "+
+			"saját felelősségre: KINORA_ALLOW_NEWER_DB=1", ErrNewerSchema, v, len(migrations))
 	}
 	for i := v; i < len(migrations); i++ {
 		tx, err := s.DB.Begin()

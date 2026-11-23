@@ -503,6 +503,12 @@ func TestMapPath(t *testing.T) {
 	if MapPath("/downloadsX/a", "/downloads", "/data") != "/downloadsX/a" {
 		t.Error("prefix of a longer folder name mapped")
 	}
+	if got := MapPath("/downloads/../../etc/passwd", "/downloads", "/data/torrents"); got != "" {
+		t.Errorf("a path leaving the mapped folder must be refused: %q", got)
+	}
+	if got := MapPath("/downloads/..hidden/a.mkv", "/downloads", "/data"); got != filepath.Join("/data", "..hidden", "a.mkv") {
+		t.Errorf("a name starting with two dots is fine: %q", got)
+	}
 }
 
 // ---------------------------------------------------------------- the whole flow

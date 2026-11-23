@@ -90,3 +90,23 @@ func TestDeleteImportedEpisodes(t *testing.T) {
 		t.Error("season 1 should go, season 2 stay")
 	}
 }
+
+// Files Kinora does not know (the user's notes, a bonus archive) are not deleted with the film; the folder stays for them.
+func TestDeleteImportedKeepsUnknownFiles(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "Film (2020)")
+	film := filepath.Join(dir, "Film (2020) - 1080p.mkv")
+	touch(t, film)
+	touch(t, filepath.Join(dir, "movie.nfo"))
+	notes := filepath.Join(dir, "my notes.txt")
+	touch(t, notes)
+	if err := deleteImported(&store.AcqGrab{Kind: "movie", TargetPath: film}, root); err != nil {
+		t.Fatal(err)
+	}
+	if exists(film) || exists(filepath.Join(dir, "movie.nfo")) {
+		t.Error("the film and its NFO should go")
+	}
+	if !exists(notes) {
+		t.Error("an unknown file was deleted")
+	}
+}

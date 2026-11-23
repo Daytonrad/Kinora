@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ScotyLucas/kinora/internal/media"
+	"github.com/ScotyLucas/kinora/internal/safe"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -122,7 +123,11 @@ func (sc *Scanner) Trigger(ctx context.Context, libID int64) bool {
 	sc.mu.Unlock()
 	go func() {
 		defer sc.wg.Done()
-		err := sc.scan(cctx, libID)
+		err := safe.Call(func() error { return sc.scan(cctx, libID) })
+		var pe *safe.PanicError
+		if errors.As(err, &pe) {
+			sc.log.Error("scan panicked", "library", libID, "err", pe, "stack", string(pe.Stack))
+		}
 		sc.mu.Lock()
 		delete(sc.cancels, libID)
 		if s := sc.status[libID]; s != nil {
@@ -482,7 +487,7 @@ func (sc *Scanner) scan(ctx context.Context, libID int64) error {
 		go func() {
 			defer wg.Done()
 			for f := range jobs {
-				err := sc.processFile(ctx, lib, f, containerIDs)
+				err := safe.Call(func() error { return sc.processFile(ctx, lib, f, containerIDs) })
 				sc.update(libID, func(s *Status) {
 					s.Done++
 					if err != nil {

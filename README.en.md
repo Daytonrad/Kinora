@@ -2,6 +2,8 @@
 
 [Magyar](README.md) · **English**
 
+[![CI](https://github.com/ScotyLucas/Kinora/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ScotyLucas/Kinora/actions/workflows/ci.yml)
+
 A self-hosted media server for movies and TV shows — an alternative to Jellyfin and Plex, with a web interface in Hungarian, English and German. The name comes from a hand-held “motion-picture viewer” from the 1890s.
 
 Kinora is a single Go binary with an embedded web client, an SQLite database, and FFmpeg for transcoding. Docker is the recommended installation method.

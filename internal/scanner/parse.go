@@ -18,8 +18,8 @@ type Parsed struct {
 	SeriesDir  string // relative dir of the series folder ("" for flat layouts)
 	SeriesKey  string
 	Season     int
-	Episode    int // 0 = unknown
-	EpisodeEnd int // last episode of a multi-episode file (0 = single)
+	Episode    int    // 0 = unknown
+	EpisodeEnd int    // last episode of a multi-episode file (0 = single)
 	ImdbID     string // from an "[imdbid-tt0133093]" / "{imdb-tt0133093}" tag in the file or folder name
 }
 
@@ -249,8 +249,12 @@ func parseEpisode(dirs []string, base string, force bool) (Parsed, bool) {
 	if m := reSxxEyy.FindStringSubmatchIndex(base); m != nil {
 		p.Season = atoi(base[m[2]:m[3]])
 		p.Episode = atoi(base[m[4]:m[5]])
+		// "S01E01E02" is a double episode; a range that runs backwards ("S01E07E01") or repeats the
+		// episode is not one, and storing it would show "E07–E01" in the clients
 		if m[6] >= 0 {
-			p.EpisodeEnd = atoi(base[m[6]:m[7]])
+			if end := atoi(base[m[6]:m[7]]); end > p.Episode {
+				p.EpisodeEnd = end
+			}
 		}
 		prefix = base[:m[0]]
 		p.Title = cleanEpisodeTitle(base[m[1]:])

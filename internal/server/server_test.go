@@ -174,6 +174,15 @@ func TestKidsProfileCannotSeeRFilm(t *testing.T) {
 	if code := c.do("POST", "/api/collections", map[string]any{"name": "x"}, nil); code != 403 {
 		t.Fatalf("kid collection create: %d", code)
 	}
+	// nor attach or remove subtitles, which every profile of the server would see
+	var pg13 int64
+	st.DB.QueryRow(`SELECT id FROM items WHERE title='Big Test Movie'`).Scan(&pg13)
+	if code := c.do("POST", "/api/items/"+itoa(pg13)+"/subtitles/download", map[string]any{"file_id": 1}, nil); code != 403 {
+		t.Fatalf("kid subtitle download: %d", code)
+	}
+	if code := c.do("DELETE", "/api/items/"+itoa(pg13)+"/subtitles/downloaded/1", nil, nil); code != 403 {
+		t.Fatalf("kid subtitle delete: %d", code)
+	}
 	// and the adult profile does see it
 	c.do("POST", "/api/profiles/leave", nil, nil)
 	var me struct {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"math"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -343,7 +344,14 @@ func parseSize(v string) int64 {
 	case "PB", "PIB":
 		mult = 1 << 50
 	}
-	return int64(f * mult)
+	b := f * mult
+	switch {
+	case math.IsNaN(b) || b <= 0:
+		return 0
+	case b >= math.MaxInt64: // converting it would wrap to a negative size that passes every size limit
+		return math.MaxInt64
+	}
+	return int64(b)
 }
 
 // jsonPath reads "a.b.0.c" (an optional "$." prefix) from decoded JSON.

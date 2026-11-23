@@ -43,10 +43,18 @@ func deleteImported(g *store.AcqGrab, libRoot string) error {
 	if err := removeWithSubs(target); err != nil {
 		return err
 	}
-	// the film's own folder ("Title (Year) {imdb-…}") goes too once no video is left in it
+	// the film's own folder ("Title (Year) {imdb-…}") goes too once no video is left in it: first the
+	// film's metadata and artwork (movie.nfo, poster.jpg…), then the folder itself if that emptied it.
+	// Files Kinora does not recognise stay, and so does the folder holding them.
 	dir := filepath.Dir(target)
 	if r, err := filepath.Rel(root, dir); err == nil && r != "." && !strings.ContainsRune(r, filepath.Separator) && !hasVideo(dir) {
-		return os.RemoveAll(dir)
+		ents, _ := os.ReadDir(dir)
+		for _, e := range ents {
+			if e.Type().IsRegular() && filmSidecars[strings.ToLower(e.Name())] {
+				os.Remove(filepath.Join(dir, e.Name()))
+			}
+		}
+		os.Remove(dir) // fails harmlessly when something is left
 	}
 	return nil
 }
@@ -94,19 +102,11 @@ func deleteEpisodes(root, showDir string, season int, eps []int) error {
 	return nil
 }
 
-// removeWithSubs deletes a video file and the "<name>.*" subtitles next to it.
-func removeWithSubs(file string) error {
-	if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("a fájl nem törölhető: %w", err)
-	}
-	base := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)) + "."
-	ents, _ := os.ReadDir(filepath.Dir(file))
-	for _, e := range ents {
-		if !e.IsDir() && strings.HasPrefix(e.Name(), base) && subExts[strings.ToLower(filepath.Ext(e.Name()))] {
-			os.Remove(filepath.Join(filepath.Dir(file), e.Name()))
-		}
-	}
-	return nil
+// filmSidecars are the metadata and artwork files of a film folder (Kodi/Jellyfin naming), removed with the film.
+var filmSidecars = map[string]bool{
+	"movie.nfo": true, "poster.jpg": true, "poster.png": true, "folder.jpg": true, "folder.png": true, "cover.jpg": true,
+	"fanart.jpg": true, "fanart.png": true, "backdrop.jpg": true, "backdrop.png": true, "landscape.jpg": true,
+	"banner.jpg": true, "clearlogo.png": true, "logo.png": true, "clearart.png": true, "disc.png": true, "thumb.jpg": true,
 }
 
 // hasVideo says whether a folder (or any folder in it) still holds a video file.
@@ -120,4 +120,19 @@ func hasVideo(dir string) bool {
 		return nil
 	})
 	return found
+}
+
+// removeWithSubs deletes a video file and the "<name>.*" subtitles next to it.
+func removeWithSubs(file string) error {
+	if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("a fájl nem törölhető: %w", err)
+	}
+	base := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)) + "."
+	ents, _ := os.ReadDir(filepath.Dir(file))
+	for _, e := range ents {
+		if !e.IsDir() && strings.HasPrefix(e.Name(), base) && subExts[strings.ToLower(filepath.Ext(e.Name()))] {
+			os.Remove(filepath.Join(filepath.Dir(file), e.Name()))
+		}
+	}
+	return nil
 }

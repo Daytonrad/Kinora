@@ -65,8 +65,10 @@ type Server struct {
 	legacy        legacyJS
 
 	Deps
-	bgCtx  context.Context
-	pushTx pushTexts // the notifier's texts per language
+	bgCtx      context.Context
+	pushTx     pushTexts  // the notifier's texts per language
+	imports    importRuns // Jellyfin import previews
+	arrImports arrRuns    // Sonarr / Radarr / Prowlarr import previews
 }
 
 // Deps are the subsystems the server drives (wired in main).
@@ -115,7 +117,7 @@ func New(cfg Config, st *store.Store, log *slog.Logger, deps Deps) *Server {
 
 // Handler returns the root handler with global middleware applied.
 func (s *Server) Handler() http.Handler {
-	return s.securityHeaders(s.logRequests(s.cors(s.mux)))
+	return s.securityHeaders(s.logRequests(csrfGuard(s.cors(s.mux))))
 }
 
 // ------------------------------------------------------------------ context
@@ -235,14 +237,16 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 
 func ok(w http.ResponseWriter) { writeJSON(w, http.StatusOK, map[string]bool{"ok": true}) }
 
-// internalErr logs the real error and returns a generic Hungarian message.
+// internalErr logs the real error and returns a generic message with a reference that appears in the
+// log line. The error text itself (file paths, SQL, upstream URLs) never reaches the client.
 func (s *Server) internalErr(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, store.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "nem található")
 		return
 	}
-	s.log.Error("request failed", "path", r.URL.Path, "err", err)
-	writeErr(w, http.StatusInternalServerError, "belső hiba: "+err.Error())
+	ref := store.RandomToken(4)
+	s.log.Error("request failed", "path", r.URL.Path, "ref", ref, "err", err)
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "belső hiba (hivatkozás a naplóban: " + ref + ")", "ref": ref})
 }
 
 const maxBody = 1 << 20

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/ScotyLucas/kinora/internal/meta"
+	"github.com/ScotyLucas/kinora/internal/safe"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -25,6 +26,7 @@ func (s *Server) handleMetadataRefresh(w http.ResponseWriter, r *http.Request, c
 		return
 	}
 	go func() {
+		defer safe.Recover(s.log, "metadata-refresh")
 		if err := s.Meta.Refresh(s.bgCtx, in.RetryNoMatch); err != nil {
 			s.log.Warn("metadata refresh", "err", err)
 		}

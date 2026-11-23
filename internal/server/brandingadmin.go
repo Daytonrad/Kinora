@@ -3,8 +3,8 @@ package server
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"

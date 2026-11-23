@@ -37,11 +37,28 @@ type nfoDoc struct {
 	} `xml:"uniqueid"`
 }
 
+// maxNFOSize is the largest NFO file read.
+const maxNFOSize = 4 << 20
+
 // ReadNFO parses a Kodi/Jellyfin compatible movie.nfo / tvshow.nfo / <video>.nfo.
 // Files that are not XML (e.g. a bare URL) return nil.
 func ReadNFO(path string) *store.LocalMeta {
-	data, err := os.ReadFile(path)
-	if err != nil || !bytes.Contains(data, []byte("<")) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	// a real NFO is a few kB; a huge file with an .nfo name must not be read into memory
+	data, err := io.ReadAll(io.LimitReader(f, maxNFOSize+1))
+	if err != nil || len(data) > maxNFOSize {
+		return nil
+	}
+	return parseNFO(data)
+}
+
+// parseNFO reads NFO content; nil when it is not XML.
+func parseNFO(data []byte) *store.LocalMeta {
+	if !bytes.Contains(data, []byte("<")) {
 		return nil
 	}
 	dec := xml.NewDecoder(bytes.NewReader(data))
@@ -101,6 +118,9 @@ func ReadNFO(path string) *store.LocalMeta {
 				m.TmdbID, _ = strconv.ParseInt(strings.TrimSpace(u.Value), 10, 64)
 			}
 		}
+	}
+	if m.TmdbID < 0 {
+		m.TmdbID = 0 // -1 is Kinora's "manually edited, never refresh" marker, not an id an NFO can set
 	}
 	m.ImdbID = store.NormalizeImdbID(d.ImdbID)
 	for _, u := range d.UniqueIDs {

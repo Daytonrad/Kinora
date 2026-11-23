@@ -146,7 +146,7 @@ func TestLongestSynthetic(t *testing.T) {
 		b[i] = uint32(i*40503) ^ 0x12345678
 	}
 	copy(b[150:250], a[40:140]) // shared stretch: a[40:140] == b[150:250]
-	b[200] ^= 0xffff0000          // one corrupted item inside is tolerated
+	b[200] ^= 0xffff0000        // one corrupted item inside is tolerated
 	m, ok := Longest(a, b, MaxBitErrors, MaxGapItems, 50)
 	if !ok || m.A0 != 40 || m.A1 != 140 || m.B0 != 150 || m.B1 != 250 {
 		t.Fatalf("match %+v ok %v", m, ok)

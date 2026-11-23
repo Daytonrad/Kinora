@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ScotyLucas/kinora/internal/meta"
+	"github.com/ScotyLucas/kinora/internal/safe"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -24,6 +25,8 @@ import (
 type adminUser struct {
 	*store.User
 	Profiles int `json:"profiles"`
+	// NeedsPassword: an imported account whose password link was not used yet
+	NeedsPassword bool `json:"needs_password"`
 }
 
 func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request, c *reqCtx) {
@@ -35,7 +38,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 	out := []adminUser{}
 	for _, u := range users {
 		ps, _ := s.st.Profiles(u.ID)
-		out = append(out, adminUser{u, len(ps)})
+		out = append(out, adminUser{u, len(ps), !u.HasPassword()})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -304,6 +307,7 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 	if s.st.Setting("metadata_lang") != oldLang && s.Meta.Enabled() {
 		// re-fetch matched titles in the new language; a refresh already running picks it up when it ends
 		go func() {
+			defer safe.Recover(s.log, "metadata-refresh")
 			if err := s.Meta.Refresh(s.bgCtx, false); err != nil && !errors.Is(err, meta.ErrRunning) {
 				s.log.Warn("metadata refresh", "err", err)
 			}

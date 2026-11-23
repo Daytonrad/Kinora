@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -106,8 +107,12 @@ func (s *Server) handlePlayback(w http.ResponseWriter, r *http.Request, c *reqCt
 	enc := s.Encoders.PickFor(s.encoderSetting(), s.st.Setting("video_codec"), req.Caps)
 	sess, err := s.Media.Start(r.Context(), media.HLSSpec{Item: it, UserID: c.User.ID, Decision: d, Start: req.Start, Encoder: enc})
 	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, media.ErrBusy) {
+			status = http.StatusServiceUnavailable
+		}
 		s.log.Warn("playback failed", "item", it.Title, "mode", d.Mode, "err", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error(), "reasons": d.Reasons, "mode": d.Mode})
+		writeJSON(w, status, map[string]any{"error": err.Error(), "reasons": d.Reasons, "mode": d.Mode})
 		return
 	}
 	resp["url"] = withStreamToken("/api/hls/"+sess.ID+"/index.m3u8", tok)
@@ -167,7 +172,8 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request, c *reqCtx)
 	}
 	f, err := os.Open(it.Path)
 	if err != nil {
-		writeErr(w, http.StatusConflict, "a fájl nem olvasható: "+err.Error())
+		s.log.Warn("stream: file not readable", "item", it.ID, "err", err)
+		writeErr(w, http.StatusConflict, "a fájl nem olvasható (részletek a szerver naplójában)")
 		return
 	}
 	defer f.Close()
@@ -303,7 +309,11 @@ func (s *Server) handleDownloadCreate(w http.ResponseWriter, r *http.Request, c 
 	}
 	tl := s.st.TitleLangsFor(c.Profile.ID, store.TitleOf(it))
 	audio := media.ChooseAudio(it.Streams, in.AudioIdx, media.WithTitleLang(tl.AudioLang, splitLangs(c.Profile.AudioLangs)))
-	job := s.Downloads.Enqueue(it, c.User.ID, q, audio, downloadName(it, q.Name)+".mp4")
+	job, err := s.Downloads.Enqueue(it, c.User.ID, q, audio, downloadName(it, q.Name)+".mp4")
+	if err != nil {
+		writeErr(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusAccepted, job)
 }
 
@@ -319,7 +329,7 @@ func (s *Server) handleDownloads(w http.ResponseWriter, r *http.Request, c *reqC
 
 func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	j, path, found := s.Downloads.Get(r.PathValue("key"))
-	if !found || j.UserID != c.User.ID || !s.st.ItemVisible(j.ItemID, c.Profile) {
+	if !found || !j.HasUser(c.User.ID) || !s.st.ItemVisible(j.ItemID, c.Profile) {
 		writeErr(w, http.StatusNotFound, "a letöltés nem található")
 		return
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/ScotyLucas/kinora/internal/media"
 	"github.com/ScotyLucas/kinora/internal/meta"
 	"github.com/ScotyLucas/kinora/internal/party"
+	"github.com/ScotyLucas/kinora/internal/safe"
 	"github.com/ScotyLucas/kinora/internal/scanner"
 	"github.com/ScotyLucas/kinora/internal/server"
 	"github.com/ScotyLucas/kinora/internal/store"
@@ -114,6 +115,7 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 		}
 	}
 
+	store.AllowNewerSchema = os.Getenv("KINORA_ALLOW_NEWER_DB") == "1"
 	st, err := store.Open(filepath.Join(cfg.DataDir, "kinora.db"))
 	if err != nil {
 		return err
@@ -145,10 +147,13 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 		log.Info("encoder selected", "encoder", enc.Pick(st.Setting("encoder")).Name, "tonemap", enc.ToneMap())
 	}()
 	mgr := media.NewManager(cfg.CacheDir, enc, log)
-	go mgr.Reap(ctx)
+	if n, err := strconv.Atoi(os.Getenv("KINORA_MAX_TRANSCODES")); err == nil && n > 0 {
+		mgr.MaxSessions = n
+	}
+	safe.Go(ctx, log, "transcode-reaper", mgr.Reap)
 	dl := media.NewDownloader(cfg.CacheDir, enc, log)
 	dl.EncoderSetting = func() string { return st.Setting("encoder") }
-	go dl.Run(ctx)
+	safe.Go(ctx, log, "downloads", dl.Run)
 
 	hub := party.NewHub(log)
 	hub.CanSee = func(profileID, itemID int64) bool {
@@ -159,7 +164,7 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 		return st.AddPartyReport(store.PartyReport{Room: r.Room, ReporterUser: r.Reporter.UserID, ReporterName: r.Reporter.Name,
 			SenderUser: r.Sender.UserID, SenderName: r.Sender.Name, Text: r.Text, Reason: r.Reason, CreatedAt: r.At})
 	}
-	go hub.Run(ctx)
+	safe.Go(ctx, log, "party", hub.Run)
 
 	fetcher := meta.New(st, imgDir, log)
 	if v := os.Getenv("KINORA_TMDB_API"); v != "" { // a TMDB proxy or mirror (also used by tests)
@@ -174,6 +179,7 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 			return
 		}
 		go func() { // never block the scanner on network I/O
+			defer safe.Recover(log, "metadata-refresh")
 			if err := fetcher.Refresh(ctx, false); err != nil && !errors.Is(err, meta.ErrRunning) {
 				log.Warn("metadata refresh", "err", err)
 			}
@@ -190,7 +196,7 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	analyzer.Busy = func() bool { return len(mgr.Sessions()) > 0 }
 	analyzer.Settings = func() (bool, int) { return st.Setting("intro_detection") != "0", st.SettingInt("intro_window_min", 10) }
 	log.Info("intro detection", "backend", analyzer.Status().Backend)
-	go analyzer.Run(ctx)
+	safe.Go(ctx, log, "intro", analyzer.Run)
 	prevScanned := sc.OnScanned
 	sc.OnScanned = func(libID int64) {
 		if prevScanned != nil {
@@ -202,11 +208,11 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	srv := server.New(cfg, st, log, server.Deps{Ctx: ctx, Scanner: sc, ImgDir: imgDir, Media: mgr, Encoders: enc,
 		Subs: media.NewSubtitles(cfg.CacheDir), Downloads: dl, Party: hub, Meta: fetcher, Intro: analyzer})
 	srv.ApplyStartupBranding()
-	go srv.Background(ctx)
-	go srv.RunDiscovery(ctx)
-	go sc.Run(ctx)
-	go srv.Acquire.Run(ctx) // built-in acquisition: follows downloads, imports finished ones
-	go srv.Push.Run(ctx)    // iOS push notifications through the relay
+	safe.Go(ctx, log, "housekeeping", srv.Background)
+	safe.Go(ctx, log, "discovery", srv.RunDiscovery)
+	safe.Go(ctx, log, "scanner", sc.Run)
+	safe.Go(ctx, log, "acquire", srv.Acquire.Run) // built-in acquisition: follows downloads, imports finished ones
+	safe.Go(ctx, log, "push", srv.Push.Run)       // iOS push notifications through the relay
 
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr,

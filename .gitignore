@@ -3,6 +3,7 @@
 /cache/
 /config/
 /testmedia/
+/testmedia-problem/
 /screenshots/
 *.db
 *.db-shm

@@ -58,7 +58,7 @@ func TestRefreshMovieAndSeries(t *testing.T) {
 			return
 		}
 		j(w, map[string]any{"id": 77, "name": "Teszt Sorozat", "first_air_date": "2020-01-01", "overview": "Leírás", "vote_average": 8.2,
-			"genres": []map[string]any{{"name": "Sci-Fi & Fantasy"}},
+			"genres":          []map[string]any{{"name": "Sci-Fi & Fantasy"}},
 			"content_ratings": map[string]any{"results": []map[string]any{{"iso_3166_1": "US", "rating": "TV-MA"}}}})
 	})
 	mux.HandleFunc("/3/tv/77/season/1", func(w http.ResponseWriter, r *http.Request) {

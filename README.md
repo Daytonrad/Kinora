@@ -2,6 +2,8 @@
 
 **Magyar** · [English](README.en.md)
 
+[![CI](https://github.com/ScotyLucas/Kinora/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ScotyLucas/Kinora/actions/workflows/ci.yml)
+
 Saját gépen futó médiaszerver filmekhez és sorozatokhoz – a Jellyfin és a Plex alternatívája, magyar, angol és német webes felülettel.
 A neve az 1890-es évek kézi „mozgókép-nézegetőjéből” jön.
 
