@@ -1,3 +1,5 @@
 /* The push relay's placeholder alert, shown only when the notification extension cannot open the message. */
 "PUSH_FALLBACK_TITLE" = "Kinora";
 "PUSH_FALLBACK_BODY" = "Új értesítésed érkezett. Nyisd meg a Kinorát a részletekért.";
+"LIVE_START_TITLE" = "Kinora";
+"LIVE_START_BODY" = "Elkezdtem letölteni, amit kértél.";

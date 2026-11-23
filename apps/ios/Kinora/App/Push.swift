@@ -1,3 +1,4 @@
+import ActivityKit
 import DeviceCheck
 import SwiftUI
 import UIKit
@@ -25,6 +26,26 @@ final class PushManager {
     var lastError: String?
 
     private static let wantedKey = "kinora.push.wanted"
+    private static let mutedKey = "kinora.push.muted"
+    private static let liveKey = "kinora.push.live"
+
+    /// Categories the user turned off (PushCategory); the same on every server.
+    private(set) var muted = Set(UserDefaults.standard.stringArray(forKey: PushManager.mutedKey) ?? []) {
+        didSet { UserDefaults.standard.set(muted.sorted(), forKey: Self.mutedKey) }
+    }
+    /// The user wants the server's downloads of their requests on the Lock Screen (on by default).
+    private(set) var liveWanted = UserDefaults.standard.object(forKey: PushManager.liveKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(liveWanted, forKey: Self.liveKey) }
+    }
+    /// The server can only start a Live Activity through push from iOS 17.2, and only if the user allows them.
+    var liveAvailable: Bool {
+        guard #available(iOS 17.2, *) else { return false }
+        return ActivityAuthorizationInfo().areActivitiesEnabled
+    }
+    var prefs: PushPrefs { PushPrefs(muted: muted.sorted(), live: liveWanted && liveAvailable) }
+    /// The current push-to-start token of request activities (hex).
+    private var liveStartToken: String?
+    private var watchedActivities = Set<String>()
     private var apnsToken: String?
     /// One sync at a time: each one may spend a registration of the relay's daily limit.
     private var syncing = false
@@ -43,6 +64,7 @@ final class PushManager {
 
     /// At launch: APNs may hand out a new token, so ask for it every time.
     func launched() {
+        observeLiveActivities()
         Task {
             await refreshAuthorization()
             if wanted, authorization.allowsPush { UIApplication.shared.registerForRemoteNotifications() }
@@ -118,6 +140,68 @@ final class PushManager {
         }
     }
 
+    func setMuted(_ category: String, _ off: Bool) async {
+        if off { muted.insert(category) } else { muted.remove(category) }
+        await sendPrefs()
+    }
+
+    func setLive(_ on: Bool) async {
+        liveWanted = on
+        await sendPrefs()
+    }
+
+    /// Tells every paired server what this device wants now.
+    private func sendPrefs() async {
+        lastError = nil
+        for p in store.pairings {
+            guard let saved = servers.servers.first(where: { $0.id == p.savedServerId }),
+                  let t = servers.token(for: saved.id) else { continue }
+            do {
+                try await KinoraClient(server: saved, token: t).setPushPrefs(prefs)
+            } catch {
+                if saved.id == model?.server?.id { lastError = error.localizedDescription }
+            }
+        }
+    }
+
+    // MARK: - live activities
+
+    /// Hands the relay the tokens it needs to start and update request activities: the app-wide
+    /// push-to-start token, and each running activity's own token.
+    private func observeLiveActivities() {
+        if #available(iOS 17.2, *) {
+            Task {
+                for await data in Activity<RequestActivityAttributes>.pushToStartTokenUpdates {
+                    liveStartToken = data.map { String(format: "%02x", $0) }.joined()
+                    for p in store.pairings { await handInStartToken(p) }
+                }
+            }
+        }
+        Task {
+            for a in Activity<RequestActivityAttributes>.activities { watch(a) }
+            for await a in Activity<RequestActivityAttributes>.activityUpdates { watch(a) }
+        }
+    }
+
+    private func watch(_ activity: Activity<RequestActivityAttributes>) {
+        guard watchedActivities.insert(activity.id).inserted else { return }
+        let attrs = activity.attributes
+        Task {
+            for await data in activity.pushTokenUpdates {
+                guard let p = store.pairing(relayServer: attrs.s), let relay = PushRelay(p.relayUrl) else { continue }
+                try? await relay.liveToken(handle: p.handle, token: data.map { String(format: "%02x", $0) }.joined(), ref: attrs.ref)
+            }
+        }
+    }
+
+    private func handInStartToken(_ p: PushPairing) async {
+        guard let token = liveStartToken, p.liveStartToken != token, let relay = PushRelay(p.relayUrl) else { return }
+        do {
+            try await relay.liveToken(handle: p.handle, token: token)
+            store.setLiveStartToken(token, saved: p.savedServerId)
+        } catch {}
+    }
+
     // MARK: - pairing
 
     /// Pairs the current server when notifications are on, and drops leftovers when they are off.
@@ -157,6 +241,9 @@ final class PushManager {
                p.apnsToken == token, p.environment == env {
                 if st.paired == true, store.key(relayServer: relayServer) != nil {
                     if current { paired = true; lastError = nil }
+                    // Keeps the language and the choices fresh; an older server without the endpoint just says no.
+                    try? await client.setPushPrefs(prefs)
+                    await handInStartToken(p)
                     return
                 }
                 // The server forgot this device (a new session): the relay's handle still holds.
@@ -167,10 +254,11 @@ final class PushManager {
                                       handle: handle, apnsToken: token, environment: env)
             }
             let key = PushCrypto.newKey()
-            try await client.pairPush(handle: pairing.handle, key: key)
+            try await client.pairPush(handle: pairing.handle, key: key, prefs: prefs)
             pairing.updated = .now
             store.save(pairing, key: key)
             if current { paired = true; lastError = nil }
+            await handInStartToken(pairing)
         } catch {
             if current { paired = false; lastError = error.localizedDescription }
         }

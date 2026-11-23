@@ -59,3 +59,18 @@ struct PartyActivityAttributes: ActivityAttributes {
         var fraction: Double { duration > 0 ? min(1, max(0, position / duration)) : 0 }
     }
 }
+
+/// One requested title the server is fetching, started and driven by the server through push.
+/// The state is sealed with the pairing's key so the relay and Apple only see ciphertext; the
+/// widget opens it with the key in the shared keychain (`PushCrypto.liveState`).
+struct RequestActivityAttributes: ActivityAttributes {
+    /// The relay's id of the server, picks the key.
+    var s: String
+    /// The server's reference of the request.
+    var ref: String
+
+    struct ContentState: Codable, Hashable {
+        /// base64url(nonce || ciphertext || tag) of a `PushLiveState`.
+        var e: String
+    }
+}

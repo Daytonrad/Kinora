@@ -10,6 +10,7 @@ struct KinoraWidgets: WidgetBundle {
         SeriesWidget()
         DownloadsLiveActivity()
         PartyLiveActivity()
+        RequestLiveActivity()
     }
 }
 

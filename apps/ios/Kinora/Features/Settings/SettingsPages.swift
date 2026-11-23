@@ -337,9 +337,34 @@ struct NotificationSettingsView: View {
                     }
                 }
             } footer: {
-                Text(L("Értesítést kapsz, amikor egy általad kért film vagy sorozat elérhetővé válik. A szerver titkosítja az üzenetet; a közvetítő csak a titkosított változatot továbbítja."))
+                Text(L("A szerver titkosítja az üzeneteket, és a nyelvedre fordítja őket; a közvetítő csak a titkosított változatot továbbítja."))
             }
             .listRowBackground(Theme.panel)
+
+            if push.wanted, push.paired, let categories = push.status?.categories, !categories.isEmpty {
+                Section {
+                    ForEach(categories.filter { $0 != PushCategory.adminRequests || model.me?.user.isAdmin == true }, id: \.self) { cat in
+                        Toggle(isOn: Binding(get: { !push.muted.contains(cat) }, set: { on in
+                            Task { await push.setMuted(cat, !on) }
+                        })) {
+                            Label(Self.title(cat), systemImage: Self.icon(cat))
+                        }
+                    }
+                    Toggle(isOn: Binding(get: { push.liveWanted && push.liveAvailable }, set: { on in
+                        Task { await push.setLive(on) }
+                    })) {
+                        Label(L("Élő letöltés a zárolási képernyőn"), systemImage: "tray.and.arrow.down")
+                    }
+                    .disabled(!push.liveAvailable)
+                } header: {
+                    Text(L("Miről szóljon"))
+                } footer: {
+                    Text(push.liveAvailable
+                         ? L("Amíg a szerver letölti, amit kértél, a zárolási képernyőn és a Dynamic Islandben látod, hol tart.")
+                         : L("Az élő letöltéshez iOS 17.2 kell, és engedélyezni kell az élő tevékenységeket a Kinoránál."))
+                }
+                .listRowBackground(Theme.panel)
+            }
 
             if push.authorization == .denied {
                 Section {
@@ -380,6 +405,24 @@ struct NotificationSettingsView: View {
         .task {
             await push.refreshAuthorization()
             await push.syncCurrent()
+        }
+    }
+
+    static func title(_ category: String) -> String {
+        switch category {
+        case PushCategory.requests: L("Kéréseim")
+        case PushCategory.episodes: L("Új részek a követett sorozatokból")
+        case PushCategory.adminRequests: L("Új kérések (rendszergazda)")
+        default: category
+        }
+    }
+
+    static func icon(_ category: String) -> String {
+        switch category {
+        case PushCategory.requests: "film.stack"
+        case PushCategory.episodes: "sparkles.tv"
+        case PushCategory.adminRequests: "tray.full"
+        default: "bell"
         }
     }
 

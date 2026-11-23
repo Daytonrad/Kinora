@@ -16,22 +16,51 @@ public struct PushStatus: Codable, Sendable, Equatable {
     public var serverId: String?
     /// Whether this session's device is paired on the server.
     public var paired: Bool?
+    /// The notification categories this server sends (older servers: nil).
+    public var categories: [String]?
+    /// The categories this device turned off, and whether it shows live downloads (paired devices).
+    public var muted: [String]?
+    public var live: Bool?
 
-    public init(enabled: Bool, relayUrl: String? = nil, serverId: String? = nil, paired: Bool? = nil) {
+    public init(enabled: Bool, relayUrl: String? = nil, serverId: String? = nil, paired: Bool? = nil,
+                categories: [String]? = nil, muted: [String]? = nil, live: Bool? = nil) {
         self.enabled = enabled; self.relayUrl = relayUrl; self.serverId = serverId; self.paired = paired
+        self.categories = categories; self.muted = muted; self.live = live
     }
+}
+
+/// What a device wants from a server: the categories it turned off and whether it shows live
+/// downloads. The language goes in the X-Kinora-Lang header of every request.
+public struct PushPrefs: Codable, Sendable, Equatable {
+    public var muted: [String]
+    public var live: Bool
+    public init(muted: [String] = [], live: Bool = false) { self.muted = muted; self.live = live }
+}
+
+/// Notification categories of the server (internal/push).
+public enum PushCategory {
+    public static let requests = "requests"
+    public static let episodes = "episodes"
+    public static let adminRequests = "admin_requests"
 }
 
 struct PushPairBody: Codable, Sendable {
     var handle: String
     var key: String
+    var muted: [String]?
+    var live: Bool?
 }
 
 extension KinoraClient {
     public func pushStatus() async throws -> PushStatus { try await get("/api/push/ios") }
 
-    public func pairPush(handle: String, key: Data) async throws {
-        try await post("/api/push/ios", PushPairBody(handle: handle, key: key.base64URLEncoded))
+    public func pairPush(handle: String, key: Data, prefs: PushPrefs? = nil) async throws {
+        try await post("/api/push/ios", PushPairBody(handle: handle, key: key.base64URLEncoded, muted: prefs?.muted, live: prefs?.live))
+    }
+
+    /// Sends the device's categories (and, in the header, its language) to the server.
+    public func setPushPrefs(_ prefs: PushPrefs) async throws {
+        _ = try await patch("/api/push/ios", prefs, as: Empty.self)
     }
 
     public func unpairPush() async throws { try await delete("/api/push/ios") }
@@ -107,6 +136,14 @@ public struct PushRelay: Sendable {
         return try await send("POST", "/v1/devices", try Self.encoder.encode(r), as: Out.self).handle
     }
 
+    /// Hands in a Live Activity push token: the push-to-start token (no ref) or the token of a
+    /// running activity (its ref). A nil token with a ref forgets that activity.
+    public func liveToken(handle: String, token: String?, ref: String? = nil) async throws {
+        struct In: Encodable { var handle: String; var token: String?; var ref: String? }
+        struct Out: Decodable { var ok: Bool? }
+        _ = try await send("POST", "/v1/live/tokens", try Self.encoder.encode(In(handle: handle, token: token, ref: ref)), as: Out.self)
+    }
+
     private static let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.keyEncodingStrategy = .convertToSnakeCase
@@ -161,6 +198,40 @@ public struct PushMessage: Codable, Sendable, Equatable {
     }
 }
 
+/// A request being downloaded on the server, as its Live Activity shows it (sealed by the server).
+public struct PushLiveState: Codable, Sendable, Equatable {
+    public var v: Int
+    /// Title, in the device's metadata language.
+    public var t: String
+    /// movie | series
+    public var k: String
+    /// downloading | importing | available | failed | canceled
+    public var st: String
+    /// 0…1
+    public var p: Double
+    /// Seconds left from `at`; nil while unknown.
+    public var eta: Int64?
+    /// When the state was measured (unix).
+    public var at: Int64
+    public var item: Int64?
+
+    public init(v: Int = 1, t: String, k: String, st: String, p: Double, eta: Int64? = nil, at: Int64, item: Int64? = nil) {
+        self.v = v; self.t = t; self.k = k; self.st = st; self.p = p; self.eta = eta; self.at = at; self.item = item
+    }
+
+    public var measuredAt: Date { Date(timeIntervalSince1970: TimeInterval(at)) }
+    public var finishes: Date? { eta.flatMap { $0 > 0 ? measuredAt.addingTimeInterval(TimeInterval($0)) : nil } }
+    public var running: Bool { st == "downloading" || st == "importing" }
+
+    /// The span the progress bar runs over on its own, placed so it shows `p` at `at`.
+    public var timeline: ClosedRange<Date>? {
+        guard st == "downloading", let end = finishes, end > measuredAt, p < 1 else { return nil }
+        let f = min(max(p, 0), 0.99)
+        let start = measuredAt.addingTimeInterval(-end.timeIntervalSince(measuredAt) * f / (1 - f))
+        return start...end
+    }
+}
+
 public enum PushCrypto {
     /// A new AES-256 key for one server.
     public static func newKey() -> Data { SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) } }
@@ -173,6 +244,12 @@ public enum PushCrypto {
     public static func seal(_ plain: Data, key: Data) throws -> Data {
         guard let out = try AES.GCM.seal(plain, using: SymmetricKey(data: key)).combined else { throw CryptoKitError.incorrectParameterSize }
         return out
+    }
+
+    /// Decrypts and decodes the content state of a live download activity.
+    public static func liveState(_ e: String, key: Data) throws -> PushLiveState {
+        guard let sealed = Data(base64URLEncoded: e) else { throw CryptoKitError.incorrectParameterSize }
+        return try JSONDecoder().decode(PushLiveState.self, from: open(sealed, key: key))
     }
 
     /// Decrypts and decodes the `k` field of a notification.
@@ -195,6 +272,8 @@ public struct PushPairing: Codable, Sendable, Equatable {
     public var apnsToken: String
     public var environment: String
     public var updated: Date
+    /// The push-to-start token last handed in to the relay for this handle (live downloads).
+    public var liveStartToken: String?
 
     public init(savedServerId: String, relayUrl: String, relayServerId: String, handle: String,
                 apnsToken: String, environment: String, updated: Date = .now) {
@@ -234,6 +313,14 @@ public final class PushStore: @unchecked Sendable {
         keychain.write(key.base64EncodedString(), account: p.relayServerId)
         var list = pairings.filter { $0.savedServerId != p.savedServerId && $0.relayServerId != p.relayServerId }
         list.append(p)
+        defaults.set(try? JSONEncoder().encode(list), forKey: listKey)
+    }
+
+    /// Notes the push-to-start token the relay now has for a pairing.
+    public func setLiveStartToken(_ token: String?, saved id: String) {
+        var list = pairings
+        guard let i = list.firstIndex(where: { $0.savedServerId == id }) else { return }
+        list[i].liveStartToken = token
         defaults.set(try? JSONEncoder().encode(list), forKey: listKey)
     }
 

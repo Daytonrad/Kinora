@@ -247,3 +247,170 @@ struct PartyProgress: View {
         }
     }
 }
+
+// MARK: - requests (driven by the server through push)
+
+struct RequestLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: RequestActivityAttributes.self) { context in
+            let s = RequestLive.open(context)
+            RequestLockView(state: s, stale: context.isStale)
+                .padding(16)
+                .activityBackgroundTint(Palette.black.opacity(0.9))
+                .activitySystemActionForegroundColor(Palette.amber)
+                .widgetURL(RequestLive.link(s))
+        } dynamicIsland: { context in
+            let s = RequestLive.open(context)
+            let stale = context.isStale
+            return DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Image(systemName: RequestLive.icon(s))
+                        .font(.title2)
+                        .foregroundStyle(Palette.amber)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    RequestStatus(state: s, stale: stale)
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(Palette.bright)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(RequestLive.headline(s, stale: stale)).font(.subheadline.weight(.semibold))
+                        if let s {
+                            Text(s.t).font(.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                            if s.running { RequestProgress(state: s, stale: stale) }
+                        }
+                    }
+                }
+            } compactLeading: {
+                Image(systemName: "tray.and.arrow.down.fill").foregroundStyle(Palette.amber)
+            } compactTrailing: {
+                if let s, s.running {
+                    RequestProgress(state: s, stale: stale, circular: true)
+                } else {
+                    Image(systemName: RequestLive.icon(s)).foregroundStyle(Palette.amber)
+                }
+            } minimal: {
+                if let s, s.running {
+                    RequestProgress(state: s, stale: stale, circular: true)
+                } else {
+                    Image(systemName: RequestLive.icon(s)).foregroundStyle(Palette.amber)
+                }
+            }
+            .widgetURL(RequestLive.link(s))
+        }
+    }
+}
+
+enum RequestLive {
+    /// Opens the sealed state with the key the app keeps for that server; nil when it can't (unpaired since).
+    static func open(_ context: ActivityViewContext<RequestActivityAttributes>) -> PushLiveState? {
+        guard let key = PushStore.shared().key(relayServer: context.attributes.s) else { return nil }
+        return try? PushCrypto.liveState(context.state.e, key: key)
+    }
+
+    static func icon(_ s: PushLiveState?) -> String {
+        switch s?.st {
+        case "available": "checkmark.circle.fill"
+        case "failed", "canceled": "xmark.circle.fill"
+        case "importing": "gearshape.2.fill"
+        default: "tray.and.arrow.down.fill"
+        }
+    }
+
+    static func headline(_ s: PushLiveState?, stale: Bool) -> String {
+        guard let s else { return L("Kérés beszerzése") }
+        switch s.st {
+        case "available": return s.k == "series" ? L("Megérkezett a sorozat") : L("Megérkezett a film")
+        case "failed": return L("Nem sikerült beszerezni")
+        case "canceled": return L("A beszerzés leállt")
+        case "importing": return L("Hozzáadás a könyvtárhoz…")
+        default: return stale && s.finishes != nil ? L("Befejezés…") : L("Letöltés a szerverre")
+        }
+    }
+
+    static func link(_ s: PushLiveState?) -> URL? {
+        guard let s, s.st == "available", let item = s.item else { return nil }
+        return KinoraLink.item(Int(item)).url
+    }
+}
+
+struct RequestLockView: View {
+    var state: PushLiveState?
+    var stale = false
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: RequestLive.icon(state))
+                .font(.system(size: 34))
+                .foregroundStyle(Palette.amber)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(RequestLive.headline(state, stale: stale))
+                        .font(.headline)
+                        .foregroundStyle(Palette.bright)
+                    Spacer(minLength: 8)
+                    RequestStatus(state: state, stale: stale)
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(Palette.amber)
+                }
+                if let state {
+                    Text(state.t).font(.subheadline).foregroundStyle(Palette.plaster).lineLimit(1)
+                    if state.running {
+                        RequestProgress(state: state, stale: stale)
+                    } else if state.st == "available" {
+                        Text(L("Már nézheted.")).font(.caption).foregroundStyle(Palette.muted)
+                    }
+                } else {
+                    Text(L("Nyisd meg az appot a részletekért.")).font(.caption).foregroundStyle(Palette.muted)
+                }
+            }
+        }
+    }
+}
+
+/// Remaining time counting down on its own once the server knows the speed, the percentage until then.
+struct RequestStatus: View {
+    var state: PushLiveState?
+    var stale: Bool
+
+    var body: some View {
+        if let s = state, s.st == "downloading", !stale || s.finishes == nil {
+            if let eta = s.timeline?.upperBound, eta > .now {
+                HStack(spacing: 4) {
+                    Text(L("kb."))
+                    Text(timerInterval: Date.now...eta, countsDown: true)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 52, alignment: .trailing)
+                }
+            } else {
+                Text(min(max(s.p, 0), 1).formatted(.percent.precision(.fractionLength(0))))
+            }
+        } else {
+            EmptyView()
+        }
+    }
+}
+
+struct RequestProgress: View {
+    var state: PushLiveState
+    var stale: Bool
+    var circular = false
+
+    var body: some View {
+        Group {
+            if state.st == "importing" || stale && state.finishes != nil {
+                styled(ProgressView(value: 0.98))
+            } else if let span = state.timeline {
+                styled(ProgressView(timerInterval: span, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() })
+            } else {
+                styled(ProgressView(value: min(max(state.p, 0), 1)))
+            }
+        }
+        .tint(Palette.amber)
+    }
+
+    @ViewBuilder private func styled(_ view: some View) -> some View {
+        if circular { view.progressViewStyle(.circular) } else { view }
+    }
+}
