@@ -279,6 +279,7 @@ async function route() {
   if (state.status.setup_needed) { if (p0 !== 'setup') return go('#/setup'); return viewSetup(); }
   if (p0 === 'setup') return go('#/login');
   if (p0 === 'join' && p1) return viewJoin(p1);
+  if (p0 === 'setpw' && p1) return viewSetPassword(p1);
   if (!state.me) await loadMe();
   if (!state.me) {
     if (p0 !== 'login') { if (p0 === 'quickconnect') rememberAfter(location.hash); return go('#/login'); }
@@ -571,6 +572,33 @@ async function viewJoin(code) {
     await loadMe(); go('#/profiles');
   } }, field(T.username, user), field(T.password, pw), field(T.password2, pw2), h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.join));
   authPage(T.joinTitle, T.joinLede(info.server_name), form);
+}
+
+// a one-time link (Jellyfin import, or one an admin made) that sets an account's password and signs it in
+async function viewSetPassword(code) {
+  let info;
+  try { info = await GET('/api/password-links/' + encodeURIComponent(code), { quiet: true, noRedirect: true }); }
+  catch { return authPage(T.setPwTitle, T.setPwInvalid, h('a.btn', { href: '#/login' }, T.loginTitle)); }
+  const pw = h('input', { type: 'password', autocomplete: 'new-password' });
+  const pw2 = h('input', { type: 'password', autocomplete: 'new-password' });
+  const user = h('input', { type: 'text', autocomplete: 'username', value: info.username, readonly: true });
+  const form = h('form', { onsubmit: async e => {
+    e.preventDefault();
+    if (pw.value !== pw2.value) return toast(T.pwMismatch, true);
+    await POST('/api/password-links/' + encodeURIComponent(code), { password: pw.value }, { noRedirect: true });
+    state.me = null; await loadMe(); go('#/profiles');
+  } }, field(T.username, user), field(T.password, pw), field(T.password2, pw2), h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.setPwSave));
+  authPage(T.setPwTitle, T.setPwLede(info.username, info.server_name), form);
+}
+
+// the address of a password link, as the user will open it
+async function passwordLinkURL(code) {
+  const base = (await GET('/api/admin/settings')).values.public_url || location.origin;
+  return base + '/#/setpw/' + code;
+}
+function passwordLinkBox(url, expires) {
+  return h('div', null, h('p.muted.small', null, T.pwLinkHint, ' ', T.expires + ': ' + new Date(expires * 1000).toLocaleString(T.locale)),
+    qrImg(url), h('div.url-row', null, h('code.mono', null, url), h('button.btn', { onclick: () => copyText(url) }, T.copy)));
 }
 
 // ===================================================================== profiles
@@ -2132,10 +2160,10 @@ function partyClient(code, player, stage, p) {
 async function viewAdmin(tab) {
   if (!state.me.user.is_admin) return go('#/home');
   const main = shell('admin');
-  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['reports', T.aReports], ['languages', T.aLangs], ['settings', T.aSettings], ['acqrequests', T.aAcqRequests], ['acqqueue', T.aAcqQueue], ['acqsettings', T.aAcqSettings]];
+  const tabs = [['dash', T.aDash], ['libraries', T.aLibs], ['users', T.aUsers], ['invites', T.aInvites], ['transcode', T.aTranscode], ['metadata', T.aMeta], ['connect', T.aConnect], ['devices', T.aDevices], ['reports', T.aReports], ['languages', T.aLangs], ['settings', T.aSettings], ['import', T.aImport], ['acqrequests', T.aAcqRequests], ['acqqueue', T.aAcqQueue], ['acqsettings', T.aAcqSettings]];
   const label = Object.fromEntries(tabs);
-  const groups = [['library', T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], ['access', T.aGroupAccess, ['users', 'invites', 'devices', 'reports', 'connect']], ['acquire', T.aGroupAcquire, ['acqrequests', 'acqqueue', 'acqsettings']], ['system', T.aGroupSystem, ['languages', 'settings']]];
-  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, reports: adminReports, languages: adminLangs, settings: adminSettings, acqrequests: adminAcqRequests, acqqueue: adminAcqQueue, acqsettings: adminAcqSettings }[tab];
+  const groups = [['library', T.aGroupLibrary, ['dash', 'libraries', 'transcode', 'metadata']], ['access', T.aGroupAccess, ['users', 'invites', 'devices', 'reports', 'connect']], ['acquire', T.aGroupAcquire, ['acqrequests', 'acqqueue', 'acqsettings']], ['system', T.aGroupSystem, ['languages', 'settings', 'import']]];
+  const fn = { dash: adminDash, libraries: adminLibs, users: adminUsers, invites: adminInvites, transcode: adminTranscode, metadata: adminMeta, connect: adminConnect, devices: adminDevices, reports: adminReports, languages: adminLangs, settings: adminSettings, import: adminImport, acqrequests: adminAcqRequests, acqqueue: adminAcqQueue, acqsettings: adminAcqSettings }[tab];
   if (!fn) return go('#/admin/dash');
   const body = h('div.a-body', { 'aria-busy': 'true' }, aSkeleton());
   const cur = (groups.find(g => g[2].includes(tab)) || groups[0])[0];
@@ -2383,12 +2411,13 @@ async function adminUsers(body) {
       : h('span.badge.amber', null, T.aLibsNone);
   put(body, aHead(T.aUsers, T.aLedeUsers, h('button.btn.primary', { onclick: newUser }, icon('plus'), T.newUser)),
     aTable([T.aColUser, T.aColProfiles, T.aColRole, T.aColLibs, ''], users.map(u => h('tr', null,
-      tdl('', null, h('div.u-cell', null, h('span.u-ini', { 'aria-hidden': 'true' }, (u.username[0] || '?').toUpperCase()), h('b', null, u.username), u.id === me && h('span.muted', null, ' ' + T.you))),
+      tdl('', null, h('div.u-cell', null, h('span.u-ini', { 'aria-hidden': 'true' }, (u.username[0] || '?').toUpperCase()), h('b', null, u.username), u.id === me && h('span.muted', null, ' ' + T.you), u.needs_password && h('span.badge.amber', { title: T.needsPasswordHint }, T.needsPassword))),
       tdl('.muted', T.aColProfiles, T.profilesN(u.profiles)),
       tdl('', T.aColRole, u.is_admin ? h('span.badge.amber', null, T.isAdmin) : h('span.muted', null, T.aRoleUser)),
       tdl('', T.aColLibs, libText(u)),
       h('td.acts', null, h('div.row-gap', null,
         h('button.btn', { onclick: () => resetPw(u) }, T.resetPw),
+        u.id !== me && h('button.btn', { onclick: () => pwLink(u) }, T.pwLink),
         !u.is_admin && h('button.btn', { onclick: () => editLibs(u) }, T.aColLibs),
         u.id !== me && h('button.btn', { onclick: async () => { await api('PATCH', '/api/admin/users/' + u.id, { is_admin: !u.is_admin }); adminUsers(body); } }, u.is_admin ? T.revokeAdmin : T.grantAdmin),
         u.id !== me && h('button.btn.danger', { onclick: async () => { if (await confirmBox(T.confirmDelete(u.username))) { await api('DELETE', '/api/admin/users/' + u.id); adminUsers(body); } } }, T.delete))))), '.a-stack'));
@@ -2409,6 +2438,11 @@ async function adminUsers(body) {
         await api('PATCH', '/api/admin/users/' + u.id, { libraries: all.checked ? null : boxes.filter(([, b]) => b.checked).map(([l]) => l.id) });
         close(); adminUsers(body);
       } }, T.save)]);
+  }
+  async function pwLink(u) {
+    const r = await POST('/api/admin/users/' + u.id + '/password-link');
+    const url = await passwordLinkURL(r.code);
+    modal(T.pwLink + ': ' + u.username, passwordLinkBox(url, r.expires_at), close => [h('button.btn.primary', { onclick: close }, T.close)]);
   }
   function resetPw(u) {
     const pw = h('input', { type: 'password' });
@@ -2433,6 +2467,94 @@ async function adminInvites(body) {
     const note = h('input', { type: 'text', placeholder: T.egNote }), uses = h('input', { type: 'number', value: 1, min: 1, max: 100 }), hours = h('input', { type: 'number', value: 72, min: 0 });
     modal(T.newInvite, h('div', null, field(T.note, note), h('div.grid2', null, field(T.uses, uses), field(T.validHours, hours))), close => [h('button.btn', { onclick: close }, T.cancel),
       h('button.btn.primary', { onclick: async () => { await POST('/api/admin/invites', { note: note.value, uses: +uses.value, hours: +hours.value }); close(); adminInvites(body); } }, T.create)]);
+  }
+}
+
+// Admin → Import: Jellyfin users and watch state. Preview first (reads Jellyfin, writes nothing), then import.
+const IMPORT_FORM = 'kinora-jf-import'; // address and path maps are remembered in this browser; the key never is
+async function adminImport(body) {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(IMPORT_FORM) || '{}'); } catch { /* private mode */ }
+  const url = h('input', { type: 'url', placeholder: 'http://192.168.1.10:8096', value: saved.url || '', autocomplete: 'off' });
+  const key = h('input', { type: 'password', autocomplete: 'off', spellcheck: false });
+  const maps = h('textarea', { rows: 3, placeholder: '/data/movies => /media/movies', spellcheck: false }, saved.maps || '');
+  const out = h('div', { 'aria-live': 'polite' });
+  const go1 = h('button.btn.primary', { type: 'submit' }, T.importPreview);
+  const parseMaps = () => maps.value.split('\n').map(l => l.split('=>')).filter(p => p.length === 2 && p[0].trim() && p[1].trim())
+    .map(([from, to]) => ({ from: from.trim(), to: to.trim() }));
+  const form = h('form', { onsubmit: async e => {
+    e.preventDefault();
+    try { localStorage.setItem(IMPORT_FORM, JSON.stringify({ url: url.value, maps: maps.value })); } catch { /* ignore */ }
+    go1.disabled = true; put(out, h('p.muted', { role: 'status' }, T.importReading));
+    try {
+      const plan = await POST('/api/admin/import/jellyfin/preview', { url: url.value, api_key: key.value, path_maps: parseMaps() }, { quiet: true });
+      showPlan(plan);
+    } catch (err) {
+      const code = err.body && err.body.code;
+      put(out, h('div.a-error', { role: 'alert' }, h('p', null, (code && T.importErr[code]) || err.message), err.body && err.body.detail && h('p.muted.small', null, err.body.detail)));
+    } finally { go1.disabled = false; }
+  } },
+    field(T.importURL, url), field(T.importKey, key, T.importKeyHint), field(T.importMaps, maps, T.importMapsHint), h('div.row-gap', null, go1));
+  put(body, aHead(T.aImport, T.aLedeImport), aSplit(T.importJF, T.importJFHint, form), out);
+
+  const method = m => T.importMethod[m] || m;
+  const reason = r => T.importReason[r] || r;
+  const entryTitle = e => e.kind === 'episode'
+    ? `${e.series || ''} ${e.season != null && e.episode != null ? T.ep(e.season, e.episode) : ''} – ${e.title}`
+    : e.title + (e.year ? ` (${e.year})` : '');
+  const stateText = e => [e.played && T.importPlayed, e.position > 0 && !e.played && T.importResume(fmtTime(e.position)), e.favorite && T.importFav].filter(Boolean).join(', ');
+
+  function showPlan(plan) {
+    const picks = {};
+    const rows = plan.users.map(u => {
+      const box = h('input', { type: 'checkbox', checked: u.action !== 'skip', disabled: u.action === 'skip', 'aria-label': u.name });
+      picks[u.jellyfin_id] = box;
+      return h('tr', null,
+        h('td', null, box),
+        tdl('', T.importColJF, h('b', null, u.name), u.is_admin && h('span.muted.small', null, ' (' + T.isAdmin + ')')),
+        tdl('', T.importColKinora, T.importAction[u.action] ? T.importAction[u.action].replace('{0}', u.kinora_name) : u.action),
+        tdl('', T.importColMatched, String(u.matched)),
+        tdl('', T.importColUnmatched, u.unmatched ? h('span.badge.amber', null, String(u.unmatched)) : '0'));
+    });
+    const details = plan.users.filter(u => u.entries.length).map(u => h('details.a-sec', null,
+      h('summary', null, h('b', null, u.name), ' – ', T.importDetails(u.matched, u.unmatched)),
+      aTable([T.importColItem, T.importColState, T.importColResult], u.entries.slice(0, 500).map(e => h('tr', null,
+        tdl('', T.importColItem, entryTitle(e), e.path && h('div.muted.small.mono', null, e.path)),
+        tdl('.muted', T.importColState, stateText(e)),
+        tdl('', T.importColResult, e.match
+          ? h('span', null, '→ ', e.match.title, e.match.year ? ` (${e.match.year})` : '', h('span.muted.small', null, ' · ' + method(e.method)))
+          : h('span.badge.warn', null, reason(e.reason))))), '.a-stack'),
+      u.entries.length > 500 && h('p.muted.small', null, T.importMore(u.entries.length - 500))));
+    const apply = h('button.btn.primary', { onclick: async () => {
+      const users = Object.entries(picks).filter(([, b]) => b.checked && !b.disabled).map(([id]) => id);
+      if (!users.length) return toast(T.importNoneSelected, true);
+      if (!await confirmBox(T.importConfirm(users.length), T.importApply)) return;
+      apply.disabled = true;
+      try { await showReport(plan, await POST('/api/admin/import/jellyfin/apply', { plan_id: plan.id, users })); }
+      finally { apply.disabled = false; }
+    } }, T.importApply);
+    const csv = h('a.btn', { href: '/api/admin/import/jellyfin/' + plan.id + '/export.csv', download: '' }, T.importCSV);
+    const methods = Object.entries(plan.by_method || {}).map(([m, n]) => `${method(m)}: ${n}`).join(' · ');
+    put(out,
+      aSec(T.importPreviewTitle(plan.server_name, plan.version), T.importPreviewHint, h('div.row-gap', null, csv, apply),
+        h('p', null, T.importTotals(plan.matched, plan.unmatched)), methods && h('p.muted.small', null, methods),
+        aTable(['', T.importColJF, T.importColKinora, T.importColMatched, T.importColUnmatched], rows, '.a-stack')),
+      ...details);
+  }
+
+  async function showReport(plan, rep) {
+    const rows = await Promise.all(rep.users.map(async u => h('tr', null,
+      tdl('', T.importColJF, h('b', null, u.name)),
+      tdl('', T.importColKinora, u.kinora_name || '—', u.created && h('span.badge.amber', null, T.importNew)),
+      tdl('', T.importColChanged, String(u.changed)),
+      tdl('.muted', T.importColUnchanged, String(u.unchanged)),
+      tdl('', T.importColUnmatched, String(u.unmatched)),
+      tdl('', T.importColLink, u.error ? h('span.badge.warn', null, srv(u.error))
+        : u.password_code ? passwordLinkBox(await passwordLinkURL(u.password_code), u.password_expires) : h('span.muted', null, T.importHasPassword)))));
+    put(out, aSec(T.importDone(rep.changed), T.importDoneHint, h('div.row-gap', null,
+      h('a.btn', { href: '/api/admin/import/jellyfin/' + plan.id + '/export.csv', download: '' }, T.importCSV),
+      h('button.btn', { onclick: () => showPlan(plan) }, T.importBack)),
+    aTable([T.importColJF, T.importColKinora, T.importColChanged, T.importColUnchanged, T.importColUnmatched, T.importColLink], rows, '.a-stack')));
   }
 }
 
