@@ -1,0 +1,3 @@
+/* The push relay's placeholder alert, shown only when the notification extension cannot open the message. */
+"PUSH_FALLBACK_TITLE" = "Kinora";
+"PUSH_FALLBACK_BODY" = "Du hast eine neue Mitteilung. Öffne Kinora für Details.";

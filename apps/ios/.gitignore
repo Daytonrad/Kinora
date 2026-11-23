@@ -15,3 +15,5 @@ KinoraTV/Info.plist
 KinoraTV/KinoraTV.entitlements
 KinoraTopShelf/Info.plist
 KinoraTopShelf/KinoraTopShelf.entitlements
+KinoraNotifications/Info.plist
+KinoraNotifications/KinoraNotifications.entitlements

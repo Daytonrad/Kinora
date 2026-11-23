@@ -31,6 +31,7 @@ targets:
     dependencies:
       - package: KinoraKit
       - target: KinoraWidgets
+      - target: KinoraNotifications
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(KINORA_BUNDLE_ID)
@@ -49,6 +50,8 @@ targets:
         com.apple.developer.homekit: true
         # SharePlay: a watch party started from a FaceTime call.
         com.apple.developer.group-session: true
+        # Push through the relay (docs/PUSH_RELAY.md); exporting for the App Store turns it into production.
+        aps-environment: development
     info:
       path: Kinora/Info.plist
       properties:
@@ -123,6 +126,40 @@ targets:
         KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+  # Decrypts the push notifications the relay forwards and adds the poster.
+  KinoraNotifications:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KinoraNotifications
+    dependencies:
+      - package: KinoraKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(KINORA_BUNDLE_ID).notifications
+        PRODUCT_NAME: KinoraNotifications
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+    # The App Group carries the pairing keys and the login token (for the poster).
+    entitlements:
+      path: KinoraNotifications/KinoraNotifications.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(KINORA_BUNDLE_ID)]
+    info:
+      path: KinoraNotifications/Info.plist
+      properties:
+        CFBundleDisplayName: Kinora
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: hu
+        KinoraAppGroup: group.$(KINORA_BUNDLE_ID)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
   # Apple TV app. Same bundle ID as the iPhone app (universal purchase: one App Store

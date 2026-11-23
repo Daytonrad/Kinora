@@ -42,6 +42,9 @@ struct SettingsView: View {
                         SettingsRow(L("Bejelentkezett eszközök"), icon: "laptopcomputer.and.iphone",
                                     value: devices.map { "\($0.count)" })
                     }
+                    NavigationLink { NotificationSettingsView() } label: {
+                        SettingsRow(L("Értesítések"), icon: "bell.badge.fill")
+                    }
                     NavigationLink { HomeScenesView() } label: {
                         SettingsRow(L("Otthon-jelenetek"), icon: "lightbulb.max.fill")
                     }

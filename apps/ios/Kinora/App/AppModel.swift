@@ -20,7 +20,13 @@ final class AppModel {
     }
 
     private(set) var screen: Screen = .launching {
-        didSet { if screen == .home { syncOffline() } }
+        didSet {
+            guard screen == .home else { return }
+            syncOffline()
+            #if os(iOS)
+            if oldValue != .home { Task { await PushManager.shared.syncCurrent() } }
+            #endif
+        }
     }
     private(set) var servers: [SavedServer] = []
     private(set) var server: SavedServer?
@@ -174,6 +180,10 @@ final class AppModel {
     }
 
     func forget(_ saved: SavedServer) {
+        #if os(iOS)
+        let c = KinoraClient(server: saved, token: store.token(for: saved.id))
+        Task { await PushManager.shared.signedOut(saved, client: c) }
+        #endif
         store.remove(saved.id)
         servers = store.servers
         if server?.id == saved.id { server = nil; client = nil; me = nil }
@@ -322,6 +332,9 @@ final class AppModel {
         guard let server else { return }
         settingsVisible = false
         player?.close()
+        #if os(iOS)
+        await PushManager.shared.signedOut(server, client: client)
+        #endif
         await client?.logout()
         store.setToken(nil, for: server.id)
         await client?.setToken(nil)
@@ -546,6 +559,16 @@ final class AppModel {
         pendingLink = h.party.map(KinoraLink.party) ?? .play(h.itemId)
         pendingStart = h.party == nil ? h.position : nil
         goToServer(h.serverId, elsewhere: L("Ez a cím egy másik Kinora-szerveren megy, amelyre ezen az eszközön nem vagy bejelentkezve."))
+    }
+
+    /// A tapped notification: its title, on the server that sent it.
+    func openNotification(serverId: String?, url: URL) {
+        guard let link = KinoraLink(url: url) else { return }
+        pendingLink = link
+        pendingStart = nil
+        // Still starting up on that server: home picks the link up when it appears.
+        guard let serverId, screen != .launching || store.currentID != serverId else { return }
+        goToServer(serverId, elsewhere: L("Ez az értesítés egy másik Kinora-szerverről jött, amelyre ezen az eszközön nem vagy bejelentkezve."))
     }
 
     private func joinRoom(_ code: String, on serverId: String, elsewhere: String) {

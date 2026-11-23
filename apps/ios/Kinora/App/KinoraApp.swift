@@ -4,6 +4,7 @@ import KinoraKit
 
 @main
 struct KinoraApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel()
     @Environment(\.scenePhase) private var phase
 
@@ -18,6 +19,7 @@ struct KinoraApp: App {
                 .task {
                     _ = NetworkStatus.shared
                     IntentRouter.model = model
+                    PushManager.shared.model = model
                     SharePlay.shared.model = model
                     SharePlay.shared.listen()
                     HomeScenes.shared.warmUp()

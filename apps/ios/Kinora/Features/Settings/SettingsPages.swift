@@ -308,6 +308,87 @@ struct DownloadSettingsView: View {
     }
 }
 
+// MARK: - Értesítések
+
+struct NotificationSettingsView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
+    @State private var push = PushManager.shared
+    @State private var sent = false
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(isOn: Binding(get: { push.wanted }, set: { on in
+                    Task { on ? await push.enable() : await push.disable() }
+                })) {
+                    Label(L("Értesítések"), systemImage: "bell.badge")
+                }
+                .disabled(push.working)
+                if push.wanted {
+                    HStack {
+                        Text(L("Ezen a szerveren"))
+                        Spacer()
+                        if push.working {
+                            ProgressView()
+                        } else {
+                            Text(stateText).foregroundStyle(Theme.muted)
+                        }
+                    }
+                }
+            } footer: {
+                Text(L("Értesítést kapsz, amikor egy általad kért film vagy sorozat elérhetővé válik. A szerver titkosítja az üzenetet; a közvetítő csak a titkosított változatot továbbítja."))
+            }
+            .listRowBackground(Theme.panel)
+
+            if push.authorization == .denied {
+                Section {
+                    Button(L("iOS-beállítások megnyitása")) {
+                        if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                    }
+                } footer: {
+                    Text(L("Az értesítések le vannak tiltva. Engedélyezd őket az iOS Beállítások appban a Kinoránál."))
+                }
+                .listRowBackground(Theme.panel)
+            }
+
+            if push.wanted, push.paired {
+                Section {
+                    Button {
+                        Task {
+                            await push.test()
+                            sent = push.lastError == nil
+                        }
+                    } label: {
+                        Label(L("Teszt értesítés"), systemImage: "paperplane")
+                    }
+                    .disabled(push.working)
+                } footer: {
+                    if sent { Text(L("Elküldve. Pár másodpercen belül meg kell érkeznie.")) }
+                }
+                .listRowBackground(Theme.panel)
+            }
+
+            if let error = push.lastError {
+                Section {
+                    Text(error).foregroundStyle(Theme.danger)
+                }
+                .listRowBackground(Theme.panel)
+            }
+        }
+        .settingsPage(L("Értesítések"))
+        .task {
+            await push.refreshAuthorization()
+            await push.syncCurrent()
+        }
+    }
+
+    private var stateText: String {
+        if push.status?.enabled == false { return L("A rendszergazda nem kapcsolta be") }
+        return push.paired ? L("Bekapcsolva") : L("Nincs párosítva")
+    }
+}
+
 // MARK: - Bejelentkezett eszközök
 
 struct DevicesSettingsView: View {
