@@ -6,6 +6,34 @@ preconditions; **Medium** = a real bug or abuse path with a plausible trigger; *
 
 No High finding was confirmed. Several areas were checked and look sound; see "Checked, no finding" at the end.
 
+## Status after phase 1
+
+| Finding | Status | Change |
+|---|---|---|
+| M1 CSRF | fixed | `csrfGuard` drops the session cookie from state-changing requests marked `Sec-Fetch-Site: same-site/cross-site`; Bearer requests unaffected (`internal/server/cors.go`) |
+| M2 shared downloads | fixed | a job keeps every requesting user (`Job.Users`); the file stays shared |
+| M3 transcode limits | fixed | max. 8 sessions per account (the least recently used stops), optional server-wide cap `KINORA_MAX_TRANSCODES` (HTTP 503) |
+| M4 blocking queue | fixed | non-blocking enqueue (HTTP 429 when the queue is full), max. 10 pending downloads per user |
+| M5 newer database | fixed | refuses to start; `KINORA_ALLOW_NEWER_DB=1` overrides |
+| M6 panics | fixed | `internal/safe`: background loops restart with backoff; scanner files, indexer searches and metadata refreshes recover per item |
+| M7 error details | fixed | clients get a reference id, the log has the details |
+| L1 artwork without profile | fixed | the account's library restriction applies |
+| L2 folder removal | fixed | known sidecars (NFO, artwork) go with the film, unknown files and their folder stay |
+| L3 path mapping | fixed | a mapped path outside the local folder fails the import |
+| L4 retention | fixed | counted from `DoneAt` |
+| L5 kids subtitles | fixed | `notKids` on subtitle download/delete |
+| L6 first-run setup | open | to be documented in the install guides (phase 6/8) |
+| L7 DSN | fixed | `?`/`#` in the database path is refused with a clear message |
+
+Fuzzing (phase 1) found three more bugs, fixed with regression inputs under `testdata/fuzz/`:
+- `ParseFile`: "S01E07E01" was stored as the episode range 7–1;
+- `ReadNFO`: a negative `<tmdbid>` was accepted (now ignored); NFO files over 4 MB are no longer read into memory;
+- Cardigann `ParseSize`: a huge size ("9999999999999 PB") wrapped to a negative number, which passes every size limit.
+
+CI gap found while adding the problem media: the `test` job did not generate `testmedia/`, so every API test that
+needs the test library skipped itself in CI. The job now generates both libraries and fails when a test skips for
+missing media.
+
 ## Medium
 
 ### M1. CSRF from same-site origins with the session cookie
