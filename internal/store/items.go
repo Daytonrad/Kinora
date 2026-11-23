@@ -283,3 +283,15 @@ func (s *Store) fillGenresTags(items []*Item, p *Profile) {
 
 // FillGenresTags is the exported batch loader.
 func (s *Store) FillGenresTags(items []*Item, p *Profile) { s.fillGenresTags(items, p) }
+
+// CountItems counts what QueryItems would list for the same where (without paging); where may use the
+// aliases i (items), sr (the series of a season or episode) and ud (the profile's user data).
+func (s *Store) CountItems(p *Profile, where string, args []any) (int, error) {
+	rf, rargs := RatingSQL(p, "i")
+	q := `SELECT COUNT(*) FROM items i LEFT JOIN items sr ON sr.id=i.series_id AND i.kind IN ('season','episode')
+LEFT JOIN user_data ud ON ud.item_id=i.id AND ud.profile_id=? WHERE 1=1` + where + rf
+	all := append([]any{profileID(p)}, args...)
+	var n int
+	err := s.DB.QueryRow(q, append(all, rargs...)...).Scan(&n)
+	return n, err
+}
