@@ -81,7 +81,10 @@ func (s *Server) mediaSource(it *store.Item, c *reqCtx) map[string]any {
 	defAudio, defSub := -1, -1
 	for i, st := range jfStreams(it) {
 		m := map[string]any{"Index": i, "Codec": st.Codec, "IsDefault": st.Default, "IsForced": st.Forced, "IsExternal": st.External,
-			"IsInterlaced": false, "IsTextSubtitleStream": false, "SupportsExternalStream": false}
+			"IsInterlaced": false, "IsTextSubtitleStream": false, "SupportsExternalStream": false,
+			// Kinora does not track the hearing-impaired flag; a title saying SDH is the one hint it has.
+			// JellyCon reads this key without a default, so it is always sent.
+			"IsHearingImpaired": strings.Contains(strings.ToUpper(st.Title), "SDH")}
 		if st.Lang != "" {
 			m["Language"] = st.Lang
 		}
@@ -113,7 +116,12 @@ func (s *Server) mediaSource(it *store.Item, c *reqCtx) map[string]any {
 			m["SupportsExternalStream"] = st.TextBased
 			if st.TextBased {
 				m["DeliveryMethod"] = "External"
-				m["DeliveryUrl"] = s.subtitleURL(it, i, "vtt", c.Token)
+				// SubRip is delivered as SRT, the rest as WebVTT: JellyCon names the downloaded file after Codec
+				ext := "vtt"
+				if codec := strings.ToLower(st.Codec); codec == "subrip" || codec == "srt" {
+					ext = "srt"
+				}
+				m["DeliveryUrl"] = s.subtitleURL(it, i, ext, c.Token)
 			} else {
 				m["DeliveryMethod"] = "Embed"
 			}
@@ -232,6 +240,7 @@ type playSession struct {
 	Decision                  media.Decision
 	Start                     float64
 	Kinora                    string // the Kinora HLS session once started
+	Token                     string // the access token PlaybackInfo was asked with (see streamAuthed)
 	created                   time.Time
 }
 
@@ -347,8 +356,8 @@ func (s *Server) handlePlaybackInfo(w http.ResponseWriter, r *http.Request, c *r
 		src["DefaultAudioStreamIndex"] = jfIndexOf(it, "audio", d.AudioIdx)
 	}
 	playID := store.RandomToken(16)
+	s.plays.put(playID, &playSession{ItemID: it.ID, UserID: c.User.ID, ProfileID: c.Profile.ID, Decision: d, Start: req.Start, Token: c.Token})
 	if d.Mode != "direct" {
-		s.plays.put(playID, &playSession{ItemID: it.ID, UserID: c.User.ID, ProfileID: c.Profile.ID, Decision: d, Start: req.Start})
 		src["SupportsDirectPlay"], src["SupportsDirectStream"] = false, false
 		src["TranscodingUrl"] = fmt.Sprintf("/Videos/%s/master.m3u8?MediaSourceId=%s&PlaySessionId=%s&api_key=%s", s.itemID(it.ID), s.itemID(it.ID), playID, c.Token)
 		src["TranscodingSubProtocol"] = "hls"
@@ -468,7 +477,7 @@ func (s *Server) session(r *http.Request, c *reqCtx, it *store.Item) (*media.Ses
 		if playID == "" {
 			playID = store.RandomToken(16)
 		}
-		ps = &playSession{ItemID: it.ID, UserID: c.User.ID, ProfileID: c.Profile.ID, Decision: d, Start: req.Start}
+		ps = &playSession{ItemID: it.ID, UserID: c.User.ID, ProfileID: c.Profile.ID, Decision: d, Start: req.Start, Token: c.Token}
 		s.plays.put(playID, ps)
 	}
 	if ps.Kinora != "" {

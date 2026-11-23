@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 )
 
@@ -208,4 +209,56 @@ func (s *Store) Facets(p *Profile, libID int64) (genres, tags []Facet, err error
 	}
 	tags, err = q("item_tags", "tag")
 	return
+}
+
+// FacetsOf counts one facet — "genre", "tag" or "year" — over the items a profile may see: films and series, or
+// only the given kinds ("movie", "series"), optionally in one library. Genres and tags keep their stored value
+// (no translated label); years come in ascending order, the others by count.
+func (s *Store) FacetsOf(p *Profile, libID int64, kinds []string, facet string) ([]Facet, error) {
+	var sel, from, group, order string
+	switch facet {
+	case "genre":
+		sel, from, group, order = "x.genre", " JOIN item_genres x ON x.item_id=i.id", " GROUP BY x.genre COLLATE NOCASE", " ORDER BY COUNT(*) DESC, x.genre"
+	case "tag":
+		sel, from, group, order = "x.tag", " JOIN item_tags x ON x.item_id=i.id", " GROUP BY x.tag COLLATE NOCASE", " ORDER BY COUNT(*) DESC, x.tag"
+	case "year":
+		sel, from, group, order = "CAST(i.year AS TEXT)", "", " GROUP BY i.year", " ORDER BY i.year"
+	default:
+		return nil, fmt.Errorf("unknown facet %q", facet)
+	}
+	var ph []string
+	var args []any
+	for _, k := range kinds {
+		if k == "movie" || k == "series" {
+			ph = append(ph, "?")
+			args = append(args, k)
+		}
+	}
+	if len(ph) == 0 {
+		ph, args = []string{"?", "?"}, []any{"movie", "series"}
+	}
+	where := " WHERE i.kind IN (" + strings.Join(ph, ",") + ") AND i.missing=0"
+	if facet == "year" {
+		where += " AND i.year > 0"
+	}
+	if libID > 0 {
+		where += " AND i.library_id=?"
+		args = append(args, libID)
+	}
+	rf, rargs := RatingSQL(p, "i")
+	args = append(args, rargs...)
+	rows, err := s.DB.Query(`SELECT `+sel+`, COUNT(*) FROM items i`+from+where+rf+NotAltVersion+group+order, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Facet{}
+	for rows.Next() {
+		var f Facet
+		if err := rows.Scan(&f.Value, &f.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
 }

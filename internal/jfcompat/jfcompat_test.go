@@ -320,6 +320,8 @@ func TestPlaybackAndState(t *testing.T) {
 				IsExternal           bool
 				IsTextSubtitleStream bool
 				DeliveryUrl          string
+				Codec                string
+				IsHearingImpaired    *bool // JellyCon reads it without a default: it must always be there
 			}
 		}
 		PlaySessionId string
@@ -330,8 +332,16 @@ func TestPlaybackAndState(t *testing.T) {
 	}
 	var sub string
 	for _, ms := range pi.MediaSources[0].MediaStreams {
+		if ms.IsHearingImpaired == nil {
+			t.Fatalf("stream %d without IsHearingImpaired", ms.Index)
+		}
 		if ms.Type == "Subtitle" && ms.IsTextSubtitleStream {
 			sub = ms.DeliveryUrl
+			// SubRip goes out as SRT (JellyCon names the saved file after the codec), the rest as WebVTT
+			if want := map[bool]string{true: "Stream.srt?", false: "Stream.vtt?"}[ms.Codec == "subrip"]; !strings.Contains(sub, want) {
+				t.Fatalf("delivery URL of a %s subtitle: %s", ms.Codec, sub)
+			}
+			sub = strings.Replace(sub, "Stream.srt?", "Stream.vtt?", 1)
 		}
 	}
 	if sub == "" {
