@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Biztonsági hiba / Security vulnerability
+    url: https://github.com/ScotyLucas/Kinora/security/advisories/new
+    about: Privát bejelentés, nem nyilvános issue. / Report privately, not in a public issue.

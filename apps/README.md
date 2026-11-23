@@ -134,5 +134,7 @@ HLS: a webkliens hls.js-t használ, ahol van MediaSource (TV-k, Android), iOS-en
 
 ## Tudatosan későbbre hagyva (v2)
 
-- **Offline letöltés az Android appban:** a szerver már készít átkódolt letöltéseket (`/api/downloads`), a natív tárolás a következő kör.
+- **Offline letöltés az Android appban:** a webkliens app-módban a letöltést a rendszer DownloadManagerének adja át
+  (`window.KinoraOffline`, `KinoraOffline.java`), az indító pedig szerver nélkül is lejátssza az utolsó profil letöltéseit.
+  Felépítés, profilszabályok, biztonság és a kipróbálási lista: [docs/OFFLINE.md](../docs/OFFLINE.md).
 - Chromecast vezérlés. (AirPlay és kép a képben az iOS appban van.)

@@ -1,0 +1,28 @@
+name: Ötlet / Feature request
+description: Új funkció vagy változtatás javaslata. / Suggest a new feature or a change.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Milyen problémát oldana meg? / What problem would it solve?
+      description: Mit szeretnél elérni, és mi nehéz most? / What do you want to do, and what makes it hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Javaslat / Proposal
+      description: Hogyan működhetne? Más szoftverből is hozhatsz példát. / How could it work? Examples from other software are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Megfontolt alternatívák / Alternatives considered
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Közreműködés / Contributing
+      options:
+        - label: Szívesen megcsinálnám én (lásd CONTRIBUTING.md). / I'd like to work on this myself (see CONTRIBUTING.md).

@@ -44,7 +44,11 @@ docker compose up -d
 ```
 
 Ezután nyisd meg: `http://<szerver-ip>:8096`. Az első indításkor egy varázsló kéri a szerver nevét és az admin fiókot,
-majd az **Admin → Könyvtárak** oldalon add hozzá a `/media/movies` és `/media/shows` mappát (a mappaválasztó eleve a `/media` mappában nyílik meg).
+majd végigvezet a médiamappákon (a mappaválasztó eleve a `/media` mappában nyílik meg, add hozzá a `/media/movies` és `/media/shows`
+mappát), a TMDB-kulcson, a hardveres gyorsítás tesztjén, a letöltőkliensen és az indexeren, végül a távoli elérésen. Minden lépés
+kihagyható, és később pótolható az Admin oldalon; a varázsló az **Admin → Beállítások** oldalról újra megnyitható.
+Az admin fiókot az hozza létre, aki elsőként megnyitja a szervert, ezért a beállítást azelőtt végezd el, hogy a szervert kívülről
+elérhetővé tennéd.
 
 | Mappa a konténerben | Mire való | Mentsd? |
 |---|---|---|
@@ -156,27 +160,42 @@ go build -o kinora ./cmd/kinora
 ./kinora --data ./data          # http://localhost:8096
 ```
 
-## Miért jobb, mint a Jellyfin
+## Miben más a Kinora
 
-| Jellyfin-panasz | A Kinora megoldása |
+A Jellyfin kiforrott, széles körben használt médiaszerver, és sok mindent tud, amiről ez a táblázat nem szól (többek
+között Quick Connect, szülői felügyelet, következő epizód ajánlása, rengeteg kliens és plugin). A táblázat azt írja le,
+amit a Kinora másképp csinál, vagy amit egy konténerben, beépítve ad.
+
+| Terület | Mit csinál a Kinora |
 |---|---|
-| Nagy könyvtárnál lassú a szkennelés, és közben belassul a felület | Inkrementális szkenner: egy változatlan fájl egyetlen `stat()`; ffprobe csak az új vagy változott fájlokra fut, legfeljebb 6 szálon; SQLite WAL mód és rövid tranzakciók, így böngészés közben semmi nem blokkol. A második szkennelés a tesztkönyvtáron kb. 200 ms. |
-| Átnevezés vagy áthelyezés után elveszik a megnézett állapot | Áthelyezés-felismerés: egy eltűnt fájl és egy új, azonos méretű fájl ugyanaz az elem, így megmarad az azonosítója és a megnézett állapota is. |
-| SMB/NFS kiesésekor eltűnik a könyvtár | Ha a gyökérmappa nem érhető el, vagy hirtelen üres lett, a szkennelés leáll és nem nyúl semmihez. Egy eltűnt fájl csak `missing` jelölést kap, nem törlődik. |
-| „Rejtélyes” transzkóder-hibák | Valódi encoder-önteszt, valamint a lejátszóban egy „Miért így megy?” panel: magyar nyelvű indokok (pl. „a böngésző nem tudja lejátszani a(z) hevc videót”), a használt encoder, a forrás és a böngésző képességei. Hiba esetén az ffmpeg utolsó hibasora jelenik meg. |
-| Nincs átkódolt letöltés offline nézéshez | Letöltés 1080p/720p/480p/360p minőségben vagy eredeti fájlként, a háttérben, előrehaladás-jelzéssel. Faststart MP4, 7 napig marad meg. |
-| A SyncPlay akadozik | Watch party szerver oldali órával: NTP-szerű óraszinkron, kis eltérésnél `playbackRate` 0,95/1,05, nagy eltérésnél ugrás. Ha valaki pufferel, mindenki megvárja, de legfeljebb 12 másodpercig. Van chat és emoji-reakciók is. |
-| Nincs saját címke, gyűjtemény, értelmes szűrés | Saját címkék, kézi gyűjtemények sorrenddel, szabályalapú smart gyűjtemények (18 mező, all/any), összetett szűrés és rendezés. A részletes oldalon látszik, mely gyűjteményekben szerepel az elem. |
-| Smart lista csak pluginnel | Beépített szabálymotor, a szerkesztőben élő előnézettel; a gyűjtemények a kezdőlapra is kitűzhetők. |
-| Nincs „Mert megnézted…” | Teljesen helyi, magyarázható ajánló: „Neked ajánljuk” („mert szereted: Sci-Fi, Drama”), „Mert megnézted: X”, „Rejtett kincsek”, valamint „Hasonló” sor a részletes oldalon. |
-| Egy sorozatot csak megnézettnek jelölve lehet eltüntetni a Next Up-ból | Elrejtés megnézettnek jelölés nélkül. Ha újra elkezded nézni, magától visszakerül. |
-| Nincsenek igazi profilok és gyerekmód | Fiókonként 8 profil, opcionális PIN, gyerekprofil korhatár-szinttel. A szűrés **minden** végponton érvényes: listában, részleteken, keresésben, ajánlóban, streamen, feliratnál, letöltésnél, képeknél és a watch partyban. |
-| Bonyolult felhasználófelvétel | Meghívólink felhasználásszámmal és lejárattal, QR-kóddal. |
-| Bonyolult távoli elérés | „Csatlakozás” oldal: az összes LAN- és Tailscale-cím QR-kóddal, valamint útmutató Tailscale-hez, Cloudflare Tunnelhez és reverse proxyhoz. |
-| A feliratlista tele van felesleges nyelvekkel | Profilonként felirat- és hangsávnyelv-prioritás; a menü alapból csak ezeket mutatja, az „Összes nyelv mutatása” kapcsolóval jön a többi. |
-| Nincs „Következő rész” felugró | A stáblista kezdetét fejezetcímekből ismeri fel (credits, stáblista, end titles…), ennek híján az utolsó 30 másodpercben jelez. Visszaszámlálással indítja a következő részt. |
-| A magyar `.srt` ékezetei elromlanak | A nem UTF-8 külső feliratot CP1250-ként olvassa be („Árvíztűrő tükörfúrógép” helyesen jelenik meg). |
-| Gyenge mentés | Egy kattintásos, konzisztens adatbázis-mentés (`VACUUM INTO`) futás közben is. |
+| Kérések és letöltés egy konténerben | Beépített beszerzés: a felhasználók filmet és sorozatot kérhetnek, az admin jóváhagyja, a letöltőkliens (qBittorrent, Transmission, Deluge, SABnzbd, NZBGet) letölti, a Kinora beimportálja. Indexer: Torznab/Newznab vagy a beépített motor a Prowlarr közösségi leíróival. Ehhez nem kell külön Radarr, Sonarr, Prowlarr és Jellyseerr ([részletek](#beépített-beszerzés-radarrprowlarrjellyseerr-helyett)). |
+| Váltás más szerverről | Import Jellyfinből (felhasználók, megnézett állapot, folytatási pozíció, kedvencek) és Sonarrból, Radarrból, Prowlarrból (figyelt címek, minőségprofilok, indexerek, letöltőkliensek). Mindegyik előnézettel indul, csak jóváhagyás után ír, és újrafuttatva nem duplikál ([docs/IMPORT.md](docs/IMPORT.md)). |
+| Meglévő Jellyfin-kliensek | Opcionális Jellyfin-kompatibilis API külön porton, a Kinora jogosultságaival (gyerekprofil, könyvtár-korlátozás). A Kodi + JellyCon kipróbálva; mi működik és mi nem: [docs/JELLYFIN_COMPAT.md](docs/JELLYFIN_COMPAT.md). |
+| Mérések | Kinora és Jellyfin egymás mellett, ugyanazon a generált könyvtáron, ugyanazokkal a korlátokkal: szkennelés, RAM/CPU, API-válaszidő, lejátszás indulása. Az eredmények – ahol a Kinora rosszabb, ott is: [docs/BENCHMARKS.md](docs/BENCHMARKS.md); a mérés megismételhető: `scripts/bench/`. |
+| Szkennelés | Inkrementális: egy változatlan fájl egyetlen `stat()`, az ffprobe csak az új vagy változott fájlokra fut. Áthelyezés-felismerés (azonos méretű fájl = ugyanaz az elem, megmarad a megnézett állapot). Ha a gyökérmappa nem érhető el vagy hirtelen üres, a szkennelés nem nyúl a könyvtárhoz; az eltűnt fájl csak `missing` jelölést kap. |
+| Profilok | Egy fiókon belül legfeljebb 8 profil, opcionális PIN, gyerekprofil korhatár-szinttel. A korlátozás minden végponton érvényes (lista, keresés, ajánló, stream, felirat, letöltés, képek, watch party), offline az appokban is. |
+| Átlátható átkódolás | Encoder-önteszt, és a lejátszóban egy „Miért így megy?” panel: az okok közérthetően, a választott encoder, a forrás és az eszköz képességei, hiba esetén az ffmpeg utolsó hibasora. |
+| Watch party | Szerveroldali óra: kis eltérésnél `playbackRate` 0,95/1,05, nagynál ugrás; ha valaki pufferel, a többiek legfeljebb 12 másodpercig várnak. Chat, reakciók, jelentés és tiltás. |
+| Ajánlások és gyűjtemények | Helyben számolt, magyarázott ajánlósorok („mert szereted: Sci-Fi”, „Mert megnézted: X”); saját címkék, kézi és szabályalapú gyűjtemények élő előnézettel. Egy sorozat elrejthető a folytatási sorból megnézettnek jelölés nélkül. |
+| Offline letöltés | Átkódolt letöltés 1080p–360p minőségben vagy eredeti fájlként; az iOS- és az Android-app a háttérben letölti és szerver nélkül is lejátssza; az Android-rész új, készüléken még nincs kipróbálva ([docs/OFFLINE.md](docs/OFFLINE.md)). |
+| Magyar felhasználóknak | Magyar, angol és német felület; a nem UTF-8 magyar `.srt` CP1250-ként olvasva helyes ékezetekkel jelenik meg; profilonkénti felirat- és hangnyelv-sorrend. |
+| Üzemeltetés | Egyetlen Go-bináris és SQLite; első indítási varázsló (médiamappák, TMDB, hardveres gyorsítás, letöltés, távoli elérés); egy kattintásos, futás közben is konzisztens adatbázis-mentés; meghívólinkek QR-kóddal. |
+
+### Mérések: Kinora és Jellyfin
+
+Egy laptopon (Intel Core i5-1235U, Docker Desktop), ugyanazon a 4 CPU-n és 4 GB-os korláttal, ugyanazon a generált,
+10 002 videós könyvtáron, Jellyfin 12.4.0-val, internetes metaadat nélkül
+([részletek, módszer és korlátok](docs/BENCHMARKS.md); megismételhető: `scripts/bench/`).
+
+| | Kinora | Jellyfin |
+|---|---|---|
+| Első szkennelés (3 futás mediánja) | **565 s** | 846 s |
+| Újraszkennelés változás nélkül | **0,3 s** | 21,8 s |
+| RAM üresjáratban / terhelés alatt | **103 / 167 MiB** | 472 / 488 MiB |
+| Főoldal / könyvtároldal / keresés (p50) | **30 / 7 / 10 ms** | 127 / 60 / 86 ms |
+| 16 párhuzamos kliens | **162 művelet/s** | 17 művelet/s |
+| Lejátszás indulása: direct play / átkódolás (p50) | **5 ms / 2,0 s** | 75 ms / 3,0 s |
+| CPU üresjáratban | 0,4% | **0,1%** |
 
 ## Mappastruktúra
 
