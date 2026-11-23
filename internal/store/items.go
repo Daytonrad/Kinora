@@ -94,8 +94,8 @@ const itemSelect = `SELECT i.id,i.library_id,i.kind,i.parent_id,i.series_id,` + 
  i.width,i.height,i.bitrate,i.hdr,i.credits_start,i.tmdb_id,i.imdb_id,i.has_poster,i.has_backdrop,i.missing,i.added_at,i.updated_at,
  COALESCE(NULLIF(srt.title,''),sr.title,''),
  COALESCE(ud.position,0),COALESCE(ud.played,0),COALESCE(ud.play_count,0),ud.last_played_at,COALESCE(ud.favorite,0),ud.stars,COALESCE(ud.hidden,0),
- CASE WHEN i.kind IN ('series','season') THEN (SELECT COUNT(DISTINCT `+episodeIdent+`) FROM items e WHERE e.kind='episode' AND e.missing=0 AND (e.series_id=i.id OR e.parent_id=i.id) AND COALESCE(e.season_num,1)<>0) ELSE 0 END,
- CASE WHEN i.kind IN ('series','season') THEN (SELECT COUNT(DISTINCT `+episodeIdent+`) FROM items e LEFT JOIN user_data eu ON eu.item_id=e.id AND eu.profile_id=?
+ CASE WHEN i.kind IN ('series','season') THEN (SELECT COUNT(DISTINCT ` + episodeIdent + `) FROM items e WHERE e.kind='episode' AND e.missing=0 AND (e.series_id=i.id OR e.parent_id=i.id) AND COALESCE(e.season_num,1)<>0) ELSE 0 END,
+ CASE WHEN i.kind IN ('series','season') THEN (SELECT COUNT(DISTINCT ` + episodeIdent + `) FROM items e LEFT JOIN user_data eu ON eu.item_id=e.id AND eu.profile_id=?
    WHERE e.kind='episode' AND e.missing=0 AND (e.series_id=i.id OR e.parent_id=i.id) AND COALESCE(e.season_num,1)<>0 AND COALESCE(eu.played,0)=0) ELSE 0 END,
  CASE WHEN i.kind='movie' AND i.imdb_id<>'' THEN (SELECT COUNT(*) FROM items v WHERE v.imdb_id=i.imdb_id AND v.kind='movie' AND v.missing=0) ELSE 0 END
 FROM items i

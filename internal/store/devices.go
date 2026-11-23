@@ -160,7 +160,9 @@ func (s *Store) queryDevices(where string, args ...any) ([]Device, error) {
 }
 
 // Devices lists the sessions of one account.
-func (s *Store) Devices(userID int64) ([]Device, error) { return s.queryDevices(`AND s.user_id=?`, userID) }
+func (s *Store) Devices(userID int64) ([]Device, error) {
+	return s.queryDevices(`AND s.user_id=?`, userID)
+}
 
 // AllDevices lists every session (admin).
 func (s *Store) AllDevices() ([]Device, error) { return s.queryDevices(``) }

@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/cookiejar"

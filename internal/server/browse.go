@@ -12,13 +12,13 @@ import (
 // ------------------------------------------------------------------ home
 
 type homeRow struct {
-	ID     string        `json:"id"`
-	Title  string        `json:"title"`
-	Style  string        `json:"style"` // landscape | poster
-	Items  []*store.Item `json:"items"`
-	More   string        `json:"more,omitempty"`
+	ID     string           `json:"id"`
+	Title  string           `json:"title"`
+	Style  string           `json:"style"` // landscape | poster
+	Items  []*store.Item    `json:"items"`
+	More   string           `json:"more,omitempty"`
 	Reason map[int64]string `json:"reasons,omitempty"`
-	HideAs string        `json:"hide_as,omitempty"` // "series": hiding hides the whole series
+	HideAs string           `json:"hide_as,omitempty"` // "series": hiding hides the whole series
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request, c *reqCtx) {
