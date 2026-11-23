@@ -30,8 +30,66 @@ jobs:
           go-version: "1.27"
       - name: ffmpeg (tests that probe media)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      # without the generated libraries the API, playback and scanner tests skip themselves
+      - name: test media cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            testmedia
+            testmedia-problem
+          key: testmedia-all-${{ hashFiles('scripts/mkmedia.sh', 'scripts/gen-testmedia.sh') }}
+      - name: test media
+        run: |
+          [ -f testmedia/.complete ] || bash scripts/mkmedia.sh testmedia
+          [ -f testmedia-problem/.complete ] || bash scripts/gen-testmedia.sh testmedia-problem
       - run: go vet ./...
-      - run: go test -race -count=1 ./...
+      - name: go test (no test may skip for missing media)
+        run: |
+          go test -race -count=1 -v ./... > test.log 2>&1 || { grep -E '^(--- FAIL|FAIL|panic)' -A20 test.log; tail -50 test.log; exit 1; }
+          grep -E '^(ok|FAIL|---)' test.log | grep -v -- '--- PASS' || true
+          if grep -q 'media missing' test.log; then
+            echo "tests skipped because test media is missing:"; grep -B1 'media missing' test.log; exit 1
+          fi
+
+  # static analysis and known vulnerabilities in the dependencies and the standard library
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+
+  # a short run of every fuzz target on top of the seed corpus (which the test job already replays);
+  # longer runs: scripts/fuzz.sh
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+      - run: FUZZTIME=15s bash scripts/fuzz.sh
+
+  # the shared app UI's unit tests on every push (apps.yml builds the clients only when apps/ changes)
+  shared:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: apps
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/package-lock.json
+      - run: npm ci
+      - run: npm test
 
   smoke:
     runs-on: ubuntu-24.04
@@ -62,7 +120,7 @@ jobs:
   # One native build per architecture and variant (no QEMU: cgo/sqlite builds natively on the arm runner),
   # pushed by digest and stitched into multi-arch manifests by the merge job.
   build:
-    needs: [test, smoke]
+    needs: [test, lint, fuzz, shared, smoke]
     if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
