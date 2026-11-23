@@ -18,9 +18,13 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 ARG VERSION=dev
+# SQLite without its global memory-statistics mutex: with it, every allocation of every connection takes one lock
+# and concurrent requests serialise (scripts/bench measured ~2.7× more search requests/s on 4 CPUs without it).
+# Kinora never reads SQLite's memory statistics. "-O2 -g" is Go's default, which CGO_CFLAGS replaces.
+ARG CGO_CFLAGS_SQLITE="-O2 -g -DSQLITE_DEFAULT_MEMSTATUS=0"
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 go build -trimpath \
+    CGO_ENABLED=1 CGO_CFLAGS="${CGO_CFLAGS_SQLITE}" go build -trimpath \
       -ldflags "-s -w -X github.com/ScotyLucas/kinora/internal/server.Version=${VERSION}" \
       -o /out/kinora ./cmd/kinora
 

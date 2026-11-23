@@ -14,5 +14,5 @@ tty=""
 MSYS_NO_PATHCONV=1 exec docker run --rm $tty \
     -v "$src":/src -w /src \
     -v kinora-gomod:/go/pkg/mod -v kinora-gocache:/root/.cache/go-build \
-    -e CGO_ENABLED=1 -e GOFLAGS=-buildvcs=false \
+    -e CGO_ENABLED=1 -e GOFLAGS=-buildvcs=false -e CGO_CFLAGS="-O2 -g -DSQLITE_DEFAULT_MEMSTATUS=0" \
     "$img" "$@"
