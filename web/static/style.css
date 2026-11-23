@@ -605,6 +605,8 @@ pre.code { background: var(--g1); border-left: var(--hair) solid var(--rule-hi);
 .u-ini { display: inline-grid; place-items: center; width: calc(var(--hit) - var(--s3)); height: calc(var(--hit) - var(--s3)); border-radius: var(--round); background: var(--g3); color: var(--t0); font-weight: 700; margin-right: var(--s3); vertical-align: middle; flex: none; }
 .u-cell { display: flex; align-items: center; }
 .u-cell .badge { margin-left: 8px; white-space: nowrap; }
+.arr-sum { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; cursor: pointer; padding: 6px 0; }
+.arr-sum input { margin: 0; }
 /* admin: page frame (head, sections, split settings rows, states) */
 .a-body { min-width: 0; max-width: 72rem; }
 .a-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s3) var(--s5); flex-wrap: wrap; padding-bottom: var(--s5); margin-bottom: var(--s5); border-bottom: var(--hair) solid var(--rule); }

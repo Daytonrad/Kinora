@@ -2495,7 +2495,7 @@ async function adminImport(body) {
     } finally { go1.disabled = false; }
   } },
     field(T.importURL, url), field(T.importKey, key, T.importKeyHint), field(T.importMaps, maps, T.importMapsHint), h('div.row-gap', null, go1));
-  put(body, aHead(T.aImport, T.aLedeImport), aSplit(T.importJF, T.importJFHint, form), out);
+  put(body, aHead(T.aImport, T.aLedeImport), aSplit(T.importJF, T.importJFHint, form), out, ...arrImportSection());
 
   const method = m => T.importMethod[m] || m;
   const reason = r => T.importReason[r] || r;
@@ -2556,6 +2556,101 @@ async function adminImport(body) {
       h('button.btn', { onclick: () => showPlan(plan) }, T.importBack)),
     aTable([T.importColJF, T.importColKinora, T.importColChanged, T.importColUnchanged, T.importColUnmatched, T.importColLink], rows, '.a-stack')));
   }
+}
+
+// Sonarr / Radarr / Prowlarr: followed series and wanted films, quality profiles, indexers, clients, root folders
+const ARR_FORM = 'kinora-arr-import';
+function arrImportSection() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(ARR_FORM) || '{}'); } catch { /* private mode */ }
+  const app = h('select', null, [['sonarr', 'Sonarr'], ['radarr', 'Radarr'], ['prowlarr', 'Prowlarr']].map(([v, l]) => h('option', { value: v, selected: saved.app === v }, l)));
+  const url = h('input', { type: 'url', placeholder: 'http://192.168.1.10:8989', value: saved.url || '', autocomplete: 'off' });
+  const key = h('input', { type: 'password', autocomplete: 'off', spellcheck: false });
+  const maps = h('textarea', { rows: 3, placeholder: '/tv => /media/shows', spellcheck: false }, saved.maps || '');
+  const out = h('div', { 'aria-live': 'polite' });
+  const go1 = h('button.btn.primary', { type: 'submit' }, T.importPreview);
+  const parseMaps = () => maps.value.split('\n').map(l => l.split('=>')).filter(p => p.length === 2 && p[0].trim() && p[1].trim())
+    .map(([from, to]) => ({ from: from.trim(), to: to.trim() }));
+  const form = h('form', { onsubmit: async e => {
+    e.preventDefault();
+    try { localStorage.setItem(ARR_FORM, JSON.stringify({ app: app.value, url: url.value, maps: maps.value })); } catch { /* ignore */ }
+    go1.disabled = true; put(out, h('p.muted', { role: 'status' }, T.importReading));
+    try { showPlan(await POST('/api/admin/import/arr/preview', { app: app.value, url: url.value, api_key: key.value, path_maps: parseMaps() }, { quiet: true })); }
+    catch (err) {
+      const code = err.body && err.body.code;
+      put(out, h('div.a-error', { role: 'alert' }, h('p', null, (code && T.arrErr[code]) || err.message), err.body && err.body.detail && h('p.muted.small', null, err.body.detail)));
+    } finally { go1.disabled = false; }
+  } }, field(T.arrApp, app), field(T.arrURL, url), field(T.importKey, key, T.importKeyHint), field(T.importMaps, maps, T.arrMapsHint), h('div.row-gap', null, go1));
+
+  const act = (a, reason) => h('span' + (a === 'skip' ? '.badge.warn' : a === 'create' || a === 'request' || a === 'follow' ? '.badge.amber' : '.muted'), null,
+    (T.arrAction[a] || a) + (reason ? ' – ' + (T.arrReason[reason] || reason) : ''));
+  const notes = n => (n || []).map(x => h('div.muted.small', null, T.arrNote[x] || x));
+  const res = r => r === 0 ? T.arrResUnknown : r + 'p';
+
+  function showPlan(plan) {
+    const titles = plan.app === 'sonarr' ? plan.series : plan.movies;
+    const secs = [
+      ['profiles', T.arrSecProfiles, plan.profiles, [T.arrColName, T.arrColResult, T.arrColDetails], p => [
+        tdl('', T.arrColName, h('b', null, p.name)), tdl('', T.arrColResult, act(p.action)),
+        tdl('', T.arrColDetails, h('div', null, p.profile.resolutions.map(res).join(' > '),
+          p.profile.upgrade ? ' · ' + T.arrUpgrade(res(p.profile.cutoff_resolution) + ' ' + (p.profile.cutoff_source || '')) : ''), notes(p.notes))]],
+      ['folders', T.arrSecFolders, plan.folders, [T.arrColPath, T.arrColResult], f => [
+        tdl('', T.arrColPath, h('code.mono', null, f.path), f.mapped !== f.path && h('div.muted.small.mono', null, '→ ' + f.mapped)), tdl('', T.arrColResult, act(f.action, f.reason))]],
+      ['clients', T.arrSecClients, plan.clients, [T.arrColName, T.arrColURL, T.arrColResult], x => [
+        tdl('', T.arrColName, h('b', null, x.name), x.kind && h('span.muted.small', null, ' ' + x.kind)),
+        tdl('', T.arrColURL, x.url && h('code.mono', null, x.url), x.category && h('div.muted.small', null, T.arrCategory(x.category))),
+        tdl('', T.arrColResult, act(x.action, x.reason), notes(x.notes))]],
+      ['indexers', T.arrSecIndexers, plan.indexers, [T.arrColName, T.arrColURL, T.arrColResult], x => [
+        tdl('', T.arrColName, h('b', null, x.name), x.kind && h('span.muted.small', null, ' ' + x.kind)),
+        tdl('', T.arrColURL, x.url && h('code.mono', null, x.url)), tdl('', T.arrColResult, act(x.action, x.reason), notes(x.notes))]],
+      ['titles', plan.app === 'sonarr' ? T.arrSecSeries : T.arrSecMovies, titles, [T.arrColTitle, T.arrColResult], x => [
+        tdl('', T.arrColTitle, x.title + (x.year ? ` (${x.year})` : ''),
+          x.monitor && h('div.muted.small', null, T.arrMonitor[x.monitor] + (x.seasons && x.seasons.length ? ': ' + x.seasons.join(', ') : ''))),
+        tdl('', T.arrColResult, act(x.action, x.reason))]],
+    ].filter(([, , list]) => list && list.length);
+    const picks = {};
+    const count = list => list.filter(x => x.action !== 'skip' && x.action !== 'existing' && x.action !== 'link').length;
+    const blocks = secs.map(([id, title, list, cols, row]) => {
+      const box = picks[id] = h('input', { type: 'checkbox', checked: count(list) > 0, 'aria-label': title, onclick: e => e.stopPropagation() });
+      return h('details.a-sec', { open: list.length <= 12 },
+        h('summary.arr-sum', null, box, h('b', null, title), h('span.muted', null, T.arrSecCount(count(list), list.length))),
+        aTable(cols, list.slice(0, 400).map(x => h('tr', null, row(x))), '.a-stack'),
+        list.length > 400 && h('p.muted.small', null, T.importMore(list.length - 400)));
+    });
+    const apply = h('button.btn.primary', { onclick: async () => {
+      const sections = Object.entries(picks).filter(([, b]) => b.checked).map(([id]) => id);
+      if (!sections.length) return toast(T.importNoneSelected, true);
+      if (!await confirmBox(T.arrConfirm, T.importApply)) return;
+      apply.disabled = true;
+      try { await POST('/api/admin/import/arr/apply', { plan_id: plan.id, sections }); follow(plan); }
+      catch { apply.disabled = false; }
+    } }, T.importApply);
+    put(out, aSec(T.arrPreviewTitle(plan.app[0].toUpperCase() + plan.app.slice(1), plan.version), T.arrPreviewHint, h('div.row-gap', null, apply),
+      (plan.blockers || []).map(b => h('div.a-error', { role: 'alert' }, h('p', null, T.arrReason[b] || b)))), ...blocks);
+  }
+
+  // the import runs in the background; this shows its progress until it ends
+  async function follow(plan) {
+    const bar = h('div'), info = h('div');
+    put(out, aSec(T.arrRunning, null, null, bar, info));
+    for (;;) {
+      let r;
+      try { r = await GET('/api/admin/import/arr/' + plan.id, { quiet: true }); } catch { return; }
+      const p = r.progress || { done: 0, total: 0, counts: {}, errors: [] };
+      put(bar, aBar(p.done, p.total), h('p.muted.small', null, `${p.done} / ${p.total}`));
+      const counts = Object.entries(p.counts).filter(([k]) => !k.endsWith(':skip')).map(([k, n]) => {
+        const [sec, a] = k.split(':');
+        return h('li', null, `${T.arrSecName[sec] || sec}: ${T.arrAction[a] || a} × ${n}`);
+      });
+      put(info, counts.length > 0 && h('ul', null, counts),
+        p.errors.length > 0 && h('div', null, h('p', null, h('b', null, T.arrErrors(p.errors.length))),
+          h('ul', null, p.errors.slice(0, 100).map(e => h('li', null, `${e.name}: ${T.arrReason[e.error] || srv(e.error)}`)))));
+      if (!p.running && r.started) { out.querySelector('h2').textContent = T.arrDone; return; }
+      await new Promise(res => setTimeout(res, 1000));
+      if (!out.isConnected) return;
+    }
+  }
+  return [aSplit(T.arrTitle, T.arrHint, form), out];
 }
 
 // keys: [key, label, kind, options, hint] rows; a string or { h, hint } starts a titled section (two-column layout)
