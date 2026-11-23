@@ -53,6 +53,36 @@ Az import többször is lefuttatható, semmit nem duplikál:
 
 ---
 
+# Váltás Sonarrról, Radarrról és Prowlarrról
+
+**Admin → Rendszer → Importálás → Sonarr / Radarr / Prowlarr.** A Kinora az alkalmazás nyilvános API-ján olvas,
+az API-kulccsal (az alkalmazásban: Beállítások → Általános), amelyet nem ment el. Előbb előnézet készül, ez
+semmit nem ír. Az importálás szakaszonként választható, és a háttérben fut, folyamatjelzővel.
+
+| Honnan | Mi lesz belőle a Kinorában |
+|---|---|
+| Sonarr: figyelt sorozatok | követett sorozatok: ha minden évad figyelt, „minden évad”; ha csak néhány, „kiválasztott évadok”; ha egy sem, „csak az új epizódok”. A különkiadások (0. évad) nem számítanak. |
+| Radarr: figyelt, még hiányzó filmek | jóváhagyott kérések. A Kinora ugyanúgy keresi őket, mint bármely kérést. A már letöltött és a nem figyelt filmek kimaradnak. |
+| minőségprofilok | Kinora-minőségprofilok: az engedélyezett felbontások (a jobb elöl), a tiltott gyenge források (CAM, TS, TC, screener), a javítás és annak határa |
+| indexerek (Torznab, Newznab) | indexerek, a kategóriákkal és a prioritással |
+| letöltőkliensek (qBittorrent, Transmission, Deluge, SABnzbd, NZBGet) | letöltőkliensek. Ha a Sonarr és a Radarr ugyanazt a klienst használja, egy kliens lesz belőle, a filmes és a sorozatos kategóriával. |
+| gyökérmappák | Kinora-könyvtárak (útvonal-leképezéssel; a már meglévő könyvtárhoz kapcsolódik) |
+| Prowlarr: indexerek | indexerek a Prowlarr saját Torznab/Newznab-csatornáján keresztül, a Prowlarr kulcsával, így azonnal működnek |
+
+Fontos tudnivalók:
+
+- A Sonarr és a Radarr az API-ban **elrejti a jelszavakat és az API-kulcsokat** (`********`). Az ilyen indexerek
+  és kliensek kikapcsolva jönnek létre; a kulcsot a Beszerzés → Források és kliens oldalon kell megadni. A
+  Kinorában megadott kulcs egy újabb importnál is megmarad.
+- A sorozatok és a filmek csak akkor jöhetnek át, ha a beépített beszerzés be van kapcsolva, és van TMDB-kulcs.
+  Ha a Sonarr nem adja meg a TMDB-azonosítót, a Kinora a TVDB- (vagy IMDb-) azonosító alapján keresi ki.
+- Ami **nem** jön át: az egyéni formátumok (custom formats), a nyelvi szabályok, a méretkorlátok (a Kinora
+  alapértékei maradnak), a távoli útvonal-leképezések, a címkék és az értesítések. A filmkérések az alapértelmezett
+  minőségprofillal futnak; a sorozatok a hozzájuk rendelt profilt kapják.
+- Újrafuttatáskor a Kinora frissíti, amit korábban létrehozott, és nem készít másolatot.
+
+---
+
 # Switching from Jellyfin (import)
 
 **Admin → System → Import → Jellyfin** reads Jellyfin's public API with an administrator API key (the key is not
@@ -62,3 +92,10 @@ and writes nothing; new accounts get a one-time password link (14 days). Items a
 optional path mapping), then TMDB/IMDb id, episodes by series plus season and episode number, and last by an
 exact, unique title and year. Running the import again is safe: accounts are remembered and state is merged, never
 reset or duplicated.
+
+**Sonarr / Radarr / Prowlarr** (Admin → System → Import) brings over monitored series (as followed series),
+monitored films that are still missing (as approved requests), quality profiles (allowed resolutions, blocked
+low-quality sources, upgrade cutoff), Torznab/Newznab indexers, download clients and root folders (as libraries);
+from Prowlarr, its indexers through Prowlarr's own feeds. Sonarr and Radarr hide passwords and API keys in their API,
+so such indexers and clients are created switched off until the key is entered in Kinora. Custom formats, language
+rules and size limits are not carried over.
