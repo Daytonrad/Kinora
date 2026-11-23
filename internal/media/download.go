@@ -6,11 +6,13 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,7 +55,8 @@ const DownloadRetention = 7 * 24 * time.Hour
 type Job struct {
 	Key       string  `json:"key"`
 	ItemID    int64   `json:"item_id"`
-	UserID    int64   `json:"user_id"`
+	UserID    int64   `json:"user_id"`         // who asked first
+	Users     []int64 `json:"users,omitempty"` // everyone else who asked for the same file
 	Title     string  `json:"title"`
 	FileName  string  `json:"file_name"`
 	Quality   string  `json:"quality"`
@@ -69,6 +72,28 @@ type Job struct {
 	duration float64
 	hdr      bool
 }
+
+// HasUser reports whether userID asked for this download.
+func (j *Job) HasUser(userID int64) bool {
+	return j.UserID == userID || slices.Contains(j.Users, userID)
+}
+
+func (j *Job) snapshot() Job {
+	c := *j
+	c.Users = slices.Clone(j.Users)
+	return c
+}
+
+// Download queue limits.
+const (
+	maxQueue       = 256
+	MaxJobsPerUser = 10 // queued or running downloads of one user
+)
+
+var (
+	ErrQueueFull   = errors.New("a letöltési sor megtelt, próbáld később")
+	ErrTooManyJobs = errors.New("túl sok letöltés vár már rád, várd meg, amíg elkészülnek")
+)
 
 // Downloader runs one download job at a time: a single worker goroutine
 // drains the queue, which acts as the semaphore.
@@ -87,7 +112,7 @@ type Downloader struct {
 // NewDownloader loads finished jobs from <cache>/downloads.
 func NewDownloader(cacheDir string, enc *Encoders, log *slog.Logger) *Downloader {
 	d := &Downloader{dir: filepath.Join(cacheDir, "downloads"), enc: enc, log: log, jobs: map[string]*Job{},
-		queue: make(chan *Job, 256), EncoderSetting: func() string { return "auto" }}
+		queue: make(chan *Job, maxQueue), EncoderSetting: func() string { return "auto" }}
 	os.MkdirAll(d.dir, 0o755)
 	entries, _ := os.ReadDir(d.dir)
 	for _, e := range entries {
@@ -142,7 +167,11 @@ func (d *Downloader) prune() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for k, j := range d.jobs {
-		if (j.Status == "done" || j.Status == "error") && j.CreatedAt < cut {
+		at := j.CreatedAt
+		if j.DoneAt > 0 {
+			at = j.DoneAt // retention counts from when the file was ready, not from the request
+		}
+		if (j.Status == "done" || j.Status == "error") && at < cut {
 			os.Remove(d.file(k))
 			os.Remove(filepath.Join(d.dir, k+".json"))
 			delete(d.jobs, k)
@@ -150,20 +179,45 @@ func (d *Downloader) prune() {
 	}
 }
 
-// Enqueue adds a job, or returns the existing one with the same key.
-func (d *Downloader) Enqueue(it *store.Item, userID int64, q Quality, audioIdx int, fileName string) *Job {
+// Enqueue adds a job, or joins userID to the existing one with the same key (the file is shared).
+// It never blocks: a full queue or a user with too many pending jobs is an error.
+func (d *Downloader) Enqueue(it *store.Item, userID int64, q Quality, audioIdx int, fileName string) (Job, error) {
 	key := JobKey(it, q.Name, audioIdx)
 	d.mu.Lock()
+	defer d.mu.Unlock()
 	if j := d.jobs[key]; j != nil && j.Status != "error" {
-		d.mu.Unlock()
-		return j
+		if !j.HasUser(userID) {
+			j.Users = append(j.Users, userID)
+			if j.Status == "done" {
+				d.saveLocked(j)
+			}
+		}
+		return j.snapshot(), nil
+	}
+	pending := 0
+	for _, j := range d.jobs {
+		if (j.Status == "queued" || j.Status == "running") && j.HasUser(userID) {
+			pending++
+		}
+	}
+	if pending >= MaxJobsPerUser {
+		return Job{}, ErrTooManyJobs
 	}
 	j := &Job{Key: key, ItemID: it.ID, UserID: userID, Title: it.Title, FileName: fileName, Quality: q.Name, AudioIdx: audioIdx,
 		Status: "queued", CreatedAt: time.Now().Unix(), src: it.Path, duration: float64(it.RuntimeSec), hdr: it.HDR != ""}
+	select {
+	case d.queue <- j:
+	default:
+		return Job{}, ErrQueueFull
+	}
 	d.jobs[key] = j
-	d.mu.Unlock()
-	d.queue <- j
-	return j
+	return j.snapshot(), nil
+}
+
+// saveLocked writes a finished job's metadata next to its file (d.mu held).
+func (d *Downloader) saveLocked(j *Job) {
+	b, _ := json.Marshal(j)
+	os.WriteFile(filepath.Join(d.dir, j.Key+".json"), b, 0o644)
 }
 
 // Jobs lists jobs (snapshot), newest first. userID 0 = all.
@@ -172,8 +226,8 @@ func (d *Downloader) Jobs(userID int64) []Job {
 	defer d.mu.Unlock()
 	out := []Job{}
 	for _, j := range d.jobs {
-		if userID == 0 || j.UserID == userID {
-			out = append(out, *j)
+		if userID == 0 || j.HasUser(userID) {
+			out = append(out, j.snapshot())
 		}
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].CreatedAt > out[b].CreatedAt })
@@ -188,7 +242,7 @@ func (d *Downloader) Get(key string) (Job, string, bool) {
 	if j == nil {
 		return Job{}, "", false
 	}
-	return *j, d.file(key), true
+	return j.snapshot(), d.file(key), true
 }
 
 // Active counts queued/running jobs.
@@ -268,8 +322,7 @@ func (d *Downloader) run(ctx context.Context, j *Job) {
 		}
 	})
 	d.mu.Lock()
-	b, _ := json.Marshal(j)
+	d.saveLocked(j)
 	d.mu.Unlock()
-	os.WriteFile(filepath.Join(d.dir, j.Key+".json"), b, 0o644)
 	d.log.Info("download ready", "title", j.Title, "quality", j.Quality)
 }

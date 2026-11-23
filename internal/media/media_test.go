@@ -2,6 +2,7 @@ package media
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -190,9 +191,19 @@ func TestDownload(t *testing.T) {
 	defer cancel()
 	go d.Run(ctx)
 	q, _ := QualityByName("360p")
-	j := d.Enqueue(it, 1, q, 0, "Kids Cartoon [360p].mp4")
-	if j2 := d.Enqueue(it, 1, q, 0, "x"); j2.Key != j.Key {
+	j, err := d.Enqueue(it, 1, q, 0, "Kids Cartoon [360p].mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j2, _ := d.Enqueue(it, 1, q, 0, "x"); j2.Key != j.Key {
 		t.Fatal("same request must reuse the job")
+	}
+	// another user asking for the same file shares the job and sees it too
+	if j3, _ := d.Enqueue(it, 2, q, 0, "y"); j3.Key != j.Key || !j3.HasUser(2) || !j3.HasUser(1) {
+		t.Fatalf("second user must join the job: %+v", j3)
+	}
+	if len(d.Jobs(2)) != 1 || len(d.Jobs(3)) != 0 {
+		t.Fatalf("jobs per user: %d / %d", len(d.Jobs(2)), len(d.Jobs(3)))
 	}
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
@@ -213,4 +224,69 @@ func TestDownload(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Fatal("download timed out")
+}
+
+// Enqueue never blocks a request handler: a full queue and a user with too many pending jobs are errors.
+func TestDownloadQueueLimits(t *testing.T) {
+	d := NewDownloader(t.TempDir(), NewEncoders(), quiet) // Run is not started: nothing leaves the queue
+	q, _ := QualityByName("360p")
+	item := func(id int64) *store.Item { return &store.Item{ID: id, Title: "x", Path: "/none"} }
+	for i := 0; i < MaxJobsPerUser; i++ {
+		if _, err := d.Enqueue(item(int64(i+1)), 1, q, 0, "x.mp4"); err != nil {
+			t.Fatalf("job %d: %v", i, err)
+		}
+	}
+	if _, err := d.Enqueue(item(999), 1, q, 0, "x.mp4"); err != ErrTooManyJobs {
+		t.Fatalf("over the per-user limit: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		for i := 0; i < maxQueue+5 && err == nil; i++ {
+			_, err = d.Enqueue(item(int64(1000+i)), int64(100+i), q, 0, "x.mp4")
+		}
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != ErrQueueFull {
+			t.Fatalf("full queue: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Enqueue blocked on a full queue")
+	}
+}
+
+func fakeSession(m *Manager, id string, user int64, seen time.Time) {
+	s := &Session{ID: id, UserID: user, Dir: filepath.Join(m.dir, id), done: make(chan struct{})}
+	close(s.done) // an exited ffmpeg: Stop only removes the session
+	s.lastSeen.Store(seen.UnixNano())
+	m.sess[id] = s
+}
+
+func TestSessionLimits(t *testing.T) {
+	m := NewManager(t.TempDir(), NewEncoders(), quiet)
+	now := time.Now()
+	for i := 0; i < MaxSessionsPerUser; i++ {
+		fakeSession(m, fmt.Sprintf("u1-%d", i), 1, now.Add(time.Duration(i)*time.Second))
+	}
+	fakeSession(m, "u2", 2, now.Add(-time.Hour))
+	if err := m.makeRoom(1); err != nil {
+		t.Fatal(err)
+	}
+	if m.sess["u1-0"] != nil {
+		t.Fatal("the least recently used session of the user must stop")
+	}
+	if m.sess["u2"] == nil || m.sess["u1-1"] == nil {
+		t.Fatal("other sessions must stay")
+	}
+
+	m.MaxSessions = len(m.sess)
+	if err := m.makeRoom(3); err != ErrBusy {
+		t.Fatalf("server-wide limit: %v", err)
+	}
+	m.MaxSessions = 0
+	if err := m.makeRoom(3); err != nil {
+		t.Fatal(err)
+	}
 }

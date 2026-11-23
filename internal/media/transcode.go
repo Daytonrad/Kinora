@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -69,6 +70,14 @@ type SessionInfo struct {
 	Seconds int    `json:"seconds"`
 }
 
+// MaxSessionsPerUser bounds one account's ffmpeg processes. An account is shared by up to 8 household
+// profiles, so this allows a stream on every profile at once; past it the least recently used session
+// of the account stops (a client that forgot to stop its old session must not pile up processes).
+const MaxSessionsPerUser = 8
+
+// ErrBusy is returned when the server-wide session limit is reached.
+var ErrBusy = errors.New("a szerver most nem tud több átkódolást indítani, próbáld később")
+
 // Manager owns transcode sessions.
 type Manager struct {
 	dir  string
@@ -76,6 +85,8 @@ type Manager struct {
 	Enc  *Encoders
 	mu   sync.Mutex
 	sess map[string]*Session
+	// MaxSessions limits sessions across all users (0 = no limit; KINORA_MAX_TRANSCODES).
+	MaxSessions int
 }
 
 // NewManager creates the manager and wipes leftovers of previous runs.
@@ -160,6 +171,9 @@ func BuildHLSArgs(sp HLSSpec, dir string) []string {
 
 // Start launches ffmpeg and waits (max 30 s) until the playlist has a segment.
 func (m *Manager) Start(ctx context.Context, sp HLSSpec) (*Session, error) {
+	if err := m.makeRoom(sp.UserID); err != nil {
+		return nil, err
+	}
 	id := store.RandomToken(12)
 	dir := filepath.Join(m.dir, id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -218,6 +232,33 @@ func (m *Manager) Start(ctx context.Context, sp HLSSpec) (*Session, error) {
 	msg := lastLine(tb.String())
 	m.Stop(id)
 	return nil, fmt.Errorf("az átkódolás 30 mp alatt sem adott első szegmenst (lassú encoder?) %s", msg)
+}
+
+// makeRoom enforces the per-user and server-wide session limits before a new session starts.
+func (m *Manager) makeRoom(userID int64) error {
+	m.mu.Lock()
+	var oldest *Session
+	mine := 0
+	for _, s := range m.sess {
+		if s.UserID != userID {
+			continue
+		}
+		mine++
+		if oldest == nil || s.lastSeen.Load() < oldest.lastSeen.Load() {
+			oldest = s
+		}
+	}
+	total := len(m.sess)
+	m.mu.Unlock()
+	if mine >= MaxSessionsPerUser && oldest != nil {
+		m.log.Info("transcode limit per user, stopping the oldest", "user", userID, "session", oldest.ID)
+		m.Stop(oldest.ID)
+		total--
+	}
+	if m.MaxSessions > 0 && total >= m.MaxSessions {
+		return ErrBusy
+	}
+	return nil
 }
 
 func hasSegment(playlist string) bool {
