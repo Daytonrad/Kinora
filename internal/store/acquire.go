@@ -578,7 +578,7 @@ func (s *Store) BumpRequestAttempts(id int64) int {
 // MarkFilmAvailable closes every open request for a film that is now in the library.
 func (s *Store) MarkFilmAvailable(kind string, tmdbID int64) {
 	w, a := inStates("status", OpenRequestStates)
-	s.DB.Exec(`UPDATE acq_requests SET status='available', note='', seen=0, updated_at=? WHERE kind=? AND tmdb_id=? AND `+w, append([]any{now(), kind, tmdbID}, a...)...)
+	s.DB.Exec(`UPDATE acq_requests SET status='available', note='', seen=0, pushed=0, updated_at=? WHERE kind=? AND tmdb_id=? AND `+w, append([]any{now(), kind, tmdbID}, a...)...)
 }
 
 // UnseenAvailable lists a user's fulfilled requests they were not told about yet.

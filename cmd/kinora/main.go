@@ -206,6 +206,7 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	go srv.RunDiscovery(ctx)
 	go sc.Run(ctx)
 	go srv.Acquire.Run(ctx) // built-in acquisition: follows downloads, imports finished ones
+	go srv.Push.Run(ctx)    // iOS push notifications through the relay
 
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr,

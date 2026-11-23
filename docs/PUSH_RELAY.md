@@ -57,7 +57,7 @@ Válasz `201`: `{"server_id": "srv_…", "server_secret": "<base64url, 32 bájt>
 A közvetítő a secretet nem tárolja: `HMAC-SHA256(SERVER_SECRET_KEY, "server:" + server_id)`-ből számolja újra. Ha a
 `SERVER_SECRET_KEY` cserélődik, minden szervernek újra kell regisztrálnia.
 
-IP-címenként óránként legfeljebb 10 regisztráció.
+IP-címenként 24 óránként legfeljebb 2 regisztráció (naptári napra, UTC szerint).
 
 ### `GET /v1/challenge`
 
@@ -145,7 +145,7 @@ eszközt törli. Válasz `200 {"ok":true}`.
 A titkosítatlan tartalom JSON, legfeljebb ~1,5 KB:
 
 ```json
-{ "v": 1, "title": "…", "body": "…", "href": "/item/…", "image": "/api/…", "tag": "…" }
+{ "v": 1, "type": "…", "title": "…", "body": "…", "item": 123, "href": "#/item/123", "image": "/api/images/123/poster", "tag": "…" }
 ```
 
 Az `image` relatív út a saját szerveren; az NSE a saját munkamenetével tölti le. A szerverenkénti AES-kulcsot az app
@@ -158,8 +158,9 @@ csomagban lévő `s` mező alapján választja ki a kulcsot.
 |---|---|---|
 | küldés handle-enként | 30 / óra | `LIMIT_HANDLE_HOURLY` |
 | küldés szerverenként | 600 / óra | `LIMIT_SERVER_HOURLY` |
-| szerverregisztráció IP-nként | 10 / óra | `LIMIT_REGISTER_HOURLY` |
-| eszközregisztráció IP-nként | 60 / óra | `LIMIT_DEVICE_HOURLY` |
+| szerverregisztráció IP-nként | 2 / 24 óra | `LIMIT_REGISTER_DAILY` |
+| eszközregisztráció IP-nként | 5 / 24 óra | `LIMIT_DEVICE_DAILY` |
+| challenge kérés IP-nként | az eszközkeret 4-szerese / 24 óra | – |
 
 ## Vészfék
 
@@ -167,8 +168,28 @@ csomagban lévő `s` mező alapján választja ki a kulcsot.
 - Eszköz letiltása: `POST /v1/admin/handles/<handle>/disable`.
 - Minden küldés leállítása: `SEND_DISABLED=true` változó és újratelepítés.
 
-## A Kinora szerver oldala (még nincs kész)
+## A Kinora szerver oldala
 
-- Beállítás: push ki/be, közvetítő URL (alapértelmezés a hivatalos közvetítő), átírható saját közvetítőre.
-- Tárolás: `server_id`, `server_secret`, és felhasználónként/eszközönként handle + AES-kulcs.
-- Küldés ugyanabból az eseményrendszerből, mint a Web Push; `410`-re a handle törlése.
+- **Beállítás** (Beállítások → Hálózat, vagy környezeti változó): `push_enabled` (`KINORA_PUSH`, 0/1) és
+  `push_relay_url` (`KINORA_PUSH_RELAY`). Alapérték a hivatalos közvetítő: `https://kinorarelay.projectone.dev`.
+- **Szerverregisztráció:** az első `GET /api/push/ios`-kor (vagy küldéskor), és újra, ha a közvetítő URL-je
+  változik vagy a közvetítő `401 unauthorized`-dal válaszol. A `push_server_id`, `push_server_secret` és
+  `push_server_relay` belső beállítás, az admin felületen nem látszik.
+- **Párosítás:** `push_ios` tábla, a munkamenet `device_id`-jához kötve, így kijelentkezéskor vagy az eszköz
+  eltávolításakor törlődik.
+- **App API** (bejelentkezett munkamenettel, stream-tokennel nem):
+
+  | Kérés | Leírás |
+  |---|---|
+  | `GET /api/push/ios` | `{"enabled": false}` vagy `{"enabled": true, "relay_url", "server_id", "paired"}` |
+  | `POST /api/push/ios` | `{"handle": "<43 karakter base64url>", "key": "<32 bájt, base64 vagy base64url>"}`; új handle-nél a régit törli a közvetítőnél |
+  | `DELETE /api/push/ios` | párosítás bontása, a handle törlése a közvetítőnél |
+  | `POST /api/push/ios/test` | tesztértesítés erre az eszközre; `410`, ha a közvetítő már nem ismeri |
+
+- **Küldés:** a háttérben 30 mp-enként a teljesült kérések (`acq_requests.status='available'`, `pushed=0`)
+  a kérő összes párosított eszközére mennek `collapse_id: "req-<id>"`-vel. Ami több mint 24 órája teljesült
+  (a push ki volt kapcsolva), azt küldés nélkül megjelöli. Ha a közvetítő nem érhető el (`5xx`, `429`),
+  a következő körben újrapróbálja. `410` vagy `unknown_handle` esetén törli a párosítást.
+- **Csomag:** `{"v":1, "type":"request_available"|"test", "title", "body", "item", "href":"#/item/<id>",
+  "image":"/api/images/<id>/poster", "tag"}`. A cím legfeljebb 150, a szöveg legfeljebb 400 karakter, és a
+  JSON legfeljebb 1500 bájt.

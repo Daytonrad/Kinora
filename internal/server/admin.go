@@ -166,7 +166,7 @@ func (s *Server) handleInviteDelete(w http.ResponseWriter, r *http.Request, c *r
 
 var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder", "video_codec",
 	"quickconnect_enabled", "discovery_enabled", "brand_accent", "intro_detection", "intro_window_min",
-	"opensubtitles_key", "opensubtitles_user", "opensubtitles_pass", "watch_region", "omdb_key"}
+	"opensubtitles_key", "opensubtitles_user", "opensubtitles_pass", "watch_region", "omdb_key", "push_enabled", "push_relay_url"}
 
 // secretSettings are shown masked and kept when the masked value comes back.
 var secretSettings = map[string]bool{"tmdb_key": true, "opensubtitles_key": true, "opensubtitles_pass": true, "omdb_key": true}
@@ -190,6 +190,8 @@ var SettingEnv = map[string]string{
 	"opensubtitles_pass":   "KINORA_OPENSUBTITLES_PASS",
 	"watch_region":         "KINORA_WATCH_REGION",
 	"omdb_key":             "KINORA_OMDB_KEY",
+	"push_enabled":         "KINORA_PUSH",
+	"push_relay_url":       "KINORA_PUSH_RELAY",
 }
 
 const maskChar = "•"
@@ -256,13 +258,19 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *
 				return
 			}
 			v = strings.TrimRight(v, "/")
+		case "push_relay_url":
+			if v != "" && !strings.HasPrefix(v, "https://") && !strings.HasPrefix(v, "http://") {
+				writeErr(w, http.StatusBadRequest, "a push-közvetítő URL-je http:// vagy https:// kezdetű legyen")
+				return
+			}
+			v = strings.TrimRight(v, "/")
 		case "intro_window_min":
 			n, err := strconv.Atoi(v)
 			if err != nil || n < 2 || n > 30 {
 				writeErr(w, http.StatusBadRequest, "az intró keresési ablaka 2–30 perc lehet")
 				return
 			}
-		case "quickconnect_enabled", "discovery_enabled", "intro_detection":
+		case "quickconnect_enabled", "discovery_enabled", "intro_detection", "push_enabled":
 			if v != "0" && v != "1" {
 				writeErr(w, http.StatusBadRequest, "a kapcsoló értéke 0 vagy 1 lehet")
 				return

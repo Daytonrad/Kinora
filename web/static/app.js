@@ -2811,7 +2811,8 @@ async function adminSettings(body) {
   put(body, aHead(T.aSettings, T.aLedeSettings),
     settingsForm(s.values, s.env, [{ h: T.setGeneral, hint: T.setGeneralHint }, ['server_name', T.serverName], ['public_url', T.publicUrl, 'url'],
       { h: T.setScanning, hint: T.setScanningHint }, ['scan_interval_min', T.scanInterval, 'number'],
-      { h: T.setNetwork, hint: T.setNetworkHint }, ['quickconnect_enabled', T.qcEnabled, 'toggle'], ['discovery_enabled', T.discEnabled, 'toggle']], () => { state.status = null; }),
+      { h: T.setNetwork, hint: T.setNetworkHint }, ['quickconnect_enabled', T.qcEnabled, 'toggle'], ['discovery_enabled', T.discEnabled, 'toggle'],
+      ['push_enabled', T.pushEnabled, 'toggle'], ['push_relay_url', T.pushRelayUrl, 'url', null, T.pushRelayHint]], () => { state.status = null; }),
     lookPanel(s.values, s.env, () => adminSettings(body)),
     aSplit(T.backupTitle, T.backupHint, h('a.btn', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
 }

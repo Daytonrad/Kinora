@@ -27,6 +27,7 @@ import (
 	"github.com/ScotyLucas/kinora/internal/meta"
 	"github.com/ScotyLucas/kinora/internal/party"
 	"github.com/ScotyLucas/kinora/internal/scanner"
+	"github.com/ScotyLucas/kinora/internal/push"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -81,6 +82,7 @@ type Deps struct {
 	Intro     *intro.Analyzer     // skip intro / credits detection (nil = off)
 	OpenSubs  *meta.OpenSubtitles // subtitle search and download (created by New when nil)
 	Acquire   *acquire.Manager    // built-in acquisition (created by New when nil and Meta is set; main runs it)
+	Push      *push.Notifier      // iOS push through the relay (created by New when nil; main runs it)
 }
 
 // New builds the server and its routes.
@@ -92,6 +94,9 @@ func New(cfg Config, st *store.Store, log *slog.Logger, deps Deps) *Server {
 	}
 	if s.OpenSubs == nil {
 		s.OpenSubs = meta.NewOpenSubtitles(st, "Kinora v"+Version)
+	}
+	if s.Push == nil {
+		s.Push = push.NewNotifier(st, push.NewRelay(st), log)
 	}
 	if s.Acquire == nil && s.Meta != nil {
 		s.Acquire = acquire.New(st, s.Meta, func(libID int64) {

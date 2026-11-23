@@ -508,6 +508,20 @@ CREATE TABLE party_reports(
 `,
 	// 16: libraries an account may see ('' = all, else comma-separated library ids)
 	`ALTER TABLE users ADD COLUMN libraries TEXT NOT NULL DEFAULT '';`,
+	// 17: iOS push through the relay (one row per logged-in device), and which fulfilled
+	// requests were already pushed (existing ones count as pushed: no flood after the upgrade)
+	`
+CREATE TABLE push_ios(
+  device_id TEXT PRIMARY KEY REFERENCES sessions(device_id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  handle TEXT NOT NULL,
+  key BLOB NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX push_ios_user ON push_ios(user_id);
+ALTER TABLE acq_requests ADD COLUMN pushed INTEGER NOT NULL DEFAULT 0;
+UPDATE acq_requests SET pushed=1;
+`,
 }
 
 func (s *Store) migrate() error {
@@ -577,6 +591,8 @@ var SettingDefaults = map[string]string{
 	"acq_library":          "",
 	"acq_retry_hours":      "6",
 	"acq_library_tv":       "",
+	"push_enabled":         "0",
+	"push_relay_url":       "https://kinorarelay.projectone.dev",
 }
 
 // SetOverride forces a setting from the environment (shown as locked in the admin UI).
