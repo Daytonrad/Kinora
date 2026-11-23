@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ScotyLucas/kinora/internal/safe"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -373,6 +374,7 @@ func (f *Fetcher) Kick(ctx context.Context) {
 		return
 	}
 	go func() {
+		defer safe.Recover(f.log, "metadata-refresh")
 		err := f.Refresh(ctx, false)
 		if errors.Is(err, ErrRunning) {
 			f.mu.Lock()
