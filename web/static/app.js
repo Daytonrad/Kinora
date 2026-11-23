@@ -277,7 +277,7 @@ async function route() {
     applyBranding();
   }
   if (state.status.setup_needed) { if (p0 !== 'setup') return go('#/setup'); return viewSetup(); }
-  if (p0 === 'setup') return go('#/login');
+  if (p0 === 'setup' && !p1) return go('#/login');
   if (p0 === 'join' && p1) return viewJoin(p1);
   if (p0 === 'setpw' && p1) return viewSetPassword(p1);
   if (!state.me) await loadMe();
@@ -287,9 +287,12 @@ async function route() {
     return code ? viewLoginCode() : viewLogin();
   }
   if (p0 === 'login') return go('#/profiles');
+  // the first-run wizard comes right after the admin account, before any profile is picked
+  if (p0 === 'setup') return state.me.user.is_admin ? viewWizard(p1) : go('#/home');
   if (p0 === 'quickconnect' && state.me.profile) return viewQuickConnect(q.get('code') || '');
   if (p0 === 'quickconnect') rememberAfter(location.hash);
   if (p0 === 'profiles' || !state.me.profile) return viewProfiles(p1 === 'edit');
+  if (DEV) deviceSync();
   document.title = T.appName;
   try {
     switch (p0) {
@@ -491,11 +494,240 @@ function viewSetup() {
     if (logo.files[0]) {
       for (const v of ['dark', 'light']) await uploadLogo(v, logo.files[0]).catch(err => toast(err.message, true));
     }
-    state.status = null; await loadMe(); go('#/profiles');
+    state.status = null; await loadMe(); go('#/setup/' + WIZ[0]);
   } }, field(T.serverName, name), field(T.username, user), field(T.password, pw), field(T.password2, pw2), field(T.setupLogo, logo, T.logoHint),
   h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.createAdmin));
   authPage(T.setupTitle, T.setupLede, form);
 }
+
+// ===================================================================== first-run wizard
+// After the admin account (viewSetup): media folders → metadata → encoder test → downloads → remote access →
+// summary. Every step can be skipped; each one saves through the regular admin endpoints, so whatever is left out
+// can be done later on the matching Admin page (the summary links there, the dashboard offers to continue).
+const WIZ = ['media', 'metadata', 'hardware', 'downloads', 'remote', 'summary'];
+
+async function viewWizard(step) {
+  const i = WIZ.indexOf(step);
+  if (i < 0) return go('#/setup/' + WIZ[0]);
+  document.title = T.wizDocTitle;
+  const body = h('div.wiz-body', { 'aria-busy': 'true' });
+  const foot = h('div.wiz-foot');
+  const names = [T.wizStepAdmin, ...WIZ.map(k => T['wizStep_' + k])];
+  put(app(), h('div.center', null, h('div.wiz', null, brandMark('span'),
+    h('ol.wiz-steps', { 'aria-label': T.wizProgress(i + 2, names.length) }, names.map((n, j) => h('li' + (j === i + 1 ? '.on' : j <= i ? '.done' : ''),
+      { 'aria-current': j === i + 1 ? 'step' : null }, h('span.wiz-dot', { 'aria-hidden': 'true' }, j <= i ? icon('check') : String(j + 1)), h('span.wiz-name', null, n)))),
+    h('h1', null, T['wizTitle_' + step]), h('p.lede', null, T['wizLede_' + step]), body, foot, langSwitch())));
+  let onNext = null;
+  try { onNext = await WIZ_STEPS[step](body); }
+  catch (e) { put(body, h('p.bad', { role: 'alert' }, e.message || String(e))); }
+  finally { body.removeAttribute('aria-busy'); }
+  const nextStep = () => go('#/setup/' + WIZ[i + 1]);
+  const last = step === 'summary';
+  put(foot,
+    i > 0 && h('button.btn.ghost', { onclick: () => go('#/setup/' + WIZ[i - 1]) }, T.wizBack),
+    h('span.wiz-gap'),
+    !last && h('button.btn.ghost', { onclick: nextStep, title: T.wizSkipHint }, T.wizSkip),
+    h('button.btn.primary', { onclick: async e => {
+      const b = e.currentTarget;
+      b.disabled = true;
+      try {
+        if (onNext && (await onNext()) === false) return; // the step kept the user here (a rejected value)
+        if (!last) return nextStep();
+        await POST('/api/admin/setup/finish', {});
+        go('#/profiles');
+      } catch (err) { toast(err.message, true); }
+      finally { b.disabled = false; }
+    } }, last ? T.wizFinish : T.wizNext));
+  body.querySelector('input, select')?.focus();
+}
+
+const WIZ_STEPS = {
+  // media folders: the libraries so far and an "add" form with the folder picker
+  async media(body) {
+    if (!state.installMode) state.installMode = (await GET('/api/admin/browse?path=/').catch(() => ({}))).mode || '';
+    const list = h('ul.wiz-list', { 'aria-live': 'polite' });
+    const render = async () => {
+      const libs = await GET('/api/libraries');
+      state.libs = null;
+      put(list, libs.length ? libs.map(l => h('li', null, icon('check'), ' ', h('b', null, l.name), h('span.muted', null, ' · ' + T.kinds[l.kind]), h('div.small.muted.mono', null, l.path)))
+        : h('li.muted.small', null, T.wizNoLibs));
+    };
+    const name = h('input', { type: 'text' });
+    const path = h('input', { type: 'text', placeholder: state.installMode === 'docker' ? '/media/movies' : '' });
+    const kind = h('select', null, Object.entries(T.kinds).map(([k, v]) => h('option', { value: k }, v)));
+    const lastPart = p => p.split(/[\\/]/).filter(Boolean).pop() || '';
+    const addNow = async () => {
+      try {
+        await POST('/api/libraries', { name: name.value.trim() || lastPart(path.value) || path.value.trim(), path: path.value.trim(), kind: kind.value }, { quiet: true });
+      } catch (e) {
+        if (e.body && e.body.perm) permDialog(e.body.perm); else toast(e.message, true);
+        return false;
+      }
+      toast(T.wizLibAdded); name.value = ''; path.value = ''; await render();
+      return true;
+    };
+    const add = h('button.btn', { type: 'button', onclick: async () => {
+      if (!path.value.trim()) return toast(T.wizPickFolder, true);
+      add.disabled = true;
+      try { await addNow(); } finally { add.disabled = false; }
+    } }, icon('plus'), T.addLibrary);
+    await render();
+    put(body, list, h('div.a-form.wiz-form', null,
+      h('label.field', null, h('span', null, T.libPath), h('div.row-gap', { class: 'nowrap' }, path,
+        h('button.btn', { type: 'button', onclick: () => folderPicker(path.value, p => { path.value = p; if (!name.value) name.value = lastPart(p); }) }, T.choose))),
+      h('div.hint', { class: 'mt0' }, state.installMode === 'docker' ? T.mediaHintDocker : T.mediaHintNative),
+      h('div.grid2', null, field(T.libName, name), field(T.libKind, kind)), h('div.a-form-foot', null, add)));
+    // a folder chosen but not added yet goes in with "Next"; a refused one keeps the user on this step
+    return async () => { if (path.value.trim()) return addNow(); };
+  },
+
+  // metadata: what TMDB adds, how to get a free key, the language; without a key Kinora uses file and folder
+  // names and local NFO files
+  async metadata(body) {
+    const s = await GET('/api/admin/settings');
+    const locked = s.env.tmdb_key;
+    const key = h('input', { type: 'password', value: s.values.tmdb_key || '', autocomplete: 'off', disabled: !!locked, placeholder: T.wizOptional });
+    const lang = h('select', { disabled: !!s.env.metadata_lang }, [['hu-HU', T.langNames.hun], ['en-US', T.langNames.eng], ['de-DE', T.langNames.ger]]
+      .map(([v, l]) => h('option', { value: v, selected: (s.values.metadata_lang || 'hu-HU') === v }, l)));
+    const status = h('div.key-status', { role: 'status' });
+    const test = h('button.btn.small', { type: 'button', onclick: async () => {
+      test.disabled = true; status.className = 'key-status'; status.textContent = T.keyTesting;
+      try {
+        const r = await POST('/api/admin/keytest', { service: 'tmdb', key: key.value });
+        status.className = 'key-status ' + (r.ok ? 'ok' : r.state === 'limit' || r.state === 'network' ? 'warn' : 'bad');
+        status.textContent = (T[KEY_STATE[r.state]] || T.keyStateError) + (r.detail && !r.ok ? ' (' + srv(r.detail) + ')' : '');
+      } catch (e) { status.className = 'key-status bad'; status.textContent = e.message; }
+      finally { test.disabled = false; }
+    } }, T.keyTest);
+    put(body, h('div.wiz-text', null, h('p', null, T.wizMetaWhat), h('p', null, T.wizMetaWithout)),
+      h('div.a-form.wiz-form', null,
+        h('label.field', null, h('span', null, T.tmdbKey), h('div.key-row', null, key, test), status,
+          h('div.hint', null, T.wizMetaGetKey, ' ', h('a', { href: 'https://www.themoviedb.org/settings/api', target: '_blank', rel: 'noopener noreferrer' }, 'themoviedb.org/settings/api')),
+          locked && h('div.env-lock', null, T.envLocked(locked))),
+        field(T.metaLang, lang, T.metaLangHint)));
+    return async () => {
+      const patch = {};
+      if (!locked && key.value.trim() && key.value !== s.values.tmdb_key) patch.tmdb_key = key.value.trim();
+      if (!s.env.metadata_lang && lang.value !== (s.values.metadata_lang || 'hu-HU')) patch.metadata_lang = lang.value;
+      if (Object.keys(patch).length) await api('PATCH', '/api/admin/settings', patch);
+    };
+  },
+
+  // the encoder test: which hardware encoders work in this install, and what to do when none does
+  async hardware(body) {
+    if (!state.installMode) state.installMode = (await GET('/api/admin/browse?path=/').catch(() => ({}))).mode || '';
+    const out = h('div', { 'aria-live': 'polite' });
+    const missing = x => x.error === 'az ffmpeg nem tartalmazza ezt az encodert';
+    const show = r => {
+      const hw = r.results.filter(x => x.ok && x.hardware);
+      put(out,
+        h('p', { class: hw.length ? 'ok' : '' }, hw.length ? T.wizHwFound(srv(r.selected.label)) : T.wizHwSoftware),
+        !hw.length && h('p.muted.small', null, state.installMode === 'docker' ? T.wizHwDocker : T.wizHwNative),
+        h('ul.wiz-list.small', null, r.results.filter(x => !missing(x)).map(x => h('li', null,
+          h('span', { class: x.ok ? 'ok' : 'bad' }, x.ok ? T.works : T.encFailed), ' · ', srv(x.label),
+          x.name === r.selected.name && [' ', h('span.badge.amber', null, T.inUse)]))));
+    };
+    const run = h('button.btn', { type: 'button', onclick: async () => {
+      run.disabled = true; run.textContent = T.hwTesting;
+      try { show(await POST('/api/admin/hwtest')); } catch (e) { put(out, h('p.bad', null, e.message)); }
+      finally { run.disabled = false; run.textContent = T.hwTest; }
+    } }, T.hwTest);
+    put(body, h('div.wiz-text', null, h('p', null, T.wizHwWhat)), h('div.a-form-foot', null, run), out);
+    run.click(); // it takes a few seconds: start it right away
+    return null;
+  },
+
+  // built-in requests and downloads: one download client and one Torznab/Newznab indexer (Jackett, Prowlarr…);
+  // the rest (built-in tracker definitions, quality profiles, FlareSolverr, folders) is on Admin → Downloads
+  async downloads(body) {
+    const s = await GET('/api/admin/acquire/settings');
+    const enabled = h('input.switch', { type: 'checkbox', role: 'switch', checked: !!s.enabled });
+    const have = h('ul.wiz-list.small', { 'aria-live': 'polite' });
+    const listHave = (cls, ixs) => put(have, [...cls.map(c => h('li', null, icon('check'), ' ', T.wizDlClientIs(c.name || c.kind))),
+      ...ixs.map(x => h('li', null, icon('check'), ' ', T.wizDlIndexerIs(x.name)))]);
+    listHave(s.clients || [], s.indexers || []);
+    const refresh = async () => { const n = await GET('/api/admin/acquire/settings'); listHave(n.clients || [], n.indexers || []); };
+
+    const kind = h('select', null, ACQ_CLIENT_KINDS.map(([v, l]) => h('option', { value: v }, l)));
+    const cName = h('input', { type: 'text' }), cUrl = h('input', { type: 'url' });
+    const cUser = h('input', { type: 'text', autocomplete: 'off' }), cPass = h('input', { type: 'password', autocomplete: 'new-password' });
+    const userField = field(T.username, cUser), passLabel = h('span', null, T.password);
+    const sync = () => {
+      const k = kind.value;
+      cUrl.placeholder = ACQ_CLIENT_KINDS.find(x => x[0] === k)[2];
+      passLabel.textContent = k === 'sabnzbd' ? T.acqApiKey : T.password;
+      userField.classList.toggle('hidden', k === 'deluge' || k === 'sabnzbd');
+    };
+    kind.addEventListener('change', sync); sync();
+    const client = () => ({ id: 0, kind: kind.value, name: cName.value.trim() || ACQ_CLIENT_KINDS.find(x => x[0] === kind.value)[1], url: cUrl.value.trim(),
+      username: cUser.value.trim(), password: cPass.value, category: 'kinora-movies', category_tv: 'kinora-tv', enabled: true });
+    const cOut = h('p.small', { role: 'status' });
+    const cSave = h('button.btn.primary', { type: 'button', onclick: async () => {
+      if (!cUrl.value.trim()) return toast(T.wizUrlNeeded, true);
+      await POST('/api/admin/acquire/clients', client()); toast(T.saved);
+      cUrl.value = cUser.value = cPass.value = cName.value = ''; put(cOut); refresh();
+    } }, T.save);
+
+    const iKind = h('select', null, [['torznab', T.acqKindTorznab], ['newznab', T.acqKindNewznab]].map(([v, l]) => h('option', { value: v }, l)));
+    const iName = h('input', { type: 'text' });
+    const iUrl = h('input', { type: 'url', placeholder: 'http://192.168.1.10:9117/api/v2.0/indexers/all/results/torznab' });
+    const iKey = h('input', { type: 'password', autocomplete: 'off' });
+    const indexer = () => ({ id: 0, kind: iKind.value, name: iName.value.trim() || iKind.options[iKind.selectedIndex].text, url: iUrl.value.trim(),
+      api_key: iKey.value, categories: '', priority: 25, enabled: true });
+    const iOut = h('p.small', { role: 'status' });
+    const iSave = h('button.btn.primary', { type: 'button', onclick: async () => {
+      if (!iUrl.value.trim()) return toast(T.wizUrlNeeded, true);
+      await POST('/api/admin/acquire/indexers', indexer()); toast(T.saved);
+      iUrl.value = iKey.value = iName.value = ''; put(iOut); refresh();
+    } }, T.save);
+
+    put(body, h('div.wiz-text', null, h('p', null, T.wizDlWhat), h('p.muted.small', null, T.wizDlOptional)), have,
+      h('details.a-opt', null, h('summary', null, T.acqAddClient), h('div.a-opt-b.a-form', null,
+        h('div.grid2', null, field(T.acqClientKind, kind), field(T.acqName, cName)), field(T.acqClientUrl, cUrl),
+        h('div.grid2', null, userField, h('label.field', null, passLabel, cPass)), cOut,
+        h('div.a-form-foot', null, acqTestButton('/api/admin/acquire/clients/test', client, cOut), cSave))),
+      h('details.a-opt', null, h('summary', null, T.acqAddIndexer), h('div.a-opt-b.a-form', null,
+        h('div.grid2', null, field(T.acqName, iName), field(T.acqKind, iKind)), field(T.acqUrl, iUrl, T.acqUrlHint), field(T.acqApiKey, iKey), iOut,
+        h('div.a-form-foot', null, acqTestButton('/api/admin/acquire/indexers/test', indexer, iOut), iSave))),
+      h('div.form-row', null, h('label.switch-row', null, h('span', null, T.acqEnable), enabled), h('div.hint', null, T.wizDlEnableHint)),
+      h('p.small', null, h('a', { href: '#/admin/acqsettings' }, T.wizDlMore)));
+    return async () => { if (enabled.checked !== !!s.enabled) await api('PUT', '/api/admin/acquire/settings', { enabled: enabled.checked }); };
+  },
+
+  // remote access: the addresses on this network, the Tailscale / Cloudflare / proxy guides, the public URL
+  async remote(body) {
+    const [c, s] = await Promise.all([GET('/api/admin/connect'), GET('/api/admin/settings')]);
+    const kindLabel = { lan: T.lan, tailscale: 'Tailscale', other: T.otherNet };
+    const pub = h('input', { type: 'url', value: s.values.public_url || '', placeholder: 'https://kinora.example.org', disabled: !!s.env.public_url });
+    put(body, h('div.wiz-text', null, h('p', null, T.wizRemoteWhat)),
+      c.addresses.length > 0 && h('ul.wiz-list.small', null, c.addresses.map(a => h('li', null, h('b', null, kindLabel[a.kind]), ' · ', h('code.mono', null, a.url),
+        ' ', h('button.btn.small.ghost', { type: 'button', onclick: () => copyText(a.url) }, T.copy)))),
+      remoteGuides(),
+      h('div.a-form.wiz-form', null, field(T.publicUrl, pub, T.wizPublicHint), s.env.public_url && h('div.env-lock', null, T.envLocked(s.env.public_url))));
+    return async () => {
+      const v = pub.value.trim();
+      if (s.env.public_url || v === (s.values.public_url || '')) return;
+      try { await api('PATCH', '/api/admin/settings', { public_url: v }, { quiet: true }); }
+      catch (e) { toast(e.message, true); pub.focus(); return false; }
+    };
+  },
+
+  // what is set up, and a link to the Admin page of each part that is not
+  async summary(body) {
+    const st = await GET('/api/admin/setup/status');
+    const row = (ok, text, href) => h('li', null, h('span', { class: ok ? 'ok' : 'muted' }, ok ? icon('check') : '–'), ' ', text,
+      !ok && href && [' ', h('a.small', { href }, T.wizSetLater)]);
+    const dl = st.downloads;
+    put(body, h('ul.wiz-list.wiz-sum', null,
+      row(st.libraries > 0, st.libraries > 0 ? T.wizSumLibs(st.libraries, st.movies, st.series, st.episodes) : T.wizSumNoLibs, '#/admin/libraries'),
+      row(st.metadata.tmdb, st.metadata.tmdb ? T.wizSumTmdb : T.wizSumNoTmdb, '#/admin/metadata'),
+      row(true, st.encoder.hardware ? T.wizSumHw(srv(st.encoder.label)) : T.wizSumSw(srv(st.encoder.label))),
+      row(dl.clients > 0 && dl.indexers > 0 && dl.enabled, dl.clients || dl.indexers ? T.wizSumDl(dl.clients, dl.indexers) + (dl.enabled ? '' : ' · ' + T.wizSumDlOff) : T.wizSumNoDl, '#/admin/acqsettings'),
+      row(!!st.remote.public_url || st.remote.tailscale, st.remote.public_url ? T.wizSumPublic(st.remote.public_url) : st.remote.tailscale ? T.wizSumTailscale : T.wizSumLocal, '#/admin/connect')),
+      h('p.muted.small', null, T.wizSumLater));
+    return null;
+  },
+};
 
 function viewLogin() {
   const user = h('input', { type: 'text', autocomplete: 'username' });
@@ -1222,12 +1454,105 @@ function tagEditor(it) {
 function downloadWidget(it) {
   const q = h('select', { 'aria-label': T.downloadQ, style: { width: 'auto' } },
     h('option', { value: 'original' }, T.original), ['1080p', '720p', '480p', '360p'].map(v => h('option', { value: v }, v)));
+  if (DEV) q.value = '720p'; // to a phone: a smaller file is the usual choice
   const btn = h('button.btn', { onclick: async () => {
-    const r = await POST(`/api/items/${it.id}/download`, { quality: q.value });
-    if (r.url) { location.href = r.url; return; }
-    toast(T.dlStarted);
-  } }, icon('dl'), T.download);
+    btn.disabled = true;
+    try {
+      const r = await POST(`/api/items/${it.id}/download`, { quality: q.value });
+      if (DEV) { await deviceWant(it, r, q.value); return; }
+      if (r.url) { location.href = r.url; return; }
+      toast(T.dlStarted);
+    } finally { btn.disabled = false; }
+  } }, icon('dl'), DEV ? T.dlToDevice : T.download);
   return h('span.row-gap', null, q, btn);
+}
+
+// ===================================================================== downloads to the device (Android app)
+// window.KinoraOffline (apps/android, KinoraOffline.java): the server prepares the MP4, then the phone's
+// DownloadManager fetches it, and the app's launcher plays it without the server. A download belongs to the
+// profile that asked for it (offline only the last profile's downloads show, so a kids profile never sees
+// another's); what was watched offline comes back here and is sent to the server.
+const DEV = (() => { try { return window.KinoraOffline && window.KinoraOffline.available() ? window.KinoraOffline : null; } catch { return null; } })();
+function devCall(fn) { try { const r = JSON.parse(fn()); return r && r.error ? null : r; } catch { return null; } }
+
+// asked on the title page: remember it on the device; the hand-over waits until the server has the file
+async function deviceWant(it, job, quality) {
+  const p = state.me.profile;
+  const meta = { series: it.series_title || '', position: (it.user_data && it.user_data.position) || 0,
+    episode: it.kind === 'episode' && it.season_num != null ? `S${String(it.season_num).padStart(2, '0')}E${String(it.episode_num || 0).padStart(2, '0')}` : '' };
+  const r = devCall(() => DEV.want(JSON.stringify({ id: it.id, key: job.key || '', title: it.title, meta, quality, profile: p.id })));
+  if (!r) return toast(T.dlDeviceFailed, true);
+  if (r.state === 'done') return toast(T.dlOnDevice);
+  if (job.url) await deviceStart(it.id, job.url); // the original file: nothing to prepare
+  toast(T.dlDeviceStarted);
+  deviceHandOff();
+}
+
+// the subtitles go along as text (fetched with this session), the file through a stream-token URL
+async function deviceStart(id, url) {
+  let subs = [];
+  try {
+    const d = await GET('/api/items/' + id, { quiet: true });
+    const text = (d.item.streams || []).filter(st => st.type === 'subtitle' && st.text_based).slice(0, 10);
+    for (const st of text) {
+      const r = await fetch(`/api/items/${id}/subtitles/${st.type_index}`, { credentials: 'same-origin' });
+      if (r.ok) subs.push({ lang: st.lang, label: st.title || (T.langNames[st.lang] || st.lang), text: await r.text() });
+    }
+  } catch { subs = []; } // without subtitles rather than not at all
+  return devCall(() => DEV.start(id, url, JSON.stringify(subs)));
+}
+
+// Hands every title the server has finished to the phone. Runs while the web client is open (every 5 s while
+// something is being prepared); a title prepared while the app was closed goes over the next time it opens.
+let handOffTimer = 0;
+async function deviceHandOff() {
+  clearTimeout(handOffTimer);
+  if (!DEV || !state.me || !state.me.profile) return;
+  const mine = (devCall(() => DEV.list()) || []).filter(x => x.state === 'preparing');
+  if (!mine.length) return;
+  let jobs = [];
+  try { jobs = (await GET('/api/downloads', { quiet: true })).jobs; } catch { /* offline for a moment */ }
+  for (const x of mine) {
+    const j = jobs.find(j => j.key === x.key);
+    if (j && j.status === 'done' && j.file_url) await deviceStart(x.id, j.file_url);
+  }
+  handOffTimer = setTimeout(deviceHandOff, 5000);
+}
+
+// on every start with a profile: tell the phone who is watching, send what was watched offline
+let deviceSyncedFor = 0;
+async function deviceSync() {
+  if (!DEV || !state.me || !state.me.profile) return;
+  const p = state.me.profile;
+  if (deviceSyncedFor === p.id) return;
+  deviceSyncedFor = p.id;
+  devCall(() => DEV.setProfile(JSON.stringify({ id: p.id, name: p.name, kids: !!p.is_kids })));
+  for (const q of devCall(() => DEV.takeProgress(p.id)) || []) {
+    await POST(`/api/items/${q.id}/progress`, { position: q.position, ended: !!q.ended }, { quiet: true }).catch(() => {});
+  }
+  deviceHandOff();
+}
+
+// the Downloads page: what this profile has on the phone
+function deviceSection(onChange) {
+  if (!DEV) return null;
+  const pid = state.me.profile.id;
+  const list = (devCall(() => DEV.list()) || []).filter(x => (x.profiles || []).includes(pid));
+  const label = x => [x.meta && x.meta.series, x.meta && x.meta.episode, x.title].filter(Boolean).join(' · ');
+  const stateText = x => x.state === 'done' ? T.dlOnDevice : x.state === 'downloading' ? T.dlTransferring(Math.round((x.progress || 0) * 100))
+    : x.state === 'preparing' ? T.dlPreparing : T.dlDeviceFailed;
+  return h('section', { class: 'mt4' }, h('h2', null, T.dlDeviceTitle),
+    list.length ? h('div.scroll-x', null, h('table.tbl', null, h('tbody', null, list.map(x => h('tr', null,
+      h('td', null, h('a', { href: '#/item/' + x.id }, label(x))), h('td', null, x.quality || ''),
+      h('td', { class: x.state === 'failed' ? 'bad' : x.state === 'done' ? 'ok' : '' }, stateText(x)),
+      h('td', null, h('div.row-gap', null,
+        x.state === 'failed' && h('button.btn', { onclick: async () => {
+          const it = (await GET('/api/items/' + x.id)).item;
+          const job = await POST(`/api/items/${x.id}/download`, { quality: x.quality || '720p' });
+          await deviceWant(it, job, x.quality || '720p'); onChange();
+        } }, T.retry),
+        h('button.btn.ghost', { onclick: () => { devCall(() => DEV.remove(x.id, pid)); onChange(); } }, T.delete)))))))) : h('p.muted', null, T.dlDeviceEmpty),
+    h('p.muted.small', null, T.dlDeviceHint));
 }
 
 async function fixMatchDialog(it) {
@@ -1389,14 +1714,16 @@ async function viewDownloads() {
   const render = async () => {
     const r = await GET('/api/downloads');
     if (dead) return; // left while the request was out: start no new timer
-    if (!r.jobs.length) { put(box, h('p.empty', null, T.dlEmpty)); return; }
+    const dev = deviceSection(() => { clearTimeout(timer); render(); });
+    if (DEV && (devCall(() => DEV.list()) || []).some(x => x.state === 'preparing' || x.state === 'downloading')) { clearTimeout(timer); timer = setTimeout(render, 2000); }
+    if (!r.jobs.length) { put(box, h('p.empty', null, T.dlEmpty), dev); return; }
     put(box, h('div.scroll-x', null, h('table.tbl', null, h('thead', null, h('tr', null, h('th', null, T.title), h('th', null, T.quality), h('th', null, T.status), h('th', null, ''))),
       h('tbody', null, r.jobs.map(j => h('tr', null,
         h('td', null, h('a', { href: '#/item/' + j.item_id }, j.file_name)),
         h('td', null, j.quality),
         h('td', { class: 'td-progress' }, j.status === 'running' ? h('div', null, h('div.bar', null, h('i', { style: { width: Math.round(j.progress * 100) + '%' } })), h('span.small.muted', null, Math.round(j.progress * 100) + '%')) : h('span' + (j.status === 'error' ? '.bad' : ''), { title: srv(j.error) || '' }, T.dlStatus[j.status] + (j.error ? ': ' + srv(j.error) : '')), j.size ? h('div.small.muted', null, fmtBytes(j.size)) : null),
-        h('td', null, j.status === 'done' && h('a.btn.primary', { href: `/api/downloads/${j.key}/file`, download: j.file_name }, icon('dl'), T.saveFile))))))));
-    if (r.jobs.some(j => j.status === 'running' || j.status === 'queued')) timer = setTimeout(render, 2000);
+        h('td', null, j.status === 'done' && !DEV && h('a.btn.primary', { href: `/api/downloads/${j.key}/file`, download: j.file_name }, icon('dl'), T.saveFile))))))), dev);
+    if (r.jobs.some(j => j.status === 'running' || j.status === 'queued')) { clearTimeout(timer); timer = setTimeout(render, 2000); }
   };
   onCleanup(() => { dead = true; clearTimeout(timer); });
   await render();
@@ -2240,6 +2567,12 @@ const emptyNote = (title, hint, action) => h('div.empty-note', null, h('p', null
 
 async function adminDash(body) {
   let t, dead = false;
+  // a new install whose first-run wizard was not finished: offer to continue it (or to put it away)
+  const wiz = await GET('/api/admin/setup/status', { quiet: true }).catch(() => null);
+  let wizNote = wiz && wiz.pending && h('div.wiz-note', null,
+    h('div', null, h('b', null, T.wizDashTitle), h('p.muted.small', null, T.wizDashHint)),
+    h('div.row-gap', null, h('a.btn.primary', { href: '#/setup/' + WIZ[0] }, T.wizDashContinue),
+      h('button.btn.ghost', { onclick: async () => { await POST('/api/admin/setup/finish', {}); wizNote.remove(); wizNote = null; } }, T.wizDashDismiss)));
   const render = async first => {
     let d;
     try { d = await GET('/api/admin/dashboard', { quiet: !first }); }
@@ -2254,7 +2587,7 @@ async function adminDash(body) {
     const up = d.uptime_sec, uptime = up < 60 ? T.uptimeUnder1 : up < 3600 ? T.min(Math.floor(up / 60)) : up > 86400 ? T.uptimeDH(Math.floor(up / 86400), Math.floor(up / 3600) % 24) : T.uptimeHM(Math.floor(up / 3600), Math.floor(up / 60) % 60);
     const stat = (v, l) => h('div.stat', null, h('b', { title: String(v) }, v), h('span', null, l));
     const group = (title, stats, foot) => h('div.a-ledger-g', null, h('h2.a-eyebrow', null, title), h('div.a-stats', null, stats), foot);
-    put(body, aHead(T.aDash, T.aLedeDash),
+    put(body, aHead(T.aDash, T.aLedeDash), wizNote || null,
       h('div.a-ledger', null,
         group(T.aGroupLibrary, [stat(d.library.movies, T.statMovies), stat(d.library.series, T.statSeries), stat(d.library.episodes, T.statEpisodes), stat(fmtBytes(d.library.bytes), T.size)]),
         group(T.aServer, [stat(d.transcodes.length, T.activeTranscodes), stat(d.parties.rooms, T.parties), stat(uptime, T.uptime)],
@@ -2778,19 +3111,24 @@ async function adminConnect(body) {
   const card = (title, url, sub) => h('div.conn-card', null, qrImg(url),
     h('div', null, h('b', null, title), sub && h('p.muted.small', null, sub), h('div.url-row', null, h('code.mono', { title: url }, url), h('button.btn', { onclick: () => copyText(url) }, T.copy))));
   const kindLabel = { lan: T.lan, tailscale: 'Tailscale', other: T.otherNet };
-  const opt = (title, ...kids) => h('details.a-opt', null, h('summary', null, title), h('div.a-opt-b', null, ...kids));
   put(body, aHead(T.aConnect, T.connectLede),
     aSec(T.aAddresses, !c.public_url && T.noPublic, !c.public_url && h('a.btn.ghost', { href: '#/admin/settings' }, T.aSettings + ' →'),
       h('div.conn-grid', null, c.public_url && card(T.publicUrl, c.public_url), c.addresses.map(a => card(kindLabel[a.kind] + ' (' + a.iface + ')', a.url))),
       c.in_container && h('p.muted.small', { class: 'mt3' }, T.inDocker)),
-    aSec(T.aRemote, T.aRemoteHint, null, h('div.a-opts', null,
-      opt(T.tsTitle, h('p', null, T.tsHint),
-        h('pre.code', null, 'TS_AUTHKEY=tskey-... docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d')),
-      opt(T.cfTitle, h('p', null, T.cfHint),
-        h('pre.code', null, 'CF_TUNNEL_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d'), h('p.muted.small', null, T.cfPublic)),
-      opt(T.proxyTitle, h('p', null, T.proxyHint),
-        h('pre.code', null, T.exampleHost + ' {\n  reverse_proxy 127.0.0.1:8096\n}'),
-        h('pre.code', null, 'location / {\n  proxy_pass http://127.0.0.1:8096;\n  proxy_http_version 1.1;\n  proxy_set_header Upgrade $http_upgrade;\n  proxy_set_header Connection "upgrade";\n  proxy_set_header Host $host;\n  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n  proxy_set_header X-Forwarded-Proto $scheme;\n  proxy_buffering off;\n  client_max_body_size 0;\n}')))));
+    aSec(T.aRemote, T.aRemoteHint, null, remoteGuides()));
+}
+
+// how to reach the server from outside: Tailscale, Cloudflare Tunnel, a reverse proxy (Admin → Connect and the wizard)
+function remoteGuides() {
+  const opt = (title, ...kids) => h('details.a-opt', null, h('summary', null, title), h('div.a-opt-b', null, ...kids));
+  return h('div.a-opts', null,
+    opt(T.tsTitle, h('p', null, T.tsHint),
+      h('pre.code', null, 'TS_AUTHKEY=tskey-... docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d')),
+    opt(T.cfTitle, h('p', null, T.cfHint),
+      h('pre.code', null, 'CF_TUNNEL_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d'), h('p.muted.small', null, T.cfPublic)),
+    opt(T.proxyTitle, h('p', null, T.proxyHint),
+      h('pre.code', null, T.exampleHost + ' {\n  reverse_proxy 127.0.0.1:8096\n}'),
+      h('pre.code', null, 'location / {\n  proxy_pass http://127.0.0.1:8096;\n  proxy_http_version 1.1;\n  proxy_set_header Upgrade $http_upgrade;\n  proxy_set_header Connection "upgrade";\n  proxy_set_header Host $host;\n  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n  proxy_set_header X-Forwarded-Proto $scheme;\n  proxy_buffering off;\n  client_max_body_size 0;\n}')));
 }
 
 async function adminDevices(body) {
@@ -3040,6 +3378,7 @@ async function adminSettings(body) {
       { h: T.setJellyfin, hint: T.setJellyfinHint },
       ['jellyfin_compat', T.jfCompat, 'toggle', null, s.jellyfin_compat_addr ? T.jfCompatPort(s.jellyfin_compat_addr) : T.jfCompatNoEnv]], () => { state.status = null; }),
     lookPanel(s.values, s.env, () => adminSettings(body)),
+    aSplit(T.wizReopenTitle, T.wizReopenHint, h('a.btn', { href: '#/setup/' + WIZ[0] }, T.wizReopen)),
     aSplit(T.backupTitle, T.backupHint, h('a.btn', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
 }
 
@@ -3050,6 +3389,10 @@ const acqStateLabel = st => ({ downloading: T.acqDownloading, importing: T.acqIm
 const acqReject = code => ({ resolution: T.acqRejRes, source: T.acqRejSource, size: T.acqRejSize, seeders: T.acqRejSeeders, language: T.acqRejLang, title: T.acqRejTitle, '3d': T.acqRej3d, blocklisted: T.acqRejBlock })[code] || code;
 const fmtSpeed = b => fmtBytes(b) + '/s';
 // a test button for an unsaved configuration: the result stays under the form
+// download clients: torrents (qBittorrent, Transmission, Deluge) and Usenet (SABnzbd, NZBGet); Kinora picks by the release
+const ACQ_CLIENT_KINDS = [['qbittorrent', 'qBittorrent', 'http://192.168.1.10:8080'], ['transmission', 'Transmission', 'http://192.168.1.10:9091'],
+  ['deluge', 'Deluge', 'http://192.168.1.10:8112'], ['sabnzbd', 'SABnzbd', 'http://192.168.1.10:8080'], ['nzbget', 'NZBGet', 'http://192.168.1.10:6789']];
+
 function acqTestButton(url, body, out) {
   return h('button.btn', { type: 'button', onclick: async e => {
     const b = e.currentTarget;
@@ -3257,9 +3600,7 @@ async function adminAcqSettings(body, then) {
     h('div.a-form-foot', null, acqTestButton('/api/admin/acquire/flaresolverr/test', () => ({ url: fsUrl.value }), fsOut),
       h('button.btn.primary', { onclick: async () => { await api('PUT', '/api/admin/acquire/settings', { flaresolverr: fsUrl.value }); toast(T.saved); rerender(); } }, T.save))));
 
-  // download clients: torrents (qBittorrent, Transmission, Deluge) and Usenet (SABnzbd, NZBGet); Kinora picks by the release
-  const KINDS = [['qbittorrent', 'qBittorrent', 'http://192.168.1.10:8080'], ['transmission', 'Transmission', 'http://192.168.1.10:9091'],
-    ['deluge', 'Deluge', 'http://192.168.1.10:8112'], ['sabnzbd', 'SABnzbd', 'http://192.168.1.10:8080'], ['nzbget', 'NZBGet', 'http://192.168.1.10:6789']];
+  const KINDS = ACQ_CLIENT_KINDS;
   // what a client sorts by: qBittorrent category and folder, Transmission / Deluge a folder, Usenet a category
   const isUsenet = k => k === 'sabnzbd' || k === 'nzbget';
   const hasCat = k => k !== 'transmission' && k !== 'deluge';

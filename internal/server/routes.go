@@ -79,7 +79,8 @@ func (s *Server) routes() {
 	m.HandleFunc("DELETE /api/items/{id}/subtitles/downloaded/{sid}", s.withProfile(notKids(s.handleSubtitleDelete)))
 	m.HandleFunc("POST /api/items/{id}/download", s.withProfile(s.handleDownloadCreate))
 	m.HandleFunc("GET /api/downloads", s.withProfile(s.handleDownloads))
-	m.HandleFunc("GET /api/downloads/{key}/file", s.withProfile(s.handleDownloadFile))
+	// also with ?st= (a stream token of the same title): the apps' background download managers carry no session
+	m.HandleFunc("GET /api/downloads/{key}/file", s.media(true, s.handleDownloadFile))
 
 	// admin
 	m.HandleFunc("GET /api/admin/users", s.admin(s.handleUsers))
@@ -130,6 +131,8 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/libraries/{id}/scan", s.admin(s.handleLibraryScan))
 	m.HandleFunc("GET /api/admin/scan", s.admin(s.handleScanStatus))
 	m.HandleFunc("POST /api/admin/hwtest", s.admin(s.handleHWTest))
+	m.HandleFunc("GET /api/admin/setup/status", s.admin(s.handleSetupStatus))
+	m.HandleFunc("POST /api/admin/setup/finish", s.admin(s.handleSetupFinish))
 	m.HandleFunc("POST /api/admin/metadata/refresh", s.admin(s.handleMetadataRefresh))
 	m.HandleFunc("GET /api/admin/metadata", s.admin(s.handleMetadataStatus))
 	m.HandleFunc("GET /api/admin/metadata/search", s.admin(s.handleMetadataSearch))

@@ -410,7 +410,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request, c *reqCtx
 			kind := "other"
 			ip := ipn.IP.To4()
 			switch {
-			case ip[0] == 100 && ip[1]&0xC0 == 64: // 100.64.0.0/10 CGNAT = Tailscale
+			case isTailscaleIP(ip): // 100.64.0.0/10 CGNAT = Tailscale
 				kind = "tailscale"
 			case ip.IsPrivate():
 				kind = "lan"
