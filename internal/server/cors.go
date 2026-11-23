@@ -100,3 +100,22 @@ func (s *Server) cors(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// csrfGuard drops the session cookie from state-changing requests that a browser marks as coming from
+// another origin. SameSite=Lax already stops cross-site form posts, but a page on the same host with
+// another port, or on a sibling subdomain, is "same-site" and would still send the cookie. Browsers set
+// Sec-Fetch-Site from their own view of the page, so a reverse proxy that rewrites Host does not
+// matter here. Requests with a Bearer token (the apps) are not affected: the cookie was never their
+// credential.
+func csrfGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" || site == "same-site" {
+				r.Header.Del("Cookie")
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}

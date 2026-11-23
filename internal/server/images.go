@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/ScotyLucas/kinora/internal/scanner"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 // handleImage serves artwork with a fallback chain so cards are never empty
@@ -28,6 +29,10 @@ func (s *Server) handleImage(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 			writeErr(w, http.StatusNotFound, "nem található")
 			return
 		}
+	}
+	if filter == nil && c.User != nil && c.User.Libraries != nil {
+		// no profile chosen yet (profile picker): the account's library restriction still applies
+		filter = &store.Profile{UserID: c.User.ID, Libraries: c.User.Libraries}
 	}
 	if filter != nil && !s.st.ItemVisible(id, filter) {
 		writeErr(w, http.StatusNotFound, "nem található")
