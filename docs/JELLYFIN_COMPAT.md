@@ -1,6 +1,76 @@
-# Jellyfin-kompatibilis API – terv
+# Jellyfin-kompatibilis API
 
-Állapot: **terv, jóváhagyásra vár.** Ehhez még nincs kód.
+Állapot: **megvalósítva** (`internal/jfcompat`). Automatikus tesztek: igen. Valódi kliensekkel: **még nincs kipróbálva**,
+lásd a „Kliens-mátrix” részt. Az eredeti terv lent változatlanul olvasható; ahol a megvalósítás eltér tőle, a
+„Döntések és eltérések” rész mondja meg.
+
+## Döntések és eltérések (a jóváhagyás után)
+
+- **Belépés:** `fiók` vagy `fiók/profil`, a jelszó végén `#PIN` a PIN-es profilnál. Fiók+IP páronként 5 hibás
+  próbálkozás után 15 perc kizárás, és ettől függetlenül IP-nként legfeljebb 30 hiba 15 percen belül.
+- **Quick Connect:** a Kinorában történő jóváhagyáskor kötelező profilt választani. PIN-es profilnál a PIN-t ott kell
+  megadni, és a hibás PIN ugyanúgy beleszámít a próbálkozási korlátba, mint a hibás kód.
+- **Port:** külön port, `KINORA_JELLYFIN_ADDR` (alap `:8097`), és csak `KINORA_JELLYFIN_COMPAT=1` mellett nyílik meg.
+  Az Admin → Beállítások kapcsolója dönt arról, hogy válaszol-e (kikapcsolva HTTP 503).
+- **Termék és verzió:** `ProductName: "Kinora"`, `Version: "10.10.7"` (API-szint). Jellyfin-logó és -branding sehol.
+- **Azonosítók:** AES-sel titkosított (namespace, Kinora-ID) blokk. A kulcs a Kinora adatbázisában van
+  (`jfcompat_id_key`), így újraindítás és mentés-visszaállítás után is ugyanazok az azonosítók. Visszafejtéshez nem kell
+  tábla, kitalálni viszont nem lehet.
+- **Útvonalak:** kis- és nagybetű-függetlenek (ahogy a Jellyfin-kliensek elvárják), és a régi `/emby` előtag is működik.
+- **Lejátszás:** ha a kliens nem küld `DeviceProfile`-t (Infuse, Kodi), a Kinora az eredeti fájlt adja (direct play).
+  Ha küld, a `media.Decide` dönt, és szükség esetén HLS-transcode indul a Kinora transcode-sessionjeivel (a fiókonkénti
+  korláttal). A transcode a `master.m3u8` lekérésekor indul, nem a `PlaybackInfo`-nál.
+- **Media Segments:** a Kinora intro-, stáblista-, recap- és előzetes-szakaszai a `/MediaSegments/{id}` végponton
+  Jellyfin-típusokként (`Intro`, `Outro`, `Recap`, `Preview`) jönnek.
+- **Ismert korlát:** ha a kliens a transcode-ot egy kezdőpozícióval kéri (`StartTimeTicks`), a HLS-lista ettől a
+  ponttól indul. Hogy a kliensek ezt hogyan kezelik (az idővonal 0-tól vagy a kezdőponttól számol), azt valódi
+  kliensekkel kell ellenőrizni.
+
+## Kliens-mátrix
+
+| Kliens | Platform | Állapot | Megjegyzés |
+|---|---|---|---|
+| Infuse | Apple TV, iPhone | nincs kipróbálva | a tulajdonos teszteli, lásd a tesztlistát |
+| Swiftfin | iPhone, Apple TV | nincs kipróbálva | a tulajdonos teszteli, lásd a tesztlistát |
+| Kodi + JellyCon / Jellyfin for Kodi | Windows | nincs kipróbálva | a Kodi fel van telepítve; a bővítmény vezérléséhez engedély kell (lásd a fázis-összefoglalót) |
+| Findroid | Android | nincs kipróbálva | Android-emulátor kell hozzá (nincs a gépen) |
+| Jellyfin Web, Jellyfin Media Player, hivatalos Android-app | – | nem támogatott | a szerver webes felületét töltenék be |
+
+## Tesztlista: Infuse és Swiftfin
+
+Előkészítés: a Kinorában Admin → Beállítások → **Jellyfin-kompatibilis API** be. A compose-ban a `8097:8097` port és a
+`KINORA_JELLYFIN_COMPAT=1` legyen kikommentezve. Legyen egy PIN-es gyerekprofil is.
+
+**Infuse (Apple TV, iPhone):** Beállítások → Megosztások → Megosztás hozzáadása → **Jellyfin**. Cím: a szerver IP-je,
+port: `8097`.
+
+1. Belépés `fiók` + jelszó → a könyvtárak (Filmek, Sorozatok) megjelennek, a borítók és háttérképek betöltődnek.
+2. Belépés `fiók/GyerekProfil` + `jelszó#PIN` → csak a gyerekprofilnak engedett címek látszanak (a 18-as karikás film
+   és a besorolás nélküliek nem).
+3. Hibás PIN ötször → a hatodik, már helyes próbálkozás is elutasítva (15 percig), egy másik fiók ugyanarról a gépről
+   közben beléphet.
+4. Film lejátszása (H.264 MP4 és HEVC MKV is) → elindul, tekerés működik.
+5. Feliratok: beágyazott és külső `.srt` (magyar ékezetekkel) → kiválasztható, helyesen jelenik meg. Hangsávváltás.
+6. Félbehagyás után a Kinora webes felületén a „Folytatás” sorban ott a film, jó pozícióval; és fordítva: a Kinorában
+   elkezdett film az Infuse-ban onnan folytatható.
+7. Megnézettnek jelölés és kedvenc az Infuse-ban → a Kinorában is látszik (és fordítva, egy szinkronizálás után).
+8. Sorozat: évadok, epizódok sorrendben, a dupla epizód egy elemként.
+9. A Kinora Fiók → Eszközök listájában az Infuse eszköz látszik („Jellyfin-kompatibilis kliens”), és innen kiléptetve az
+   Infuse újra belépést kér.
+
+**Swiftfin (iPhone, Apple TV):** szerver hozzáadása: `http://<szerver-ip>:8097`.
+
+1. A szerver megtalálható (kézi címmel, és a helyi hálózaton automatikusan is, ha a Kinora UDP 7359-en elérhető).
+2. **Quick Connect:** a Swiftfin kódot mutat → a Kinora webes felületén profil menü → Eszköz csatlakoztatása → kód,
+   profil (és PIN) → a Swiftfin belép, a választott profillal.
+3. Az Infuse-lista 1–9. pontja.
+4. Transcode: a Swiftfin natív lejátszójával (Beállítások → Videólejátszó: Native) egy HEVC/HDR film → átkódolva elindul,
+   tekerés működik; a Kinora Admin → Irányítópult oldalán a futó átkódolás látszik, a lejátszás leállítása után eltűnik.
+5. Intro átugrása: egy sorozatepizódnál, amelynél a Kinora talált introt, megjelenik az „Intro átugrása” gomb (ha a
+   Swiftfin-verzió támogatja a Media Segments API-t).
+
+Ha valami nem működik, a legtöbbet a Kinora naplója segít (`KINORA_LOG_LEVEL=debug`): minden kompatibilis kérés
+`jellyfin-compat` sorként jelenik meg, útvonallal és státuszkóddal.
 
 ## Cél
 
