@@ -18,11 +18,14 @@ services:
   kinora:
     image: ghcr.io/scotylucas/kinora:latest
     container_name: kinora
-    ports: ["8096:8096"]
+    ports:
+      - "8096:8096"
+      # - "8097:8097"              # Jellyfin-compatible API, see below
     environment:
       - TZ=Europe/Budapest
       - PUID=1000
       - PGID=1000
+      # - KINORA_JELLYFIN_COMPAT=1  # Jellyfin-compatible API, see below
     volumes:
       - ./config:/config
       - ./cache:/cache
@@ -71,6 +74,10 @@ All settings can also be provided through environment variables. When set this w
 | `KINORA_QUICKCONNECT` | `1` | Allow six-digit code sign-in from TVs/phones (`0` = disabled) |
 | `KINORA_DISCOVERY` | `1` | Discover servers on the local network (`0` = disabled) |
 | `KINORA_DISCOVERY_PORT` | `7359` | Discovery UDP port (`0` = do not listen) |
+| `KINORA_JELLYFIN_COMPAT` | – | `1` = opens the Jellyfin-compatible API's port (it switches on together with the admin setting) |
+| `KINORA_JELLYFIN_ADDR` | `:8097` | address of the Jellyfin-compatible API |
+| `KINORA_MAX_TRANSCODES` | – | server-wide cap on simultaneous transcodes (each account is always limited to 8) |
+| `KINORA_ALLOW_NEWER_DB` | – | `1` = also opens a database written by a newer Kinora (after a downgrade; at your own risk) |
 | `KINORA_CORS_ORIGINS` | — | Comma-separated extra app origins allowed for token-authenticated CORS requests |
 | `KINORA_ACCENT` | — | Accent color (`#rrggbb`); also used by the apps |
 | `KINORA_LOGO` | — | Logo file (for example `/config/logo.png`); adopted at startup when changed (PNG/JPG/WebP/SVG, max. 2 MB) |
@@ -213,6 +220,25 @@ Note: Cloudflare's terms may restrict large volumes of video traffic through a t
 Apps send the token returned by `POST /api/login` (or Quick Connect) in the `Authorization: Bearer <token>` header. CORS is allowed only for app origins (`capacitor://localhost`, `http(s)://localhost`, `null`) and token-authenticated requests, without `Access-Control-Allow-Credentials`.
 
 Because `<video>` and `<img>` elements cannot send authorization headers, playback responses include a short-lived, signed stream token (`?st=`) in their URLs. It is scoped to the item, user and device.
+
+### Jellyfin-compatible API (Infuse, Swiftfin, Findroid, Kodi)
+
+Native Jellyfin clients can connect to Kinora too, on a port of its own (`8097` by default). It is off by default:
+
+1. in the compose file, uncomment the `8097:8097` port and the `KINORA_JELLYFIN_COMPAT=1` line, then restart the container;
+2. in Kinora: **Admin → Settings → Jellyfin-compatible API** → on;
+3. in the client, use `http://<server-ip>:8097` as the server.
+
+**Sign-in:** the user name is the account name (it signs in with the account's first adult profile) or `account/profile`
+(e.g. `kate/Kids`); the password is the account password, with `#PIN` at the end for a profile that has a PIN (e.g.
+`password#1234`). Five wrong tries lock the account out from that address for 15 minutes. **Quick Connect** works too:
+approve the client's code in Kinora (profile menu → **Connect a device**) and choose the profile there (for a profile with
+a PIN, enter the PIN there).
+
+Every Kinora rule applies: kids profiles and rating limits, the account's library restriction, transcode limits. Signed-in
+clients appear in Kinora's device list and can be signed out there. This is partial compatibility (browsing, playback,
+subtitles, resume, watched and favourite state); web-based clients (Jellyfin Web, Jellyfin Media Player, the official
+Android app) do not work. Details and tested clients: [docs/JELLYFIN_COMPAT.md](docs/JELLYFIN_COMPAT.md).
 
 ## Built-in acquisition (instead of Radarr/Prowlarr/Jellyseerr)
 
