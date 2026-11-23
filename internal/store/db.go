@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,9 @@ type Store struct {
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
+	}
+	if strings.ContainsAny(path, "?#") {
+		return nil, fmt.Errorf("az adatbázis útvonalában nem lehet ? vagy # karakter: %s", path)
 	}
 	dsn := path + "?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=10000&_foreign_keys=on&_txlock=immediate"
 	db, err := sql.Open("sqlite3", dsn)
@@ -560,6 +564,13 @@ INSERT INTO settings(key,value) VALUES('push_episode_id', COALESCE((SELECT MAX(i
 `,
 }
 
+// ErrNewerSchema: the database was written by a newer Kinora (after rolling back an update, for example).
+// Running against a schema this binary does not know can fail later or write rows the newer version misreads.
+var ErrNewerSchema = errors.New("az adatbázist egy újabb Kinora-verzió hozta létre")
+
+// AllowNewerSchema opens such a database anyway (KINORA_ALLOW_NEWER_DB=1).
+var AllowNewerSchema bool
+
 func (s *Store) migrate() error {
 	if _, err := s.DB.Exec(`CREATE TABLE IF NOT EXISTS schema_version(version INTEGER NOT NULL)`); err != nil {
 		return err
@@ -572,6 +583,10 @@ func (s *Store) migrate() error {
 		}
 	} else if err != nil {
 		return err
+	}
+	if v > len(migrations) && !AllowNewerSchema {
+		return fmt.Errorf("%w (az adatbázis sémája %d, ez a verzió %d-ig ismeri): frissítsd a Kinorát, vagy állíts vissza egy mentést; "+
+			"saját felelősségre: KINORA_ALLOW_NEWER_DB=1", ErrNewerSchema, v, len(migrations))
 	}
 	for i := v; i < len(migrations); i++ {
 		tx, err := s.DB.Begin()
