@@ -656,6 +656,13 @@
   "aMeta": "Metadaten",
   "aConnect": "Verbinden",
   "aSettings": "Einstellungen",
+  "setJellyfin": "Jellyfin-kompatible API",
+  "setJellyfinHint": "Auch native Jellyfin-Clients (Infuse, Swiftfin, Findroid, Kodi) können sich mit diesem Server verbinden, über einen eigenen Port. Anmeldung: Benutzername ist der Kontoname oder Konto/Profil; das Passwort ist das Kontopasswort, bei einem Profil mit PIN mit #PIN am Ende. Nach fünf Fehlversuchen wird das Konto für diese Adresse 15 Minuten gesperrt. Quick Connect funktioniert auch: Bestätige den Code hier in Kinora und wähle das Profil.",
+  "jfCompat": "Jellyfin-kompatible API einschalten",
+  "jfCompatPort": "Der Server lauscht auf {0}. Gib diesen Port im Client an.",
+  "jfCompatNoEnv": "Der Port ist nicht offen: Starte Kinora mit der Umgebungsvariable KINORA_JELLYFIN_COMPAT=1 (in Docker auch Port 8097 freigeben); danach macht dieser Schalter ihn verfügbar.",
+  "qcPinLabel": "PIN des Profils",
+  "qcJellyfinNote": "Jellyfin-kompatibler Client: Er meldet sich mit dem Profil an, das du jetzt wählst. Bei einem Profil mit PIN gib die PIN hier ein, denn der Client kann sie nicht abfragen.",
   "aImport": "Import",
   "arrTitle": "Sonarr / Radarr / Prowlarr",
   "arrHint": "Die eingebaute Beschaffung übernimmt die überwachten Serien (Sonarr), die überwachten, noch fehlenden Filme (Radarr), Qualitätsprofile, Indexer, Download-Clients und Stammordner. Aus Prowlarr kommt die Indexerliste, jeder über Prowlarrs eigenen Torznab-Feed. Zuerst kommt eine Vorschau, und ein erneuter Lauf legt nichts doppelt an.",
@@ -838,6 +845,7 @@
   "lastActive": "Zuletzt aktiv",
   "aDevices": "Geräte",
   "platforms": {
+   "jellyfin": "Jellyfin-kompatibler Client",
    "web": "Browser",
    "android": "Android",
    "androidtv": "Android TV",
@@ -1663,6 +1671,7 @@
    "Ismeretlen": "Unbekannt"
   },
   "srv": {
+   "válassz profilt ehhez az eszközhöz": "wähle ein Profil für dieses Gerät",
    "ez az importálás már fut": "dieser Import läuft bereits",
    "a jelszóbeállító link érvénytelen vagy lejárt": "der Passwort-Link ist ungültig oder abgelaufen",
    "az előnézet lejárt, készítsd el újra": "die Vorschau ist abgelaufen, erstelle sie neu",

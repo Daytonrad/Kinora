@@ -1447,17 +1447,24 @@ async function viewQuickConnect(code) {
   async function lookup(c) {
     let info;
     try { info = await POST('/api/quickconnect/lookup', { code: c }); } catch { return ask(); }
-    const radios = [[0, T.qcAnyProfile, null], ...me.profiles.map(p => [p.id, p.name, p])].map(([id, label, p]) =>
-      h('label.check', null, h('input', { type: 'radio', name: 'qcp', value: id, checked: p ? p.id === me.profile.id : false }), ' ', label,
+    const jf = info.platform === 'jellyfin';
+    const pin = h('input.pin-input', { type: 'password', inputmode: 'numeric', maxlength: 8, autocomplete: 'off', 'aria-label': T.qcPinLabel });
+    const pinRow = h('label.field', { hidden: true }, h('span', null, T.qcPinLabel), pin);
+    const choices = jf ? me.profiles.map(p => [p.id, p.name, p]) : [[0, T.qcAnyProfile, null], ...me.profiles.map(p => [p.id, p.name, p])];
+    const radios = choices.map(([id, label, p]) =>
+      h('label.check', null, h('input', { type: 'radio', name: 'qcp', value: id, checked: p ? p.id === me.profile.id : false,
+        onchange: () => { pinRow.hidden = !(jf && p && p.has_pin); if (!pinRow.hidden) pin.focus(); } }), ' ', label,
         p && p.is_kids ? ' (' + T.kids + ')' : '', p && p.has_pin ? ' – PIN' : ''));
+    pinRow.hidden = !(jf && me.profile.has_pin);
     put(box, h('h1', null, T.connectDevice), h('p.lede', null, T.qcWants(info.device_name || T.unknownDevice, T.platforms[info.platform] || info.platform)),
       h('div.code', null, info.code),
       h('fieldset', { class: 'mt3' }, h('legend', null, T.qcProfile), radios),
-      h('p.muted.small', null, T.qcPinNote, ' ', T.qcKidsNote),
+      jf && pinRow,
+      h('p.muted.small', null, jf ? T.qcJellyfinNote : [T.qcPinNote, ' ', T.qcKidsNote]),
       h('div.row-gap', { class: 'mt3' },
         h('button.btn.primary.big', { onclick: async () => {
           const pid = +(box.querySelector('input[name=qcp]:checked')?.value || 0);
-          await POST('/api/quickconnect/approve', { code: info.code, profile_id: pid });
+          await POST('/api/quickconnect/approve', jf ? { code: info.code, profile_id: pid, pin: pin.value } : { code: info.code, profile_id: pid });
           put(box, h('h1', null, T.connectDevice), h('p.lede', null, T.qcApproved), h('a.btn', { href: '#/home' }, T.home));
         } }, T.approve),
         h('button.btn', { onclick: async () => { await POST('/api/quickconnect/approve', { code: info.code, action: 'deny' }); toast(T.qcDenied); ask(); } }, T.deny)));
@@ -3029,7 +3036,9 @@ async function adminSettings(body) {
     settingsForm(s.values, s.env, [{ h: T.setGeneral, hint: T.setGeneralHint }, ['server_name', T.serverName], ['public_url', T.publicUrl, 'url'],
       { h: T.setScanning, hint: T.setScanningHint }, ['scan_interval_min', T.scanInterval, 'number'],
       { h: T.setNetwork, hint: T.setNetworkHint }, ['quickconnect_enabled', T.qcEnabled, 'toggle'], ['discovery_enabled', T.discEnabled, 'toggle'],
-      ['push_enabled', T.pushEnabled, 'toggle'], ['push_relay_url', T.pushRelayUrl, 'url', null, T.pushRelayHint]], () => { state.status = null; }),
+      ['push_enabled', T.pushEnabled, 'toggle'], ['push_relay_url', T.pushRelayUrl, 'url', null, T.pushRelayHint],
+      { h: T.setJellyfin, hint: T.setJellyfinHint },
+      ['jellyfin_compat', T.jfCompat, 'toggle', null, s.jellyfin_compat_addr ? T.jfCompatPort(s.jellyfin_compat_addr) : T.jfCompatNoEnv]], () => { state.status = null; }),
     lookPanel(s.values, s.env, () => adminSettings(body)),
     aSplit(T.backupTitle, T.backupHint, h('a.btn', { href: '/api/admin/backup', download: '' }, icon('dl'), T.backup)));
 }
