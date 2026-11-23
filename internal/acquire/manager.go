@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ScotyLucas/kinora/internal/meta"
+	"github.com/ScotyLucas/kinora/internal/safe"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -77,6 +78,7 @@ var (
 	ErrNoClient = errors.New("nincs bekapcsolt letöltőkliens (Admin → Beszerzés → Beállítások)")
 	ErrNoIndex  = errors.New("nincs bekapcsolt indexer (Admin → Beszerzés → Beállítások)")
 	// ErrNoUsenetClient: a Usenet release needs SABnzbd or NZBGet.
+	//lint:ignore ST1005 "Usenet" is a proper noun
 	ErrNoUsenetClient = errors.New("Usenet-kiadáshoz SABnzbd vagy NZBGet kell (Admin → Beszerzés → Források és kliens)")
 )
 
@@ -175,7 +177,8 @@ func (m *Manager) releasesWith(ctx context.Context, tmdbID int64, prof Profile) 
 			defer wg.Done()
 			cctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 			defer cancel()
-			res, err := m.searchIx(cctx, ix, q)
+			var res []Result
+			err := safe.Call(func() (err error) { res, err = m.searchIx(cctx, ix, q); return err })
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -474,6 +477,9 @@ func (m *Manager) Poll(ctx context.Context) {
 	}
 }
 
+// errOutsideMapping: the download client reported a path that leaves the mapped folder.
+const errOutsideMapping = "a letöltőkliens a leképezett mappán kívüli útvonalat adott"
+
 // MapPath turns a path as the download client sees it into one Kinora can open.
 func MapPath(p, remote, local string) string {
 	if remote == "" || local == "" {
@@ -485,7 +491,12 @@ func MapPath(p, remote, local string) string {
 		return p
 	}
 	rest := strings.TrimPrefix(pp, rr)
-	return filepath.Join(local, filepath.FromSlash(rest))
+	out := filepath.Join(local, filepath.FromSlash(rest))
+	// "<remote>/../x" from the client would step out of the mapped folder: refuse it ("" fails the import)
+	if rel, err := filepath.Rel(filepath.Clean(local), out); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	return out
 }
 
 func (m *Manager) importGrab(g *store.AcqGrab, cc ClientConfig, s TorrentStatus) {
@@ -504,6 +515,10 @@ func (m *Manager) importGrab(g *store.AcqGrab, cc ClientConfig, s TorrentStatus)
 	}
 	m.st.SetAcqGrabStatus(g.ID, store.GrabImporting, "", "")
 	src := MapPath(s.ContentPath, cc.PathRemote, cc.PathLocal)
+	if src == "" {
+		m.grabFailed(g, errOutsideMapping, false)
+		return
+	}
 	res, err := Import(ImportMovie{Source: src, LibRoot: lib.Path, Title: g.Title, Year: g.Year, IMDb: g.ImdbID,
 		Quality: g.Quality, Mode: m.st.Setting("acq_import_mode")})
 	if err != nil {

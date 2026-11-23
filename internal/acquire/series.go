@@ -547,6 +547,10 @@ func (m *Manager) importSeriesGrab(g *store.AcqGrab, cc ClientConfig, s TorrentS
 	}
 	m.st.SetAcqGrabStatus(g.ID, store.GrabImporting, "", "")
 	src := MapPath(s.ContentPath, cc.PathRemote, cc.PathLocal)
+	if src == "" {
+		m.grabFailed(g, errOutsideMapping, false)
+		return
+	}
 	res, err := ImportEpisodes(ImportShow{Source: src, LibRoot: lib.Path, Title: x.Title, Year: x.Year, Quality: g.Quality,
 		Mode: m.st.Setting("acq_import_mode"), Season: g.Season, Want: want})
 	if err != nil {
