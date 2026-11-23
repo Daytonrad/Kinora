@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ScotyLucas/kinora/internal/intro"
+	"github.com/ScotyLucas/kinora/internal/jfcompat"
 	"github.com/ScotyLucas/kinora/internal/media"
 	"github.com/ScotyLucas/kinora/internal/meta"
 	"github.com/ScotyLucas/kinora/internal/party"
@@ -214,6 +215,30 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	safe.Go(ctx, log, "acquire", srv.Acquire.Run) // built-in acquisition: follows downloads, imports finished ones
 	safe.Go(ctx, log, "push", srv.Push.Run)       // iOS push notifications through the relay
 
+	// the Jellyfin-compatible API: its own port, started only with KINORA_JELLYFIN_COMPAT=1 (and the admin
+	// setting must be on as well; while it is off the port answers 503)
+	var jfSrv *http.Server
+	if os.Getenv("KINORA_JELLYFIN_COMPAT") == "1" {
+		addr := env("KINORA_JELLYFIN_ADDR", ":8097")
+		jf, err := jfcompat.New(jfcompat.Deps{Ctx: ctx, Store: st, Media: mgr, Encoders: enc, Subs: srv.Subs, ImgDir: imgDir, Log: log,
+			Version: server.Version, QC: srv.JFCompatQC()})
+		if err != nil {
+			return fmt.Errorf("a jellyfin-kompatibilis API: %w", err)
+		}
+		jln, err := net.Listen("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("a jellyfin-kompatibilis API: nem sikerült figyelni a(z) %s címen: %w", addr, err)
+		}
+		server.JFCompatAddr, server.JFCompatServerID = addr, jf.ServerID
+		jfSrv = &http.Server{Handler: jf, ReadHeaderTimeout: 15 * time.Second, IdleTimeout: 120 * time.Second}
+		go func() {
+			if err := jfSrv.Serve(jln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error("Jellyfin-compatible API stopped", "err", err)
+			}
+		}()
+		log.Info("Jellyfin-compatible API listening", "addr", addr, "enabled", jf.Enabled())
+	}
+
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           srv.Handler(),
@@ -240,6 +265,9 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	shCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	httpSrv.Shutdown(shCtx)
+	if jfSrv != nil {
+		jfSrv.Shutdown(shCtx)
+	}
 	srv.Shutdown(shCtx)
 	waitOrTimeout(shCtx, sc.Wait)
 	log.Info("bye")

@@ -169,7 +169,8 @@ func (s *Server) handleInviteDelete(w http.ResponseWriter, r *http.Request, c *r
 
 var settingKeys = []string{"server_name", "public_url", "scan_interval_min", "tmdb_key", "metadata_lang", "encoder", "video_codec",
 	"quickconnect_enabled", "discovery_enabled", "brand_accent", "intro_detection", "intro_window_min",
-	"opensubtitles_key", "opensubtitles_user", "opensubtitles_pass", "watch_region", "omdb_key", "push_enabled", "push_relay_url"}
+	"opensubtitles_key", "opensubtitles_user", "opensubtitles_pass", "watch_region", "omdb_key", "push_enabled", "push_relay_url",
+	"jellyfin_compat"}
 
 // secretSettings are shown masked and kept when the masked value comes back.
 var secretSettings = map[string]bool{"tmdb_key": true, "opensubtitles_key": true, "opensubtitles_pass": true, "omdb_key": true}
@@ -217,12 +218,15 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request, c *reqCt
 		if secretSettings[k] {
 			v = maskSecret(v)
 		}
+		if k == "jellyfin_compat" && v == "" {
+			v = "0" // off unless switched on (the toggle reads an empty value as on)
+		}
 		vals[k] = v
 		if s.st.Overridden(k) {
 			env[k] = SettingEnv[k]
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"values": vals, "env": env})
+	writeJSON(w, http.StatusOK, map[string]any{"values": vals, "env": env, "jellyfin_compat_addr": JFCompatAddr})
 }
 
 func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request, c *reqCtx) {
