@@ -659,6 +659,13 @@
   "aMeta": "Metadata",
   "aConnect": "Connect",
   "aSettings": "Settings",
+  "setJellyfin": "Jellyfin-compatible API",
+  "setJellyfinHint": "Native Jellyfin clients (Infuse, Swiftfin, Findroid, Kodi) can connect to this server too, on a port of its own. Sign in with the account name, or account/profile, as user name; the password is the account password, with #PIN at the end for a profile that has a PIN. Five wrong tries lock the account out from that address for 15 minutes. Quick Connect works as well: approve the code here in Kinora and pick the profile.",
+  "jfCompat": "Turn on the Jellyfin-compatible API",
+  "jfCompatPort": "The server listens on {0}. Enter this port in the client.",
+  "jfCompatNoEnv": "The port is not open: start Kinora with the KINORA_JELLYFIN_COMPAT=1 environment variable (in Docker, publish port 8097 too); then this switch makes it available.",
+  "qcPinLabel": "The profile's PIN",
+  "qcJellyfinNote": "Jellyfin-compatible client: it signs in as the profile you choose now. For a profile with a PIN, enter the PIN here, because the client cannot ask for it.",
   "aImport": "Import",
   "arrTitle": "Sonarr / Radarr / Prowlarr",
   "arrHint": "The built-in acquisition takes over the monitored series (Sonarr), the monitored films still missing (Radarr), quality profiles, indexers, download clients and root folders. From Prowlarr the indexer list comes over, each through Prowlarr's own Torznab feed. A preview comes first, and running it again never duplicates anything.",
@@ -841,6 +848,7 @@
   "lastActive": "Last active",
   "aDevices": "Devices",
   "platforms": {
+   "jellyfin": "Jellyfin-compatible client",
    "web": "Browser",
    "android": "Android",
    "androidtv": "Android TV",
@@ -1669,6 +1677,7 @@
    "Ismeretlen": "Unknown"
   },
   "srv": {
+   "válassz profilt ehhez az eszközhöz": "choose a profile for this device",
    "ez az importálás már fut": "this import is already running",
    "a jelszóbeállító link érvénytelen vagy lejárt": "the password link is invalid or has expired",
    "az előnézet lejárt, készítsd el újra": "the preview has expired, make it again",

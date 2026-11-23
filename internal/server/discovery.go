@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ScotyLucas/kinora/internal/jfcompat"
 )
 
 // LAN discovery: apps broadcast "who is KinoraServer?" to UDP port 7359 and
@@ -86,10 +88,18 @@ func (s *Server) RunDiscovery(ctx context.Context) {
 		if s.st.Setting("discovery_enabled") == "0" {
 			continue
 		}
-		if !strings.EqualFold(strings.TrimSpace(string(buf[:n])), DiscoveryQuery) {
+		msg := strings.TrimSpace(string(buf[:n]))
+		jf := strings.EqualFold(msg, jfDiscoveryQuery) && JFCompatAddr != "" && s.st.Setting(jfcompat.SettingEnabled) == "1"
+		if !jf && !strings.EqualFold(msg, DiscoveryQuery) {
 			continue
 		}
 		if !s.limiter.allow("disc:"+peer.IP.String(), 30, time.Minute) {
+			continue
+		}
+		if jf {
+			if b := s.jfDiscoveryReply(peer); b != nil {
+				conn.WriteToUDP(b, peer)
+			}
 			continue
 		}
 		conn.WriteToUDP(s.discoveryReply(peer), peer)

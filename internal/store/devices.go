@@ -7,7 +7,7 @@ import (
 )
 
 // Platforms a device can report. Anything else is stored as "web".
-var Platforms = map[string]bool{"web": true, "android": true, "androidtv": true, "ios": true, "tizen": true, "tvos": true, "webos": true}
+var Platforms = map[string]bool{"web": true, "android": true, "androidtv": true, "ios": true, "tizen": true, "tvos": true, "webos": true, "jellyfin": true}
 
 // DeviceInfo describes the client that owns a session.
 type DeviceInfo struct {

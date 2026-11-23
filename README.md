@@ -20,11 +20,14 @@ services:
   kinora:
     image: ghcr.io/scotylucas/kinora:latest
     container_name: kinora
-    ports: ["8096:8096"]
+    ports:
+      - "8096:8096"
+      # - "8097:8097"              # Jellyfin-kompatibilis API, lásd lent
     environment:
       - TZ=Europe/Budapest
       - PUID=1000
       - PGID=1000
+      # - KINORA_JELLYFIN_COMPAT=1  # Jellyfin-kompatibilis API, lásd lent
     volumes:
       - ./config:/config
       - ./cache:/cache
@@ -79,6 +82,10 @@ Minden beállítás megadható környezeti változóval is. Ilyenkor az admin fe
 | `KINORA_LOGO` | – | logófájl (pl. `/config/logo.png`); induláskor átveszi, ha változott (PNG/JPG/WebP/SVG, max. 2 MB) |
 | `KINORA_INITIAL_SERVER_NAME`, `KINORA_INITIAL_LOGO`, `KINORA_INITIAL_MEDIA` | – | csak az **első** induláskor: szervernév, logó, kezdő médiamappák (`Név=/út;/út2`); utána az adminfelületen módosíthatók – ezeket a telepítők állítják be |
 | `KINORA_INTRO_DETECTION`, `KINORA_INTRO_WINDOW_MIN` | `1`, `10` | intró-/stáblista-felismerés be/ki, és hány percben keresse az intrót |
+| `KINORA_JELLYFIN_COMPAT` | – | `1` = megnyitja a Jellyfin-kompatibilis API portját (az admin-beállítással együtt kapcsol be) |
+| `KINORA_JELLYFIN_ADDR` | `:8097` | a Jellyfin-kompatibilis API címe |
+| `KINORA_MAX_TRANSCODES` | – | egyszerre futó átkódolások felső korlátja az egész szerveren (fiókonként mindig legfeljebb 8) |
+| `KINORA_ALLOW_NEWER_DB` | – | `1` = egy újabb Kinora-verzió adatbázisát is megnyitja (visszalépés után; saját felelősségre) |
 | `TZ`, `PUID`, `PGID` | `UTC`, `1000`, `1000` | időzóna, a fájlok tulajdonosa |
 
 ### Melyik image-et válaszd?
@@ -234,6 +241,24 @@ fejlécet: HTTPS mögött a session cookie `Secure` jelzést kap.
 Az appok a `POST /api/login` (vagy a Quick Connect) után kapott tokent `Authorization: Bearer <token>` fejlécben küldik. A CORS csak az app-originekre
 (`capacitor://localhost`, `http(s)://localhost`, `null`) és csak tokenes kérésekre engedélyezett, `Access-Control-Allow-Credentials` nélkül.
 A `<video>`/`<img>` számára a lejátszási válasz rövid életű, aláírt stream-tokent (`?st=`) tesz az URL-ekbe; ez elemre, felhasználóra és eszközre szól.
+
+### Jellyfin-kompatibilis API (Infuse, Swiftfin, Findroid, Kodi)
+
+A natív Jellyfin-kliensek is csatlakozhatnak a Kinorához, egy külön porton (alapból `8097`). Alapból ki van kapcsolva:
+
+1. a compose-fájlban vedd ki a kommentből a `8097:8097` portot és a `KINORA_JELLYFIN_COMPAT=1` sort, majd indítsd újra a konténert;
+2. a Kinorában: **Admin → Beállítások → Jellyfin-kompatibilis API** → be;
+3. a kliensben szerverként a `http://<szerver-ip>:8097` címet add meg.
+
+**Belépés:** felhasználónévként a fiók neve (a fiók első felnőtt profiljával lép be), vagy `fiók/profil` (pl. `kati/Gyerek`);
+jelszóként a fiók jelszava, PIN-es profilnál a végére írva `#PIN` (pl. `jelszo#1234`). Öt hibás próbálkozás után a fiók
+15 percre letiltódik arról a címről. **Quick Connect** is működik: a kliens kódját a Kinorában hagyod jóvá (profil menü →
+**Eszköz csatlakoztatása**), és ott választod ki a profilt (PIN-es profilnál ott kell megadni a PIN-t).
+
+Minden Kinora-szabály érvényes: gyerekprofil és korhatár, a fiók könyvtár-korlátozása, átkódolási korlátok. A belépett
+kliensek a Kinora eszközlistájában látszanak, és onnan kiléptethetők. Ez részleges kompatibilitás (böngészés, lejátszás,
+feliratok, folytatás, megnézett és kedvenc állapot); a webes alapú kliensek (Jellyfin Web, Jellyfin Media Player, a
+hivatalos Android-app) nem működnek. A részletek és a kipróbált kliensek: [docs/JELLYFIN_COMPAT.md](docs/JELLYFIN_COMPAT.md).
 
 ## Beépített beszerzés (Radarr/Prowlarr/Jellyseerr helyett)
 

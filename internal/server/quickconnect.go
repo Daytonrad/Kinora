@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ScotyLucas/kinora/internal/jfcompat"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -322,6 +323,7 @@ func (s *Server) handleQCApprove(w http.ResponseWriter, r *http.Request, c *reqC
 		Code      string `json:"code"`
 		ProfileID int64  `json:"profile_id"`
 		Action    string `json:"action"` // approve (default) | deny
+		PIN       string `json:"pin"`    // a Jellyfin-compatible client's PIN profile: entered here
 	}
 	if !decode(w, r, &in) || !s.qcGuard(w, r, c) {
 		return
@@ -336,6 +338,26 @@ func (s *Server) handleQCApprove(w http.ResponseWriter, r *http.Request, c *reqC
 		return
 	}
 	var lock, needsPIN bool
+	if e := s.qc.pending(code); e != nil && e.Device.Platform == jfcompat.Platform {
+		// the Jellyfin client signs in as exactly this profile and has no way to ask for its PIN
+		pid, err := s.jfApproveProfile(c, in.ProfileID, in.PIN)
+		if err != nil {
+			if err == errWrongPIN { // counts like a wrong code: the PIN cannot be tried through here either
+				s.limiter.allow("qccode:ip:"+clientIP(r), qcAttempts+1, qcWindow)
+				s.limiter.allow(fmt.Sprintf("qccode:user:%d", c.User.ID), qcAttempts+1, qcWindow)
+				writeErr(w, http.StatusForbidden, err.Error())
+				return
+			}
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if !s.qc.decide(code, true, c.User.ID, pid, true, false, c.User.Username) {
+			s.qcFailed(w, r, c)
+			return
+		}
+		ok(w)
+		return
+	}
 	if in.ProfileID > 0 {
 		p, err := s.st.Profile(in.ProfileID)
 		if err != nil || p.UserID != c.User.ID { // only into your own account
