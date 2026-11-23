@@ -25,6 +25,8 @@ import (
 type adminUser struct {
 	*store.User
 	Profiles int `json:"profiles"`
+	// NeedsPassword: an imported account whose password link was not used yet
+	NeedsPassword bool `json:"needs_password"`
 }
 
 func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request, c *reqCtx) {
@@ -36,7 +38,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 	out := []adminUser{}
 	for _, u := range users {
 		ps, _ := s.st.Profiles(u.ID)
-		out = append(out, adminUser{u, len(ps)})
+		out = append(out, adminUser{u, len(ps), !u.HasPassword()})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

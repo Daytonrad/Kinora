@@ -65,8 +65,9 @@ type Server struct {
 	legacy        legacyJS
 
 	Deps
-	bgCtx  context.Context
-	pushTx pushTexts // the notifier's texts per language
+	bgCtx   context.Context
+	pushTx  pushTexts  // the notifier's texts per language
+	imports importRuns // Jellyfin import previews
 }
 
 // Deps are the subsystems the server drives (wired in main).
