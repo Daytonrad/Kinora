@@ -1,0 +1,10 @@
+{
+  "target": "kinora",
+  "first_scan_s": 565.453524673,
+  "second_scan_s": 0.262696316,
+  "counts": {
+    "Movies": 5002,
+    "Series": 500,
+    "Episodes": 5000
+  }
+}

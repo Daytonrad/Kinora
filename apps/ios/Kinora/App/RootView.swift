@@ -20,6 +20,8 @@ struct RootView: View {
                 ProfilesView()
             case .home:
                 HomeView()
+            case .offline:
+                OfflineView()
             }
         }
         .animation(.default, value: model.screen)

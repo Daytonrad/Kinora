@@ -7,6 +7,7 @@
   'use strict';
   var CFG = window.KINORA_LAUNCHER || { platform: 'web', version: '' };
   var native = window.KinoraAndroid || null; // Android: MainActivity's JavaScript interface
+  var offline = window.KinoraOffline || null; // Android: offline downloads (KinoraOffline.java)
   var platform = CFG.platform;
   if (platform === 'android' && native && native.isTv()) platform = 'androidtv';
   var TV = { tizen: true, webos: true, titan: true, androidtv: true }[platform] || /[?&]tv=1/.test(location.search);
@@ -21,23 +22,29 @@
       address: 'A szerver címe', addrHint: 'Pl. 192.168.1.10, nas.local vagy https://kinora.pelda.hu. Port nélkül a 8096-ot próbálom.', connect: 'Csatlakozás',
       connecting: 'Csatlakozás: {0}…', cancel: 'Mégse', remove: 'Eltávolítás', back: 'Vissza', unreachable: 'Nem érem el: {0}.',
       privateAddr: 'Ez otthoni hálózati cím: csak ugyanarról a hálózatról érhető el.', notKinora: 'Ezen a címen nem Kinora szerver válaszol: {0}.',
-      setup: 'Ezt a szervert még be kell állítani: nyisd meg a címét egy böngészőben.', found: 'Talált szerverek', saved: 'Mentett szerverek', exitHint: 'Kilépés: Vissza gomb' },
+      setup: 'Ezt a szervert még be kell állítani: nyisd meg a címét egy böngészőben.', found: 'Talált szerverek', saved: 'Mentett szerverek', exitHint: 'Kilépés: Vissza gomb',
+      offline: 'Letöltések offline', offlineRow: '{0} – {1}', offlineHint: 'Lejátszható szerver nélkül is. A megnézett részeket a következő csatlakozáskor küldöm el.',
+      del: 'Törlés', noDownloads: 'Nincs offline lejátszható letöltés.', playFailed: 'Ezt a fájlt nem sikerült lejátszani.' },
     en: { title: 'Servers', add: 'Add a server', search: 'Search the network', searching: 'Searching the network…', none: 'No Kinora server found on this network. Type its address.',
       address: 'Server address', addrHint: 'E.g. 192.168.1.10, nas.local or https://kinora.example.com. Without a port 8096 is tried.', connect: 'Connect',
       connecting: 'Connecting to {0}…', cancel: 'Cancel', remove: 'Remove', back: 'Back', unreachable: 'Cannot reach {0}.',
       privateAddr: 'This is a home network address: it only works from the same network.', notKinora: 'Something answers at {0}, but it is not a Kinora server.',
-      setup: 'This server is not set up yet: open its address in a browser.', found: 'Found on the network', saved: 'Saved servers', exitHint: 'Exit: Back button' },
+      setup: 'This server is not set up yet: open its address in a browser.', found: 'Found on the network', saved: 'Saved servers', exitHint: 'Exit: Back button',
+      offline: 'Offline downloads', offlineRow: '{0} – {1}', offlineHint: 'These play without the server. What you watch is sent the next time you connect.',
+      del: 'Delete', noDownloads: 'No download to play offline.', playFailed: 'This file could not be played.' },
     de: { title: 'Server', add: 'Server hinzufügen', search: 'Im Netzwerk suchen', searching: 'Suche im Netzwerk…', none: 'Kein Kinora-Server in diesem Netzwerk gefunden. Gib die Adresse ein.',
       address: 'Serveradresse', addrHint: 'Z. B. 192.168.1.10, nas.local oder https://kinora.example.de. Ohne Port wird 8096 versucht.', connect: 'Verbinden',
       connecting: 'Verbinde mit {0}…', cancel: 'Abbrechen', remove: 'Entfernen', back: 'Zurück', unreachable: '{0} ist nicht erreichbar.',
       privateAddr: 'Das ist eine Heimnetz-Adresse: Sie funktioniert nur im selben Netzwerk.', notKinora: 'Unter {0} antwortet kein Kinora-Server.',
-      setup: 'Dieser Server ist noch nicht eingerichtet: Öffne seine Adresse in einem Browser.', found: 'Im Netzwerk gefunden', saved: 'Gespeicherte Server', exitHint: 'Beenden: Zurück-Taste' },
+      setup: 'Dieser Server ist noch nicht eingerichtet: Öffne seine Adresse in einem Browser.', found: 'Im Netzwerk gefunden', saved: 'Gespeicherte Server', exitHint: 'Beenden: Zurück-Taste',
+      offline: 'Offline-Downloads', offlineRow: '{0} – {1}', offlineHint: 'Diese laufen auch ohne Server. Was du ansiehst, wird bei der nächsten Verbindung übertragen.',
+      del: 'Löschen', noDownloads: 'Kein Download, der offline abgespielt werden kann.', playFailed: 'Diese Datei ließ sich nicht abspielen.' },
   };
   var lang = 'en';
   var langs = navigator.languages || [navigator.language || 'en'];
   for (var li = 0; li < langs.length; li++) { var c = String(langs[li]).slice(0, 2).toLowerCase(); if (STR[c]) { lang = c; break; } }
   document.documentElement.lang = lang;
-  function t(k, a) { var s = STR[lang][k] || STR.en[k] || k; return a === undefined ? s : s.replace('{0}', a); }
+  function t(k, a, b) { var s = STR[lang][k] || STR.en[k] || k; if (a !== undefined) s = s.replace('{0}', a); return b === undefined ? s : s.replace('{1}', b); }
 
   // ------------------------------------------------------------------ storage
   var KEY = 'kinora.launcher.servers';
@@ -114,6 +121,8 @@
     var list = load().filter(function (x) { return x.id !== s.id; });
     list.unshift(s);
     store(list);
+    // the app's offline downloads accept the server's pages only on the addresses opened from here
+    if (offline) { try { offline.registerServer(String(s.id), s.name || '', JSON.stringify(merge(s.url, s.urls))); } catch (e) { /* old app */ } }
   }
   /** Tries every address of a saved server (home first, then outside), then opens the first that answers. */
   function open(s) {
@@ -267,8 +276,114 @@
     var acts = el('div', 'acts');
     acts.appendChild(button('', t('add'), function () { showAdd(''); }));
     box.appendChild(acts);
+    var off = offlineServers();
+    var offFirst = null;
+    if (off.length) {
+      box.appendChild(el('h2', '', t('offline')));
+      var ol = el('div', 'list');
+      off.forEach(function (o) {
+        var b = button('server', '', function () { showOffline(o); });
+        b.appendChild(el('b', '', t('offlineRow', o.name || '', o.profile.name || '')));
+        b.appendChild(el('span', '', String(o.count)));
+        var row = el('div', 'row');
+        row.appendChild(b);
+        ol.appendChild(row);
+        offFirst = offFirst || b;
+      });
+      box.appendChild(ol);
+    }
     if (TV) box.appendChild(el('p', 'hint', t('exitHint')));
+    // the server did not answer, but there is something to watch: start there
+    ((error && offFirst) || first || acts.firstChild).focus();
+  }
+
+  // ------------------------------------------------------------------ offline downloads (Android)
+  // The server's web client asks the server to prepare an MP4 and hands it to the system's DownloadManager
+  // (KinoraOffline.java). Here they play without the server: only the downloads of the last profile used with
+  // that server (a kids profile never sees another profile's), and what was watched waits for the next connection.
+  function offlineCall(fn) {
+    try { var r = JSON.parse(fn()); return r && r.error ? null : r; } catch (e) { return null; }
+  }
+  function offlineServers() { return offline ? offlineCall(function () { return offline.servers(); }) || [] : []; }
+  function fileSrc(path) {
+    if (window.Capacitor && Capacitor.convertFileSrc) return Capacitor.convertFileSrc(path);
+    return 'http://localhost/_capacitor_file_' + path;
+  }
+  function itemLabel(it) {
+    var m = it.meta || {};
+    return m.series ? m.series + (m.episode ? ' · ' + m.episode : '') + (it.title ? ' · ' + it.title : '') : (it.title || '');
+  }
+  function showOffline(o, error) {
+    screen = 'offline';
+    var items = offlineCall(function () { return offline.saved(o.id); }) || [];
+    var box = frame(t('offline'));
+    box.appendChild(el('p', 'lede', t('offlineRow', o.name || '', o.profile.name || '')));
+    msg(box, error);
+    if (!items.length) box.appendChild(el('p', 'hint', t('noDownloads')));
+    var list = el('div', 'list');
+    var first = null;
+    items.forEach(function (it) {
+      var row = el('div', 'row');
+      var b = button('server', '', function () { playOffline(o, it); });
+      b.appendChild(el('b', '', itemLabel(it)));
+      b.appendChild(el('span', '', [it.quality, it.size ? Math.round(it.size / 1048576) + ' MB' : ''].filter(Boolean).join(' · ')));
+      row.appendChild(b);
+      row.appendChild(button('ghost', t('del'), function () {
+        offlineCall(function () { return offline.forget(o.id, it.id); });
+        showOffline(o);
+      }));
+      list.appendChild(row);
+      first = first || b;
+    });
+    box.appendChild(list);
+    box.appendChild(el('p', 'hint', t('offlineHint')));
+    var acts = el('div', 'acts');
+    acts.appendChild(button('', t('back'), function () { showList(); }));
+    box.appendChild(acts);
     (first || acts.firstChild).focus();
+  }
+  var player = null;
+  function playOffline(o, it) {
+    screen = 'player';
+    app.innerHTML = '';
+    var v = document.createElement('video');
+    v.className = 'offline-player';
+    v.controls = true;
+    v.autoplay = true;
+    v.setAttribute('playsinline', '');
+    v.src = fileSrc(it.file);
+    (it.subs || []).forEach(function (sub, i) {
+      var tr = document.createElement('track');
+      tr.kind = 'subtitles';
+      tr.src = fileSrc(sub.file);
+      tr.srclang = (sub.lang || '').slice(0, 2);
+      tr.label = sub.label || sub.lang || String(i + 1);
+      v.appendChild(tr);
+    });
+    // resume: what was watched offline last, else where the profile stood when it was downloaded
+    var q = it.queued, start = q ? (q.ended ? 0 : q.position) : ((it.meta && it.meta.position) || 0);
+    var seek = function () { v.removeEventListener('loadedmetadata', seek); if (start > 0 && start < v.duration - 5) v.currentTime = start; };
+    v.addEventListener('loadedmetadata', seek);
+    var last = 0;
+    var report = function (ended) { try { offline.played(o.id, it.id, v.currentTime || 0, !!ended); } catch (e) { /* storage full */ } };
+    v.addEventListener('timeupdate', function () { if (Math.abs(v.currentTime - last) >= 10) { last = v.currentTime; report(false); } });
+    v.addEventListener('pause', function () { if (!v.ended) report(false); });
+    v.addEventListener('ended', function () { report(true); closePlayer(); });
+    v.addEventListener('error', function () { closePlayer(t('playFailed')); });
+    app.appendChild(v);
+    player = { video: v, server: o, report: report };
+    try { if (native) native.keepAwake(true); } catch (e) { /* old app */ }
+    v.focus();
+  }
+  function closePlayer(error) {
+    if (!player) return;
+    var p = player;
+    player = null;
+    if (!p.video.ended && !error) p.report(false);
+    p.video.pause();
+    p.video.removeAttribute('src');
+    try { if (native) native.keepAwake(false); } catch (e) { /* old app */ }
+    showOffline(p.server, error);
   }
   function showAdd(value, error) {
     screen = 'add';
@@ -354,6 +469,8 @@
     var a = document.activeElement;
     if (a && a.tagName === 'INPUT' && TV) { a.blur(); var f = focusables(); if (f[1]) f[1].focus(); return true; }
     if (screen === 'busy') { opening++; showList(); return true; }
+    if (screen === 'player') { closePlayer(); return true; }
+    if (screen === 'offline') { showList(); return true; }
     if (screen === 'add' && load().length) { showList(); return true; }
     return false;
   }

@@ -83,6 +83,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 	if name := strings.TrimSpace(in.ServerName); name != "" && !s.st.Overridden("server_name") {
 		s.st.SetSetting("server_name", name)
 	}
+	s.st.SetSetting(settingWizard, "0") // a new install: the first-run wizard follows (setupwizard.go)
 	s.log.Info("setup complete", "admin", u.Username)
 	s.startSession(w, r, u, in.DeviceInfo)
 }

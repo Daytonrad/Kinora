@@ -32,3 +32,10 @@ apps/shared/test/out/
 *.keystore
 *.p12
 *.mobileprovision
+
+# Claude Code: personal settings and local test helpers
+.claude/settings.local.json
+.claude/kodi-jellyfin-repo.ps1
+
+# benchmark runner binary
+scripts/bench/.bin/

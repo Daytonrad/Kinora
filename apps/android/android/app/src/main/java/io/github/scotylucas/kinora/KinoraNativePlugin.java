@@ -39,6 +39,8 @@ public class KinoraNativePlugin extends Plugin {
     @Override
     public void load() {
         getBridge().getWebView().addJavascriptInterface(new KinoraAndroid(getActivity()), "KinoraAndroid");
+        // offline downloads; what each page may do is decided by its address (KinoraOffline)
+        getBridge().getWebView().addJavascriptInterface(new KinoraOffline(getActivity(), getBridge().getWebView()), "KinoraOffline");
     }
 
     /**

@@ -299,7 +299,8 @@ func (s *Server) handleDownloadCreate(w http.ResponseWriter, r *http.Request, c 
 		return
 	}
 	if in.Quality == "original" || in.Quality == "" {
-		writeJSON(w, http.StatusOK, map[string]any{"status": "done", "url": fmt.Sprintf("/api/stream/%d?dl=1", it.ID)})
+		// the URL carries a stream token, so a download manager without the session can fetch it too
+		writeJSON(w, http.StatusOK, map[string]any{"status": "done", "url": withStreamToken(fmt.Sprintf("/api/stream/%d?dl=1", it.ID), s.mintStreamToken(c, it.ID))})
 		return
 	}
 	q, ok := media.QualityByName(in.Quality)
@@ -317,19 +318,32 @@ func (s *Server) handleDownloadCreate(w http.ResponseWriter, r *http.Request, c 
 	writeJSON(w, http.StatusAccepted, job)
 }
 
+// downloadJob is a job as the client sees it: a finished one carries a file URL with a stream token of its title,
+// for download managers that do not share the client's session (the Android app's).
+type downloadJob struct {
+	media.Job
+	FileURL string `json:"file_url,omitempty"`
+}
+
 func (s *Server) handleDownloads(w http.ResponseWriter, r *http.Request, c *reqCtx) {
-	out := []media.Job{}
+	out := []downloadJob{}
 	for _, j := range s.Downloads.Jobs(c.User.ID) {
-		if s.st.ItemVisible(j.ItemID, c.Profile) {
-			out = append(out, j)
+		if !s.st.ItemVisible(j.ItemID, c.Profile) {
+			continue
 		}
+		dj := downloadJob{Job: j}
+		if j.Status == "done" {
+			dj.FileURL = withStreamToken("/api/downloads/"+j.Key+"/file", s.mintStreamToken(c, j.ItemID))
+		}
+		out = append(out, dj)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": out, "qualities": media.Qualities})
 }
 
 func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	j, path, found := s.Downloads.Get(r.PathValue("key"))
-	if !found || !j.HasUser(c.User.ID) || !s.st.ItemVisible(j.ItemID, c.Profile) {
+	// a stream token opens only the downloads of its own title
+	if !found || !j.HasUser(c.User.ID) || !s.st.ItemVisible(j.ItemID, c.Profile) || !c.tokenAllows(j.ItemID) {
 		writeErr(w, http.StatusNotFound, "a letöltés nem található")
 		return
 	}

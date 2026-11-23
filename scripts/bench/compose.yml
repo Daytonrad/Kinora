@@ -1,0 +1,80 @@
+# Kinora and Jellyfin side by side on the same generated library. Driven by scripts/bench/bench.sh, which starts
+# one server at a time (so they never compete for the CPU) and runs the measurements from the `runner` service,
+# inside this network.
+name: kinora-bench
+
+# Both servers get the same fixed CPUs (a cpuset, not a CPU quota: with `cpus: 4` on a 12-thread hybrid laptop CPU,
+# CFS throttling made both servers' throughput collapse under concurrency) and the same memory limit. The runner
+# gets other CPUs, so the load generator does not take CPU time from the server it measures.
+x-limits: &limits
+  cpuset: "${BENCH_CPUSET:-0-3}"
+  mem_limit: "${BENCH_MEM:-4g}"
+
+services:
+  kinora:
+    build:
+      context: ../..
+      target: runtime
+      args:
+        VERSION: bench
+    image: kinora:bench
+    <<: *limits
+    environment:
+      TZ: UTC
+      KINORA_LOG_LEVEL: info
+    volumes:
+      - bench-media:/media:ro
+      - kinora-config:/config
+      - kinora-cache:/cache
+    ports:
+      - "127.0.0.1:18196:8096"
+
+  jellyfin:
+    image: jellyfin/jellyfin:${JELLYFIN_TAG:-12.4.20261026-211555}
+    <<: *limits
+    environment:
+      TZ: UTC
+    volumes:
+      - bench-media:/media:ro
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+    ports:
+      - "127.0.0.1:18296:8096"
+
+  # measurement program (scripts/bench/runner), Go from the Kinora dev image
+  runner:
+    build:
+      context: ../..
+      target: dev
+    image: kinora-dev
+    profiles: [tools]
+    cpuset: "${RUNNER_CPUSET:-4-11}"
+    working_dir: /src
+    entrypoint: ["go", "run", "./scripts/bench/runner"]
+    environment:
+      GOFLAGS: -buildvcs=false
+    volumes:
+      - ../..:/src
+      - gomod:/go/pkg/mod
+      - gocache:/root/.cache/go-build
+
+  # writes the library into the bench-media volume (ffmpeg from the dev image)
+  gen:
+    image: kinora-dev
+    profiles: [tools]
+    entrypoint: ["bash", "/src/scripts/bench/gen-library.sh", "/bench-media"]
+    environment:
+      MOVIES: ${MOVIES:-5000}
+      SHOWS: ${SHOWS:-500}
+    volumes:
+      - ../..:/src:ro
+      - bench-media:/bench-media
+
+volumes:
+  bench-media:
+  kinora-config:
+  kinora-cache:
+  jellyfin-config:
+  jellyfin-cache:
+  gomod:
+  gocache:

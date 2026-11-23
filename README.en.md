@@ -41,7 +41,7 @@ services:
 docker compose up -d
 ```
 
-Then open `http://<server-ip>:8096`. On first launch, a setup wizard asks for a server name and administrator account. Then go to **Admin → Libraries** and add `/media/movies` and `/media/shows` (the folder picker opens in `/media`).
+Then open `http://<server-ip>:8096`. On first launch, a setup wizard asks for a server name and administrator account, then walks you through media folders (the folder picker opens in `/media`; add `/media/movies` and `/media/shows`), a TMDB key, a hardware acceleration test, a download client and indexer, and remote access. Every step can be skipped and done later on the Admin pages; the wizard can be opened again from **Admin → Settings**. Whoever opens the server first creates the administrator account, so finish the setup before you make the server reachable from outside.
 
 | Container path | Purpose | Back it up? |
 |---|---|---|
@@ -143,27 +143,42 @@ go build -o kinora ./cmd/kinora
 ./kinora --data ./data          # http://localhost:8096
 ```
 
-## Why Kinora?
+## What Kinora does differently
 
-| Common Jellyfin pain point | How Kinora addresses it |
+Jellyfin is a mature, widely used media server and does a great deal this table doesn't cover (among others Quick
+Connect, parental controls, next-episode suggestions, many clients and plugins). The table describes what Kinora does
+differently, or what it offers built in, in one container.
+
+| Area | What Kinora does |
 |---|---|
-| Scanning a large library is slow and makes the UI lag | Incremental scanner: an unchanged file needs one `stat()` call; `ffprobe` runs only on new or changed files, with up to six workers. SQLite WAL mode and short transactions keep browsing responsive. A second scan of the test library takes about 200 ms. |
-| Watched status is lost after a file is renamed or moved | Move detection matches a missing file with a new file of the same size, preserving its item ID and watched status. |
-| A dropped SMB/NFS share makes the library disappear | If a root folder becomes unavailable or suddenly empty, scanning stops without modifying the library. Missing files are marked `missing`, not deleted. |
-| Transcoder errors are hard to understand | Real encoder self-tests plus a “Why is it playing this way?” panel with plain-language reasons, selected encoder, source details, browser capabilities and the final FFmpeg error line. |
-| No transcoded downloads for offline viewing | Prepare a download in the background at 1080p/720p/480p/360p or in the original quality, with progress reporting. Fast-start MP4 files are kept for seven days. |
-| SyncPlay drifts or stutters | Watch parties use a server clock and NTP-like synchronization: small differences are corrected with `playbackRate` 0.95/1.05; larger ones seek. If someone buffers, everyone waits, for up to 12 seconds. Chat and emoji reactions are included. |
-| No personal labels, collections or useful filtering | Custom tags, ordered manual collections, rule-based smart collections (18 fields, all/any matching), combined filters and sorting. Item pages show which collections contain each item. |
-| Smart lists require a plugin | A built-in rules engine provides a live preview in the editor; collections can also be pinned to the home screen. |
-| No “Because you watched…” recommendations | Fully local, explainable recommendations: “Recommended for you” (for example, “because you like: Sci-Fi, Drama”), “Because you watched: X”, “Hidden gems”, and a “Similar” row on item pages. |
-| A series can only be removed from Next Up by marking it watched | Hide a series without marking it watched. It returns automatically when you start watching it again. |
-| No real profiles or kids mode | Up to eight profiles per account, optional PINs and child profiles with age limits. Restrictions apply **at every endpoint**: lists, details, search, recommendations, streams, subtitles, downloads, images and watch parties. |
-| Adding users is cumbersome | Invitation links with use limits and expiration dates, plus QR codes. |
-| Remote access is hard to configure | A **Connect** page lists LAN and Tailscale addresses as QR codes and includes guides for Tailscale, Cloudflare Tunnel and reverse proxies. |
-| Subtitle menus contain too many irrelevant languages | Set subtitle and audio language priorities per profile. The menu shows preferred languages first, with an option to show all languages. |
-| No next-episode prompt | Detects credits from chapter names (credits, end titles, etc.); if unavailable, prompts during the final 30 seconds. The next episode starts after a countdown. |
-| Accented Hungarian characters break in `.srt` subtitles | Non-UTF-8 external subtitles are read as CP1250, so text such as “Árvíztűrő tükörfúrógép” displays correctly. |
-| Backups are unreliable | Create a consistent database snapshot with one click (`VACUUM INTO`), even while the server is running. |
+| Requests and downloads in one container | Built-in acquisition: users request films and series, the admin approves, the download client (qBittorrent, Transmission, Deluge, SABnzbd, NZBGet) fetches them and Kinora imports them. Indexers: Torznab/Newznab or the built-in engine with Prowlarr's community definitions. No separate Radarr, Sonarr, Prowlarr or Jellyseerr is needed. |
+| Switching from another server | Import from Jellyfin (users, watched state, resume positions, favourites) and from Sonarr, Radarr and Prowlarr (monitored titles, quality profiles, indexers, download clients). Every import starts with a preview, writes only after approval and does not duplicate when run again ([docs/IMPORT.md](docs/IMPORT.md)). |
+| Existing Jellyfin clients | An optional Jellyfin-compatible API on a separate port, with Kinora's permissions (kids profiles, library restrictions). Tried with Kodi + JellyCon; what works and what doesn't: [docs/JELLYFIN_COMPAT.md](docs/JELLYFIN_COMPAT.md). |
+| Measurements | Kinora and Jellyfin side by side on the same generated library with the same limits: scanning, RAM/CPU, API response times, playback start. The results – including where Kinora is worse: [docs/BENCHMARKS.md](docs/BENCHMARKS.md); reproducible with `scripts/bench/`. |
+| Scanning | Incremental: an unchanged file costs one `stat()` call, `ffprobe` runs only on new or changed files. Move detection (a file of the same size is the same item, watched state kept). If a root folder is unreachable or suddenly empty, the scan leaves the library alone; a missing file is only marked `missing`. |
+| Profiles | Up to eight profiles per account, optional PINs, kids profiles with an age limit. Restrictions apply at every endpoint (lists, search, recommendations, streams, subtitles, downloads, images, watch parties), and offline in the apps. |
+| Transparent transcoding | Encoder self-test and a “Why is it playing this way?” panel in the player: plain-language reasons, the chosen encoder, source and device capabilities, and the last FFmpeg error line on failure. |
+| Watch party | Server-side clock: small drift is corrected with `playbackRate` 0.95/1.05, larger drift with a seek; if someone buffers, the others wait up to 12 seconds. Chat, reactions, reporting and blocking. |
+| Recommendations and collections | Locally computed, explained recommendation rows (“because you like: Sci-Fi”, “Because you watched: X”); custom tags, manual and rule-based collections with a live preview. A series can be hidden from Continue Watching without marking it watched. |
+| Offline downloads | Transcoded downloads in 1080p–360p or the original file; the iOS and Android apps download them in the background and play them without the server; the Android part is new and not yet tried on a device ([docs/OFFLINE.md](docs/OFFLINE.md)). |
+| Hungarian users | Hungarian, English and German UI; non-UTF-8 Hungarian `.srt` files are read as CP1250 so accents display correctly; per-profile subtitle and audio language order. |
+| Running it | One Go binary and SQLite; a first-run wizard (media folders, TMDB, hardware acceleration, downloads, remote access); one-click database backups that stay consistent while running; invitation links with QR codes. |
+
+### Measurements: Kinora and Jellyfin
+
+On one laptop (Intel Core i5-1235U, Docker Desktop), on the same 4 CPUs with a 4 GB limit, on the same generated
+library of 10 002 videos, against Jellyfin 12.4.0, without internet metadata
+([details, method and limits](docs/BENCHMARKS.md); reproducible with `scripts/bench/`).
+
+| | Kinora | Jellyfin |
+|---|---|---|
+| First scan (median of 3 runs) | **565 s** | 846 s |
+| Rescan with nothing changed | **0.3 s** | 21.8 s |
+| RAM idle / under load | **103 / 167 MiB** | 472 / 488 MiB |
+| Home / library page / search (p50) | **30 / 7 / 10 ms** | 127 / 60 / 86 ms |
+| 16 concurrent clients | **162 ops/s** | 17 ops/s |
+| Playback start: direct play / transcode (p50) | **5 ms / 2.0 s** | 75 ms / 3.0 s |
+| CPU when idle | 0.4% | **0.1%** |
 
 ## Media folder structure
 

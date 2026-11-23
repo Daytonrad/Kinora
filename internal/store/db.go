@@ -47,6 +47,10 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(16)
+	// Keep the connections open between requests: database/sql keeps only 2 idle by default, so under concurrent
+	// load connections were closed and reopened all the time, and every new SQLite connection starts cold (schema
+	// parse, empty page cache). Idle ones still close after 5 minutes.
+	db.SetMaxIdleConns(16)
 	db.SetConnMaxIdleTime(5 * time.Minute)
 	if err := db.Ping(); err != nil {
 		db.Close()

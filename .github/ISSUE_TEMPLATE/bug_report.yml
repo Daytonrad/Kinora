@@ -1,0 +1,62 @@
+name: Hibajelentés / Bug report
+description: Valami nem úgy működik, ahogy kellene. / Something doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Biztonsági hibát ne itt jelents, hanem a SECURITY.md szerint. / Report security issues as described in SECURITY.md, not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: Mi történt? / What happened?
+      description: Mit vártál, és mi lett helyette? / What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Lépések a reprodukáláshoz / Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Kinora-verzió / Kinora version
+      description: Admin → Vezérlőpult / Admin → Dashboard
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Telepítés / Installation
+      options:
+        - Docker
+        - Linux (systemd)
+        - Windows
+        - Más / Other
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Kliens / Client
+      multiple: true
+      options:
+        - Webböngésző / Web browser
+        - Android
+        - Android TV
+        - iOS / iPadOS
+        - Apple TV
+        - Samsung Tizen
+        - LG webOS
+        - Jellyfin-kliens (Infuse, Swiftfin, Kodi…) / Jellyfin client
+  - type: textarea
+    id: logs
+    attributes:
+      label: Napló / Logs
+      description: A szerver naplójának releváns része (`docker logs kinora`); jelszót, tokent, API-kulcsot törölj belőle. / The relevant part of the server log; remove passwords, tokens and API keys.
+      render: text

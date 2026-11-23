@@ -1339,3 +1339,33 @@ a.score:focus-visible { outline: var(--focus-w) solid var(--amber); outline-offs
 @media (prefers-reduced-motion: reduce) {
   .scores-slot, .box-slot, .score-meter::before, .box-bar i { animation: none; opacity: 1; }
 }
+
+/* ===================================================================== first-run wizard (#/setup/…) */
+.wiz { width: min(640px, 100%); }
+.wiz .logo { font-size: var(--f5); display: block; margin-bottom: var(--s4); }
+.wiz h1 { font-size: var(--f5); margin: var(--s4) 0 var(--s2); }
+.wiz .lede { color: var(--t2); margin-bottom: var(--s5); max-width: var(--measure); }
+.wiz .lang-switch { justify-content: flex-end; margin-top: var(--s5); }
+.wiz-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); font-size: var(--f0); color: var(--t2); }
+.wiz-steps li { display: inline-flex; align-items: center; gap: var(--s2); }
+.wiz-steps li.on { color: var(--t0); font-weight: 700; }
+.wiz-dot { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; border: var(--hair) solid var(--rule-hi); font-size: 11px; flex: none; }
+.wiz-dot svg { width: 12px; height: 12px; }
+.wiz-steps li.done .wiz-dot { border-color: var(--amber-dim); color: var(--amber); }
+.wiz-steps li.on .wiz-dot { border-color: var(--amber); background: var(--amber); color: var(--amber-ink); }
+.wiz-body { display: grid; gap: var(--s4); }
+.wiz-text p { margin: 0 0 var(--s2); max-width: var(--measure); }
+.wiz-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.wiz-list svg { width: var(--i-s); height: var(--i-s); vertical-align: -.15em; color: var(--ok); }
+.wiz-sum li { font-size: var(--f1); }
+.wiz-form { max-width: 100%; }
+.wiz-foot { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s5); padding-top: var(--s4); border-top: var(--hair) solid var(--rule); }
+.wiz-gap { flex: 1; }
+.wiz-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: var(--s4); margin-bottom: var(--s5); border: var(--hair) solid var(--amber-dim); border-radius: var(--r2); }
+.wiz-note p { margin: var(--s1) 0 0; }
+@media (max-width: 760px) {
+  .wiz-steps .wiz-name { display: none; }
+  .wiz-steps li.on .wiz-name { display: inline; }
+  .wiz-foot { flex-wrap: wrap; }
+}

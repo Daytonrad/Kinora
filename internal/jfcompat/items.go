@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -427,6 +428,17 @@ func (s *Server) itemsQuery(r *http.Request, c *reqCtx) (where string, args []an
 		}
 		add(" AND EXISTS(SELECT 1 FROM item_genres g WHERE g.item_id=i.id AND g.genre IN ("+ph+"))", a...)
 	}
+	if tags := s.tagFilter(r, c); tags != nil {
+		if len(tags) == 0 {
+			return "", nil, "", false
+		}
+		ph := strings.TrimSuffix(strings.Repeat("?,", len(tags)), ",")
+		a := make([]any, len(tags))
+		for i, x := range tags {
+			a[i] = x
+		}
+		add(" AND EXISTS(SELECT 1 FROM item_tags t WHERE t.item_id=i.id AND t.tag COLLATE NOCASE IN ("+ph+"))", a...)
+	}
 	if ys := qList(r, "Years"); len(ys) > 0 {
 		var ph []string
 		var a []any
@@ -441,6 +453,29 @@ func (s *Server) itemsQuery(r *http.Request, c *reqCtx) (where string, args []an
 		}
 	}
 	return strings.Join(conds, ""), args, s.orderBy(r, kinds), true
+}
+
+// tagFilter reads Tags (names) and TagIds (ids from /Tags): nil when neither is given, empty when only unknown
+// ids are.
+func (s *Server) tagFilter(r *http.Request, c *reqCtx) []string {
+	names, ids := qList(r, "Tags"), qList(r, "TagIds")
+	if len(names) == 0 && len(ids) == 0 {
+		return nil
+	}
+	out := append([]string{}, names...)
+	if len(ids) > 0 {
+		want := map[string]bool{}
+		for _, id := range ids {
+			want[strings.ToLower(id)] = true
+		}
+		all, _ := s.Store.FacetsOf(c.Profile, 0, nil, "tag")
+		for _, f := range all {
+			if want[tagID(f.Value)] {
+				out = append(out, f.Value)
+			}
+		}
+	}
+	return out
 }
 
 func likeEscape(s string) string {
@@ -530,6 +565,25 @@ func (s *Server) handleItem(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	writeJSON(w, http.StatusOK, s.dto(it, c, dtoOpts{media: true}))
 }
 
+// latestKinds maps /Items/Latest's IncludeItemTypes to Kinora kinds: Latest lists films and series (new episodes
+// are grouped into their series), so Episode and Season ask for series. nil: no filter.
+func latestKinds(r *http.Request) map[string]bool {
+	types := qList(r, "IncludeItemTypes")
+	if len(types) == 0 {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, t := range types {
+		switch strings.ToLower(t) {
+		case "movie":
+			out["movie"] = true
+		case "series", "season", "episode":
+			out["series"] = true
+		}
+	}
+	return out
+}
+
 func (s *Server) handleLatest(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	limit := qInt(r, "Limit", 16)
 	if limit <= 0 || limit > 100 {
@@ -548,10 +602,17 @@ func (s *Server) handleLatest(w http.ResponseWriter, r *http.Request, c *reqCtx)
 			libs = []*store.Library{l}
 		}
 	}
+	want := latestKinds(r)
 	for _, l := range libs {
 		got, _ := s.Store.RecentlyAdded(c.Profile, l.ID, limit)
-		items = append(items, got...)
+		for _, it := range got {
+			if want == nil || want[it.Kind] {
+				items = append(items, it)
+			}
+		}
 	}
+	// newest first across the libraries, as each library's list is
+	sort.SliceStable(items, func(i, j int) bool { return items[i].AddedAt > items[j].AddedAt })
 	if len(items) > limit {
 		items = items[:limit]
 	}
@@ -683,17 +744,66 @@ func (s *Server) handleSimilar(w http.ResponseWriter, r *http.Request, c *reqCtx
 	writeJSON(w, http.StatusOK, map[string]any{"Items": list, "TotalRecordCount": len(list), "StartIndex": 0})
 }
 
-func (s *Server) handleGenres(w http.ResponseWriter, r *http.Request, c *reqCtx) {
-	var lib int64
-	if pid := qv(r, "ParentId"); pid != "" {
-		lib, _ = s.ids.decode(nsLibrary, pid)
+// facetKinds maps IncludeItemTypes to the kinds a facet counts over (films and series when none is asked).
+func facetKinds(r *http.Request) []string {
+	var kinds []string
+	for _, t := range qList(r, "IncludeItemTypes") {
+		switch strings.ToLower(t) {
+		case "movie":
+			kinds = append(kinds, "movie")
+		case "series":
+			kinds = append(kinds, "series")
+		}
 	}
-	genres, _, _ := s.Store.Facets(c.Profile, lib)
-	out := []map[string]any{}
-	for _, g := range genres {
-		out = append(out, map[string]any{"Name": g.Value, "Type": "Genre", "ServerId": s.serverID(), "ChildCount": g.Count})
+	return kinds
+}
+
+// facets answers /Genres, /Years and /Tags: the values over what the profile may see, with the client's
+// ParentId (a library) and IncludeItemTypes. Types Kinora has none of (MusicAlbum…) give an empty list.
+func (s *Server) facets(facet, typ string) handler {
+	return func(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+		var lib int64
+		if pid := qv(r, "ParentId"); pid != "" {
+			l, ok := s.ids.decode(nsLibrary, pid)
+			if !ok || !c.Profile.LibraryAllowed(l) {
+				emptyResult(w, r, c)
+				return
+			}
+			lib = l
+		}
+		kinds := facetKinds(r)
+		if len(kinds) == 0 && len(qList(r, "IncludeItemTypes")) > 0 {
+			emptyResult(w, r, c)
+			return
+		}
+		fs, err := s.Store.FacetsOf(c.Profile, lib, kinds, facet)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "facets")
+			return
+		}
+		out := []map[string]any{}
+		for _, f := range fs {
+			d := map[string]any{"Name": f.Value, "Type": typ, "ServerId": s.serverID(), "ChildCount": f.Count,
+				"ImageTags": map[string]string{}, "BackdropImageTags": []string{}}
+			switch facet {
+			case "tag":
+				d["Id"] = tagID(f.Value)
+			case "year":
+				if y, err := strconv.Atoi(f.Value); err == nil {
+					d["ProductionYear"] = y
+				}
+			}
+			out = append(out, d)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"Items": out, "TotalRecordCount": len(out), "StartIndex": 0})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"Items": out, "TotalRecordCount": len(out), "StartIndex": 0})
+}
+
+// tagID is a stable id for a tag name (Kinora has no tag table): clients send it back as TagIds, and
+// itemsQuery turns it into the name again by hashing the tags the profile can see.
+func tagID(name string) string {
+	h := sha1.Sum([]byte("tag:" + strings.ToLower(name)))
+	return hex.EncodeToString(h[:16])
 }
 
 // empty answers for features Kinora has no counterpart of, so clients do not treat them as errors

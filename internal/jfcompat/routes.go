@@ -51,7 +51,9 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /items/{item}/similar", auth(s.handleSimilar))
 	m.HandleFunc("GET /movies/{item}/similar", auth(s.handleSimilar))
 	m.HandleFunc("GET /shows/{item}/similar", auth(s.handleSimilar))
-	m.HandleFunc("GET /genres", auth(s.handleGenres))
+	m.HandleFunc("GET /genres", auth(s.facets("genre", "Genre")))
+	m.HandleFunc("GET /years", auth(s.facets("year", "Year")))
+	m.HandleFunc("GET /tags", auth(s.facets("tag", "Tag")))
 	for _, p := range []string{"/items/{item}/specialfeatures", "/users/{user}/items/{item}/specialfeatures",
 		"/items/{item}/localtrailers", "/users/{user}/items/{item}/localtrailers"} {
 		m.HandleFunc("GET "+p, auth(emptyList))
@@ -80,8 +82,8 @@ func (s *Server) routes() {
 		m.HandleFunc("HEAD "+p, auth(s.handleStream))
 	}
 	// stream, stream.mkv, master.m3u8, main.m3u8 (the mux has no partial-segment wildcards)
-	m.HandleFunc("GET /videos/{item}/{file}", auth(s.handleVideoFile))
-	m.HandleFunc("HEAD /videos/{item}/{file}", auth(s.handleVideoFile))
+	m.HandleFunc("GET /videos/{item}/{file}", s.streamAuthed(s.handleVideoFile))
+	m.HandleFunc("HEAD /videos/{item}/{file}", s.streamAuthed(s.handleVideoFile))
 	m.HandleFunc("GET /videos/{item}/hls1/{session}/{file}", auth(s.handleSegment))
 	m.HandleFunc("DELETE /videos/activeencodings", auth(s.handleStopEncodings))
 	m.HandleFunc("GET /videos/{item}/{source}/subtitles/{index}/{file}", auth(s.handleSubtitle))

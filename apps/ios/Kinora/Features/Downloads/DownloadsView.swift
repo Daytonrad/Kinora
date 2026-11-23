@@ -8,14 +8,14 @@ struct DownloadsView: View {
 
     var body: some View {
         Group {
-            if store.saved.isEmpty && store.phases.isEmpty {
+            if store.visible.isEmpty && store.visiblePhases.isEmpty {
                 ContentUnavailableView(L("Nincs letöltés"), systemImage: "arrow.down.circle",
                                        description: Text(L("Filmet vagy részt a címlapján a letöltés gombbal menthetsz offline nézéshez.")))
             } else {
                 List {
-                    if !store.phases.isEmpty {
+                    if !store.visiblePhases.isEmpty {
                         Section(L("Folyamatban")) {
-                            ForEach(store.phases.keys.sorted(), id: \.self) { id in
+                            ForEach(store.visiblePhases.keys.sorted(), id: \.self) { id in
                                 if let phase = store.phases[id] {
                                     ActiveRow(title: store.pendingTitle(id), phase: phase) { Haptic.warning.play(); store.cancel(id) }
                                 }
@@ -23,9 +23,9 @@ struct DownloadsView: View {
                         }
                         .listRowBackground(Theme.panel)
                     }
-                    if !store.saved.isEmpty {
+                    if !store.visible.isEmpty {
                         Section {
-                            ForEach(store.saved) { d in
+                            ForEach(store.visible) { d in
                                 Button { model.play(d.item) } label: { SavedRow(download: d) }
                                     .buttonStyle(.plain)
                                     .swipeActions {

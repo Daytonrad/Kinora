@@ -1,0 +1,10 @@
+{
+  "target": "jellyfin",
+  "first_scan_s": 843.475525617,
+  "second_scan_s": 21.799633337,
+  "counts": {
+    "Movies": 5002,
+    "Series": 500,
+    "Episodes": 5000
+  }
+}

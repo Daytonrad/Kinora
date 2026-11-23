@@ -12,6 +12,9 @@ struct SavedDownload: Codable, Identifiable, Equatable {
     var subtitles: [SubtitleTrack]
     var segments: [Segment]?
     var chapters: [Chapter]?
+    /// The profiles that downloaded it; only they see it (offline too). nil: saved before profiles were
+    /// recorded, shown to every profile except kids profiles.
+    var profiles: [Int]?
     var id: Int { item.id }
 }
 
@@ -40,6 +43,8 @@ final class DownloadStore {
         var subtitles: [SubtitleTrack] = []
         var segments: [Segment]?
         var chapters: [Chapter]?
+        /// The profile that started it.
+        var profile: Int?
     }
 
     static let shared = DownloadStore()
@@ -84,9 +89,35 @@ final class DownloadStore {
         }
     }
 
+    // MARK: - profiles
+
+    /// The profile in use (online, or the last one used when the app starts offline). Every profile sees only
+    /// its own downloads, so a kids profile never finds a title another profile saved.
+    private(set) var profileID: Int?
+    private(set) var profileIsKids = false
+
+    func use(profile: Profile?) {
+        profileID = profile?.id
+        profileIsKids = profile?.isKids ?? false
+    }
+
+    private func isVisible(_ owners: [Int]?) -> Bool {
+        OfflineAccess.canSee(owners: owners, profileID: profileID, isKids: profileIsKids)
+    }
+
+    /// The current profile's saved titles.
+    var visible: [SavedDownload] { saved.filter { isVisible($0.profiles) } }
+
+    /// The current profile's downloads in progress.
+    var visiblePhases: [Int: Phase] { phases.filter { id, _ in isVisible(pending[id]?.profile.map { [$0] }) } }
+
     // MARK: - queries
 
-    func download(for id: Int) -> SavedDownload? { saved.first { $0.id == id } }
+    /// A saved title the current profile may see.
+    func download(for id: Int) -> SavedDownload? { saved.first { $0.id == id && isVisible($0.profiles) } }
+
+    /// A saved title, whoever saved it.
+    private func savedAny(_ id: Int) -> SavedDownload? { saved.first { $0.id == id } }
 
     func fileURL(_ d: SavedDownload) -> URL { dir.appendingPathComponent("\(d.id).mp4") }
 
@@ -129,10 +160,21 @@ final class DownloadStore {
     }
 
     func start(_ item: Item, quality: String, client: KinoraClient) async throws {
+        // Another profile on this device saved it already: no second copy, it just becomes this profile's too.
+        // (The title page that offers the download comes from the server, so this profile may see the title.)
+        if let pid = profileID, let i = saved.firstIndex(where: { $0.id == item.id }),
+           FileManager.default.fileExists(atPath: fileURL(saved[i]).path) {
+            var owners = saved[i].profiles ?? []
+            if !owners.contains(pid) { owners.append(pid) }
+            saved[i].profiles = owners
+            persist()
+            return
+        }
         if let room = roomError() { throw DownloadError(message: room) }
         self.client = client
         let job = try await client.createDownload(item.id, quality: quality)
         var p = Pending(item: item, key: job.key, quality: quality)
+        p.profile = profileID
         p.subtitles = (try? await client.subtitleStreams(item.id)) ?? []
         // Skip markers and chapters for offline use; a stream session the request opened is stopped.
         if let info = try? await client.playback(item.id, PlaybackRequest(start: 0)) {
@@ -173,6 +215,13 @@ final class DownloadStore {
 
     func delete(_ id: Int) {
         guard let d = download(for: id) else { return }
+        // Saved by other profiles too: only this profile lets go of it.
+        if let rest = OfflineAccess.afterDelete(owners: d.profiles, profileID: profileID),
+           let i = saved.firstIndex(where: { $0.id == id }) {
+            saved[i].profiles = rest
+            persist()
+            return
+        }
         try? FileManager.default.removeItem(at: fileURL(d))
         for t in d.subtitles { try? FileManager.default.removeItem(at: dir.appendingPathComponent(t.url)) }
         saved.removeAll { $0.id == id }
@@ -299,9 +348,12 @@ final class DownloadStore {
         guard let p = pending[id] else { return }
         retries[id] = nil
         dropResumeData(id)
+        var owners = savedAny(id)?.profiles ?? []
+        if let pid = p.profile, !owners.contains(pid) { owners.append(pid) }
         saved.removeAll { $0.id == id }
         saved.insert(SavedDownload(item: p.item, quality: p.quality, size: size, savedAt: .now,
-                                   subtitles: p.subtitles, segments: p.segments, chapters: p.chapters), at: 0)
+                                   subtitles: p.subtitles, segments: p.segments, chapters: p.chapters,
+                                   profiles: p.profile == nil ? nil : owners), at: 0)
         pending[id] = nil
         phases[id] = nil
         persist()
@@ -338,7 +390,7 @@ final class DownloadStore {
         for (id, was) in old where !was.isFailed {
             switch phases[id] {
             case .failed?: LiveActivities.downloadEnded(failed: true)
-            case nil where download(for: id) != nil: LiveActivities.downloadEnded(failed: false)
+            case nil where savedAny(id) != nil: LiveActivities.downloadEnded(failed: false)
             default: break
             }
         }

@@ -8,8 +8,10 @@
 package jfcompat
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -133,6 +135,20 @@ func (sw *statusWriter) Flush() {
 }
 func (sw *statusWriter) Unwrap() http.ResponseWriter { return sw.ResponseWriter }
 
+// Hijack lets the clients' WebSocket (/socket) upgrade pass through the logging wrapper; gorilla/websocket
+// type-asserts http.Hijacker on the writer it is given.
+func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := sw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("hijack not supported")
+	}
+	c, rw, err := hj.Hijack()
+	if err == nil {
+		sw.status = http.StatusSwitchingProtocols
+	}
+	return c, rw, err
+}
+
 // ------------------------------------------------------------------ request context
 
 type reqCtx struct {
@@ -236,6 +252,33 @@ func (s *Server) authed(h handler) http.HandlerFunc {
 			return
 		}
 		h(w, r, &reqCtx{User: ss.User, Profile: ss.Profile, Token: a.Token, Auth: a})
+	}
+}
+
+// streamAuthed authenticates the /Videos/{item}/… requests. Some clients (Kodi's JellyCon) hand the bare
+// stream URL to their player, without a token: only the PlaySessionId that PlaybackInfo gave them. Such a
+// request is let through as the profile that asked PlaybackInfo, when the play session exists, is for this
+// very item, and the token it was issued under is still a valid session of that profile (so signing the
+// device out ends it too). Play session ids are 16 random bytes, kept in memory for at most 12 hours.
+func (s *Server) streamAuthed(h handler) http.HandlerFunc {
+	tokenAuth := s.authed(h)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if parseAuth(r).Token != "" {
+			tokenAuth(w, r)
+			return
+		}
+		ps := s.plays.get(qv(r, "PlaySessionId"))
+		item, ok := s.ids.decode(nsItem, r.PathValue("item"))
+		if ps == nil || ps.Token == "" || !ok || item != ps.ItemID {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		ss, err := s.Store.SessionFull(ps.Token, clientIP(r))
+		if err != nil || ss.Profile == nil || ss.Profile.ID != ps.ProfileID || ss.User.ID != ps.UserID {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		h(w, r, &reqCtx{User: ss.User, Profile: ss.Profile, Token: ps.Token, Auth: parseAuth(r)})
 	}
 }
 

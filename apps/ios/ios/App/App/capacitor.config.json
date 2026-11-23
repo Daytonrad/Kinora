@@ -1,0 +1,15 @@
+{
+	"appId": "io.github.scotylucas.kinora",
+	"appName": "Kinora",
+	"webDir": "www",
+	"ios": {
+		"contentInset": "never",
+		"allowsLinkPreview": false,
+		"limitsNavigationsToAppBoundDomains": false
+	},
+	"packageClassList": [
+		"SecureStorage",
+		"AppPlugin",
+		"KinoraNativePlugin"
+	]
+}
