@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +57,29 @@ func TestPushIOSPairing(t *testing.T) {
 	if err != nil || json.Unmarshal(plain, &m) != nil || m.Type != "test" {
 		t.Fatalf("payload %q %v", plain, err)
 	}
+
+	// the device's language and categories
+	c.hdr = map[string]string{"X-Kinora-Lang": "en"}
+	if code := c.do("PATCH", "/api/push/ios", map[string]any{"muted": []string{"episodes"}, "live": true}, nil); code != 200 {
+		t.Fatalf("prefs %d", code)
+	}
+	if code := c.do("PATCH", "/api/push/ios", map[string]any{"muted": []string{"spam"}}, nil); code != 400 {
+		t.Fatalf("unknown category accepted: %d", code)
+	}
+	if code := c.do("GET", "/api/push/ios", nil, &info); code != 200 || info["live"] != true || fmt.Sprint(info["muted"]) != "[episodes]" {
+		t.Fatalf("prefs back: %v", info)
+	}
+	if p, _ := st.PushIOSAll(); len(p) != 1 || p[0].Lang != "en" || !p[0].Live || p[0].Wants("episodes") || !p[0].Wants("requests") {
+		t.Fatalf("stored %+v", p)
+	}
+	c.do("POST", "/api/push/ios/test", nil, nil)
+	sent, _, _ = rl.Snapshot()
+	plain, _ = pushtest.Open(key, sent[len(sent)-1].Payload)
+	json.Unmarshal(plain, &m)
+	if m.Body != "Notifications are working." {
+		t.Fatalf("test push in English: %q", m.Body)
+	}
+	c.hdr = nil
 
 	// re-pairing with a new handle forgets the old one at the relay
 	newHandle := strings.Repeat("n", 43)

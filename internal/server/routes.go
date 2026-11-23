@@ -32,6 +32,7 @@ func (s *Server) routes() {
 	m.HandleFunc("DELETE /api/devices/{id}", s.authed(s.handleDeviceDelete))
 	m.HandleFunc("GET /api/push/ios", s.authed(s.handlePushIOS))
 	m.HandleFunc("POST /api/push/ios", s.authed(s.handlePushIOSPair))
+	m.HandleFunc("PATCH /api/push/ios", s.authed(s.handlePushIOSPrefs))
 	m.HandleFunc("DELETE /api/push/ios", s.authed(s.handlePushIOSUnpair))
 	m.HandleFunc("POST /api/push/ios/test", s.authed(s.handlePushIOSTest))
 	m.HandleFunc("POST /api/quickconnect/lookup", s.authed(s.handleQCLookup))

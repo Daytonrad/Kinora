@@ -61,7 +61,9 @@ func NewRelay(st *store.Store) *Relay {
 }
 
 // URL is the configured relay base URL ("" = none).
-func (r *Relay) URL() string { return strings.TrimRight(strings.TrimSpace(r.st.Setting("push_relay_url")), "/") }
+func (r *Relay) URL() string {
+	return strings.TrimRight(strings.TrimSpace(r.st.Setting("push_relay_url")), "/")
+}
 
 // Enabled reports whether push is switched on and a relay is configured.
 func (r *Relay) Enabled() bool { return r.st.Setting("push_enabled") == "1" && r.URL() != "" }
@@ -111,6 +113,30 @@ func (r *Relay) Send(ctx context.Context, handle string, payload []byte, collaps
 	}
 	raw, _ := json.Marshal(body)
 	return r.signed(ctx, http.MethodPost, "/v1/send", raw)
+}
+
+// LiveRequest starts, updates or ends a Live Activity on a device.
+type LiveRequest struct {
+	Handle        string
+	Ref           string // the activity, as the device knows it (from its attributes)
+	Event         string // start | update | end
+	Payload       []byte // sealed LiveState
+	Priority      int    // 5 or 10
+	StaleDate     int64  // unix, 0 = none
+	DismissalDate int64  // unix, 0 = none
+}
+
+// Live sends a Live Activity push. A device that has no token for it answers 404 no_live_token.
+func (r *Relay) Live(ctx context.Context, l LiveRequest) error {
+	body := map[string]any{"handle": l.Handle, "ref": l.Ref, "event": l.Event, "payload": b64url(l.Payload), "priority": l.Priority}
+	if l.StaleDate > 0 {
+		body["stale_date"] = l.StaleDate
+	}
+	if l.DismissalDate > 0 {
+		body["dismissal_date"] = l.DismissalDate
+	}
+	raw, _ := json.Marshal(body)
+	return r.signed(ctx, http.MethodPost, "/v1/live", raw)
 }
 
 // Delete tells the relay to forget a handle.

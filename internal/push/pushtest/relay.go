@@ -26,6 +26,14 @@ type Sent struct {
 	Payload            []byte
 }
 
+// Live is one accepted /v1/live.
+type Live struct {
+	Handle, Ref, Event       string
+	Payload                  []byte
+	Priority                 int
+	StaleDate, DismissalDate int64
+}
+
 // Relay is a fake relay.
 type Relay struct {
 	*httptest.Server
@@ -36,11 +44,13 @@ type Relay struct {
 	Deleted       []string
 	Gone          map[string]bool // handles answered with 410
 	Status        int             // when set, every send is answered with it
+	Lives         []Live
+	LiveTokens    map[string]bool // "handle" (push-to-start) and "handle/ref" (running activity) tokens
 }
 
 // New starts a fake relay, closed with the test.
 func New(t *testing.T) *Relay {
-	r := &Relay{secrets: map[string]string{}, Gone: map[string]bool{}}
+	r := &Relay{secrets: map[string]string{}, Gone: map[string]bool{}, LiveTokens: map[string]bool{}}
 	r.Server = httptest.NewServer(http.HandlerFunc(r.serve))
 	t.Cleanup(r.Close)
 	return r
@@ -51,6 +61,24 @@ func (r *Relay) Snapshot() (sent []Sent, deleted []string, regs int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]Sent(nil), r.Sent...), append([]string(nil), r.Deleted...), r.Registrations
+}
+
+// LiveSnapshot returns a copy of the accepted Live Activity pushes.
+func (r *Relay) LiveSnapshot() []Live {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]Live(nil), r.Lives...)
+}
+
+// SetLiveToken gives a handle a push-to-start token (ref "") or a token for a running activity.
+func (r *Relay) SetLiveToken(handle, ref string, on bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	k := handle
+	if ref != "" {
+		k += "/" + ref
+	}
+	r.LiveTokens[k] = on
 }
 
 // SetGone makes sends to a handle answer 410.
@@ -106,6 +134,33 @@ func (r *Relay) serve(w http.ResponseWriter, q *http.Request) {
 			fail(w, r.Status, "test")
 		default:
 			r.Sent = append(r.Sent, Sent{Handle: in.Handle, CollapseID: in.Collapse_id, Payload: p})
+			w.Write([]byte(`{"ok":true}`))
+		}
+	case q.Method == http.MethodPost && q.URL.Path == "/v1/live":
+		var in struct {
+			Handle, Ref, Event, Payload string
+			Priority                    int
+			Stale_date, Dismissal_date  int64
+		}
+		json.Unmarshal(body, &in)
+		p, err := base64.RawURLEncoding.DecodeString(in.Payload)
+		k := in.Handle
+		if in.Event != "start" {
+			k += "/" + in.Ref
+		}
+		switch {
+		case err != nil || len(p) < 28 || len(p) > 1024:
+			fail(w, http.StatusBadRequest, "bad_payload")
+		case r.Status != 0:
+			fail(w, r.Status, "test")
+		case !r.LiveTokens[k]:
+			fail(w, http.StatusNotFound, "no_live_token")
+		default:
+			if in.Event == "end" {
+				delete(r.LiveTokens, k)
+			}
+			r.Lives = append(r.Lives, Live{Handle: in.Handle, Ref: in.Ref, Event: in.Event, Payload: p, Priority: in.Priority,
+				StaleDate: in.Stale_date, DismissalDate: in.Dismissal_date})
 			w.Write([]byte(`{"ok":true}`))
 		}
 	case q.Method == http.MethodDelete && strings.HasPrefix(q.URL.Path, "/v1/devices/"):

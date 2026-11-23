@@ -26,8 +26,8 @@ import (
 	"github.com/ScotyLucas/kinora/internal/media"
 	"github.com/ScotyLucas/kinora/internal/meta"
 	"github.com/ScotyLucas/kinora/internal/party"
-	"github.com/ScotyLucas/kinora/internal/scanner"
 	"github.com/ScotyLucas/kinora/internal/push"
+	"github.com/ScotyLucas/kinora/internal/scanner"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
 
@@ -65,7 +65,8 @@ type Server struct {
 	legacy        legacyJS
 
 	Deps
-	bgCtx context.Context
+	bgCtx  context.Context
+	pushTx pushTexts // the notifier's texts per language
 }
 
 // Deps are the subsystems the server drives (wired in main).
@@ -97,6 +98,9 @@ func New(cfg Config, st *store.Store, log *slog.Logger, deps Deps) *Server {
 	}
 	if s.Push == nil {
 		s.Push = push.NewNotifier(st, push.NewRelay(st), log)
+	}
+	if s.Push.Text == nil {
+		s.Push.Text = s.pushText
 	}
 	if s.Acquire == nil && s.Meta != nil {
 		s.Acquire = acquire.New(st, s.Meta, func(libID int64) {

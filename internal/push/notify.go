@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ScotyLucas/kinora/internal/store"
@@ -16,10 +18,21 @@ import (
 // maxPlain keeps the encrypted payload under the relay's 2048-byte limit.
 const maxPlain = 1500
 
-// Message is the plaintext the iOS Notification Service Extension decrypts.
+// Notification categories a device can turn off (PushPrefs.Muted).
+const (
+	CatRequests      = "requests"       // the device's own requests: approved, denied, failed, arrived
+	CatEpisodes      = "episodes"       // new episodes of series the profile follows
+	CatAdminRequests = "admin_requests" // admins: someone asked for something
+)
+
+// Categories lists every category, in the order the app shows them.
+var Categories = []string{CatRequests, CatEpisodes, CatAdminRequests}
+
+// Message is the plaintext the iOS Notification Service Extension decrypts. Title and body are
+// already in the device's language.
 type Message struct {
 	V     int    `json:"v"`
-	Type  string `json:"type"` // request_available | test
+	Type  string `json:"type"` // request_approved | request_denied | request_failed | request_available | request_new | episodes | test
 	Title string `json:"title"`
 	Body  string `json:"body"`
 	Item  int64  `json:"item,omitempty"`  // library item to open
@@ -28,18 +41,39 @@ type Message struct {
 	Tag   string `json:"tag,omitempty"`
 }
 
-// Notifier pushes fulfilled requests to their requester's paired iOS devices.
+// LiveState is the sealed content of a live download activity.
+type LiveState struct {
+	V        int     `json:"v"`
+	Title    string  `json:"t"`
+	Kind     string  `json:"k"`             // movie | series
+	State    string  `json:"st"`            // downloading | importing | available | failed | canceled
+	Progress float64 `json:"p"`             // 0..1
+	ETA      int64   `json:"eta,omitempty"` // seconds from At, 0 = unknown
+	At       int64   `json:"at"`            // when this state was measured
+	Item     int64   `json:"item,omitempty"`
+}
+
+// Translator returns the texts of one language: Hungarian source text in, translation out, with
+// {0}, {1}… filled from args.
+type Translator func(lang string) func(hu string, args ...any) string
+
+// Notifier pushes request changes, new episodes and live downloads to paired iOS devices.
 type Notifier struct {
 	st       *store.Store
 	Relay    *Relay
 	log      *slog.Logger
 	Interval time.Duration
+	Text     Translator // nil = Hungarian
+	now      func() time.Time
 }
 
 // NewNotifier makes the notifier; Run drives it.
 func NewNotifier(st *store.Store, relay *Relay, log *slog.Logger) *Notifier {
-	return &Notifier{st: st, Relay: relay, log: log, Interval: 30 * time.Second}
+	return &Notifier{st: st, Relay: relay, log: log, Interval: 30 * time.Second, now: time.Now}
 }
+
+// SetClock replaces the notifier's clock (tests).
+func (n *Notifier) SetClock(now func() time.Time) { n.now = now }
 
 // Run sends pending notifications until ctx ends.
 func (n *Notifier) Run(ctx context.Context) {
@@ -55,42 +89,422 @@ func (n *Notifier) Run(ctx context.Context) {
 	}
 }
 
-// Tick sends what is pending now. Requests fulfilled more than a day ago (push was
-// off) are marked as done without sending.
+// Format fills {0}, {1}… in s.
+func Format(s string, args ...any) string {
+	for i, a := range args {
+		s = strings.ReplaceAll(s, "{"+strconv.Itoa(i)+"}", fmt.Sprint(a))
+	}
+	return s
+}
+
+func (n *Notifier) text(lang string) func(string, ...any) string {
+	if n.Text == nil || lang == "" || lang == "hu" {
+		return Format
+	}
+	return n.Text(lang)
+}
+
+// Tick sends what is waiting now.
 func (n *Notifier) Tick(ctx context.Context) {
 	if !n.Relay.Enabled() {
+		// nobody to tell: drop what piled up, so turning push on later does not flood
+		n.st.ClearPushEvents()
+		n.skipEpisodes()
 		return
 	}
-	list, err := n.st.PendingAvailable(time.Now().Add(-24 * time.Hour).Unix())
+	devs, err := n.st.PushIOSAll()
 	if err != nil {
-		n.log.Warn("push: pending requests", "err", err)
+		n.log.Warn("push: devices", "err", err)
 		return
 	}
-	for _, q := range list {
+	if len(devs) == 0 {
+		n.st.ClearPushEvents()
+		n.skipEpisodes()
+		return
+	}
+	n.requests(ctx, devs)
+	n.episodes(ctx, devs)
+	n.live(ctx, devs)
+}
+
+// --- request changes ------------------------------------------------------------
+
+// retryable is an error after which the rest is left for the next tick: the relay is unreachable or broken.
+func retryable(err error) bool {
+	if err == nil || errors.Is(err, ErrDisabled) {
+		return false
+	}
+	var re *RelayError
+	return !errors.As(err, &re) || re.Status >= 500
+}
+
+func (n *Notifier) requests(ctx context.Context, devs []store.PushIOS) {
+	events, err := n.st.PushEvents(n.now().Add(-24*time.Hour).Unix(), 100)
+	if err != nil {
+		n.log.Warn("push: request events", "err", err)
+		return
+	}
+	for _, e := range events {
 		if ctx.Err() != nil {
 			return
 		}
-		m := Message{V: 1, Type: "request_available", Title: q.Title, Body: availableBody(q), Tag: fmt.Sprintf("req-%d", q.ID)}
-		if id := n.st.LibraryItemByTmdb(q.Kind, q.TmdbID); id > 0 {
-			m.Item, m.Href, m.Image = id, "#/item/"+strconv.FormatInt(id, 10), fmt.Sprintf("/api/images/%d/poster", id)
+		q, err := n.st.AcqRequest(e.RequestID)
+		if err != nil || q.UserID == nil {
+			n.st.DonePushEvent(e.ID)
+			continue
 		}
-		if err := n.SendUser(ctx, *q.UserID, m); err != nil && !errors.Is(err, ErrDisabled) {
-			n.log.Warn("push: request", "id", q.ID, "err", err)
-			var re *RelayError
-			if !errors.As(err, &re) || re.Status >= 500 || re.Status == 429 {
-				return // relay unreachable or busy: retry the rest on the next tick
+		var failed error
+		for _, d := range devs {
+			m, ok := n.requestMessage(e, q, d)
+			if !ok {
+				continue
+			}
+			if err := n.SendDevice(ctx, d, m); err != nil {
+				n.log.Warn("push: request", "id", q.ID, "status", e.Status, "err", err)
+				if retryable(err) {
+					failed = err
+					break
+				}
 			}
 		}
-		n.st.MarkPushed(q.ID)
+		if failed != nil {
+			return // retry this one and the rest on the next tick
+		}
+		n.st.DonePushEvent(e.ID)
 	}
 }
 
-func availableBody(q *store.AcqRequest) string {
-	if q.Kind == "series" {
-		return "A kért sorozat megérkezett, már nézheted."
+// requestMessage builds what device d hears about event e, if anything.
+func (n *Notifier) requestMessage(e store.PushEvent, q *store.AcqRequest, d store.PushIOS) (Message, bool) {
+	T := n.text(d.Lang)
+	mine := d.UserID == *q.UserID
+	m := Message{V: 1, Tag: fmt.Sprintf("req-%d", q.ID)}
+	item := n.st.LibraryItemByTmdb(libKind(q.Kind), q.TmdbID)
+	title := n.itemTitle(item, d, q.Title)
+	switch {
+	case e.Status == store.ReqPending:
+		if mine || !d.IsAdmin || !d.Wants(CatAdminRequests) {
+			return m, false
+		}
+		m.Type, m.Title, m.Body = "request_new", T("Új kérés"), T("{0} kérte: {1}", q.UserName, title)
+		m.Href, m.Tag = "#/requests", fmt.Sprintf("req-new-%d", q.ID)
+		return m, true
+	case !mine || !d.Wants(CatRequests):
+		return m, false
 	}
-	return "A kért film megérkezett, már nézheted."
+	m.Title = title
+	series := q.Kind == "series"
+	switch e.Status {
+	case store.ReqApproved:
+		m.Type, m.Body = "request_approved", T("Jóváhagyták a kérésedet, hamarosan beszerzem.")
+	case store.ReqDenied:
+		m.Type, m.Body = "request_denied", T("Elutasították a kérésedet.")
+		if note := strings.TrimSpace(q.Note); note != "" {
+			m.Body = T("Elutasították a kérésedet: {0}", note)
+		}
+	case store.ReqFailed:
+		m.Type = "request_failed"
+		if series {
+			m.Body = T("A kért sorozatot nem sikerült beszerezni.")
+		} else {
+			m.Body = T("A kért filmet nem sikerült beszerezni.")
+		}
+	case store.ReqAvailable:
+		m.Type = "request_available"
+		if series {
+			m.Body = T("A kért sorozat megérkezett, már nézheted.")
+		} else {
+			m.Body = T("A kért film megérkezett, már nézheted.")
+		}
+	default:
+		return m, false
+	}
+	if item > 0 {
+		m.Item, m.Href = item, "#/item/"+strconv.FormatInt(item, 10)
+		m.Image = fmt.Sprintf("/api/images/%d/poster", item)
+	}
+	return m, true
 }
+
+// libKind is the library item kind of a request kind.
+func libKind(kind string) string {
+	if kind == "series" {
+		return "series"
+	}
+	return "movie"
+}
+
+// itemTitle is the title of a library item in the device's metadata language, or fallback.
+func (n *Notifier) itemTitle(id int64, d store.PushIOS, fallback string) string {
+	if id <= 0 {
+		return fallback
+	}
+	it, err := n.st.Item(id, &store.Profile{ID: d.ProfileID, MetaLang: d.MetaLang})
+	if err != nil || it == nil || it.Title == "" {
+		return fallback
+	}
+	return it.Title
+}
+
+// --- new episodes -----------------------------------------------------------------
+
+const (
+	episodeCursor = "push_episode_id"
+	episodeQuiet  = 2 * time.Minute // a season still being scanned arrives in one notification
+	bulkSeries    = 20              // more series at once is a library import, not news
+)
+
+func (n *Notifier) skipEpisodes() {
+	cur, _ := strconv.ParseInt(n.st.Setting(episodeCursor), 10, 64)
+	if _, next, err := n.st.NewEpisodes(cur, n.now().Unix()); err == nil && next != cur {
+		n.st.SetSetting(episodeCursor, strconv.FormatInt(next, 10))
+	}
+}
+
+func (n *Notifier) episodes(ctx context.Context, devs []store.PushIOS) {
+	cur, _ := strconv.ParseInt(n.st.Setting(episodeCursor), 10, 64)
+	eps, next, err := n.st.NewEpisodes(cur, n.now().Add(-episodeQuiet).Unix())
+	if err != nil {
+		n.log.Warn("push: new episodes", "err", err)
+		return
+	}
+	if next != cur {
+		defer n.st.SetSetting(episodeCursor, strconv.FormatInt(next, 10))
+	}
+	bySeries := map[int64][]store.NewEpisode{}
+	var order []int64
+	for _, e := range eps {
+		if bySeries[e.SeriesID] == nil {
+			order = append(order, e.SeriesID)
+		}
+		bySeries[e.SeriesID] = append(bySeries[e.SeriesID], e)
+	}
+	if len(order) == 0 || len(order) > bulkSeries {
+		return
+	}
+	profiles := map[int64]*store.Profile{}
+	for _, sid := range order {
+		followers, err := n.st.SeriesFollowers(sid)
+		if err != nil || len(followers) == 0 {
+			continue
+		}
+		follows := map[int64]bool{}
+		for _, p := range followers {
+			follows[p] = true
+		}
+		for _, d := range devs {
+			if ctx.Err() != nil {
+				return
+			}
+			if !follows[d.ProfileID] || !d.Wants(CatEpisodes) {
+				continue
+			}
+			p, ok := profiles[d.ProfileID]
+			if !ok {
+				p, _ = n.st.Profile(d.ProfileID)
+				profiles[d.ProfileID] = p
+			}
+			if p == nil {
+				continue
+			}
+			view := *p
+			view.MetaLang = d.MetaLang
+			m, ok := n.episodeMessage(sid, bySeries[sid], &view, d.Lang)
+			if !ok {
+				continue
+			}
+			if err := n.SendDevice(ctx, d, m); err != nil {
+				n.log.Warn("push: episodes", "series", sid, "err", err)
+			}
+		}
+	}
+}
+
+func (n *Notifier) episodeMessage(seriesID int64, eps []store.NewEpisode, p *store.Profile, lang string) (Message, bool) {
+	series, err := n.st.Item(seriesID, p) // nil when the profile may not see it
+	if err != nil || series == nil {
+		return Message{}, false
+	}
+	T := n.text(lang)
+	m := Message{V: 1, Type: "episodes", Title: series.Title, Item: seriesID, Tag: fmt.Sprintf("series-%d", seriesID),
+		Href: "#/item/" + strconv.FormatInt(seriesID, 10), Image: fmt.Sprintf("/api/images/%d/poster", seriesID)}
+	if len(eps) > 1 {
+		m.Body = T("{0} új rész", len(eps))
+		return m, true
+	}
+	e := eps[0]
+	label := fmt.Sprintf("S%02dE%02d", e.Season, e.Episode)
+	if ep, err := n.st.Item(e.ID, p); err == nil && ep != nil && ep.Title != "" {
+		label += " · " + ep.Title
+		m.Item, m.Href = e.ID, "#/item/"+strconv.FormatInt(e.ID, 10)
+	}
+	m.Body = T("Új rész: {0}", label)
+	return m, true
+}
+
+// --- live downloads ---------------------------------------------------------------
+
+const (
+	liveEvery     = 90 * time.Second // at most this often while the progress moves
+	liveKeepAlive = 10 * time.Minute // a state at least this often (it goes stale after liveStale)
+	liveStale     = 20 * time.Minute // the activity shows itself as outdated after this
+	liveNoToken   = 10 * time.Minute // a started activity whose token never came was dismissed
+	liveLinger    = 30 * time.Minute // a finished download stays on the lock screen
+	liveForget    = 24 * time.Hour
+)
+
+func liveRef(requestID int64) string { return fmt.Sprintf("req-%d", requestID) }
+
+func (n *Notifier) live(ctx context.Context, devs []store.PushIOS) {
+	now := n.now()
+	n.st.PrunePushLive(now.Add(-liveForget).Unix())
+	downloads, err := n.st.LiveDownloads()
+	if err != nil {
+		n.log.Warn("push: live downloads", "err", err)
+		return
+	}
+	lives, err := n.st.PushLives()
+	if err != nil {
+		n.log.Warn("push: live activities", "err", err)
+		return
+	}
+	type key struct {
+		dev string
+		req int64
+	}
+	known := map[key]store.PushLive{}
+	for _, l := range lives {
+		known[key{l.DeviceID, l.RequestID}] = l
+	}
+	byDevice := map[string]store.PushIOS{}
+	for _, d := range devs {
+		byDevice[d.DeviceID] = d
+	}
+
+	for _, dl := range downloads {
+		for _, d := range devs {
+			if ctx.Err() != nil {
+				return
+			}
+			if !d.Live || d.UserID != *dl.Request.UserID {
+				continue
+			}
+			k := key{d.DeviceID, dl.Request.ID}
+			l, seen := known[k]
+			delete(known, k)
+			st := n.liveState(dl, d, now)
+			switch {
+			case !seen:
+				err := n.sendLive(ctx, d, dl.Request.ID, "start", st, 10, now.Add(liveStale).Unix(), 0)
+				if err != nil && !errors.Is(err, errNoLiveToken) {
+					n.log.Warn("push: live start", "id", dl.Request.ID, "err", err)
+					continue
+				}
+				// without a push-to-start token (older iOS, Live Activities off) it is not tried again
+				n.st.SavePushLive(store.PushLive{DeviceID: d.DeviceID, RequestID: dl.Request.ID, StartedAt: now.Unix(), SentAt: now.Unix(),
+					Progress: st.Progress, State: st.State, Ended: err != nil})
+			case l.Ended:
+			default:
+				since := now.Sub(time.Unix(l.SentAt, 0))
+				moved := st.Progress-l.Progress >= 0.01 || l.Progress-st.Progress >= 0.01
+				changed := st.State != l.State
+				if !changed && !(moved && since >= liveEvery) && since < liveKeepAlive {
+					continue
+				}
+				prio := 5
+				if changed {
+					prio = 10
+				}
+				err := n.sendLive(ctx, d, dl.Request.ID, "update", st, prio, now.Add(liveStale).Unix(), 0)
+				switch {
+				case errors.Is(err, errNoLiveToken):
+					// the app has not handed in the activity's token yet, or the user dismissed it
+					if now.Sub(time.Unix(l.StartedAt, 0)) > liveNoToken {
+						l.Ended = true
+						n.st.SavePushLive(l)
+					}
+				case err != nil:
+					n.log.Warn("push: live update", "id", dl.Request.ID, "err", err)
+				default:
+					l.SentAt, l.Progress, l.State = now.Unix(), st.Progress, st.State
+					n.st.SavePushLive(l)
+				}
+			}
+		}
+	}
+
+	// what is left is no longer downloading (or the device stopped wanting it): end it
+	for _, l := range known {
+		if l.Ended || ctx.Err() != nil {
+			continue
+		}
+		d, ok := byDevice[l.DeviceID]
+		if !ok {
+			continue
+		}
+		q, err := n.st.AcqRequest(l.RequestID)
+		final := LiveState{V: 1, State: "canceled", At: now.Unix()}
+		dismiss := now.Unix()
+		if err == nil {
+			final.Title, final.Kind = q.Title, libKind(q.Kind)
+			switch q.Status {
+			case store.ReqAvailable:
+				final.State, final.Progress = "available", 1
+				final.Item = n.st.LibraryItemByTmdb(libKind(q.Kind), q.TmdbID)
+				final.Title = n.itemTitle(final.Item, d, q.Title)
+				dismiss = now.Add(liveLinger).Unix()
+			case store.ReqFailed:
+				final.State, final.Progress = "failed", l.Progress
+				dismiss = now.Add(liveLinger).Unix()
+			}
+		}
+		err = n.sendLive(ctx, d, l.RequestID, "end", final, 10, 0, dismiss)
+		if err != nil && !errors.Is(err, errNoLiveToken) {
+			n.log.Warn("push: live end", "id", l.RequestID, "err", err)
+			continue
+		}
+		l.Ended, l.SentAt = true, now.Unix()
+		n.st.SavePushLive(l)
+	}
+}
+
+func (n *Notifier) liveState(dl store.LiveDownload, d store.PushIOS, now time.Time) LiveState {
+	q := dl.Request
+	st := LiveState{V: 1, Kind: libKind(q.Kind), State: dl.State, At: now.Unix(),
+		Progress: float64(int(dl.Progress*1000)) / 1000}
+	st.Title = n.itemTitle(n.st.LibraryItemByTmdb(st.Kind, q.TmdbID), d, q.Title)
+	if dl.ETA > 0 && dl.ETA < 7*24*3600 {
+		st.ETA = dl.ETA
+	}
+	return st
+}
+
+var errNoLiveToken = errors.New("push: nincs Live Activity token")
+
+func (n *Notifier) sendLive(ctx context.Context, d store.PushIOS, requestID int64, event string, st LiveState, priority int, stale, dismissal int64) error {
+	st.Title = clip(st.Title, 120)
+	plain, err := json.Marshal(st)
+	if err != nil {
+		return err
+	}
+	sealed, err := Seal(d.Key, plain)
+	if err != nil {
+		return err
+	}
+	err = n.Relay.Live(ctx, LiveRequest{Handle: d.Handle, Ref: liveRef(requestID), Event: event, Payload: sealed,
+		Priority: priority, StaleDate: stale, DismissalDate: dismissal})
+	var re *RelayError
+	switch {
+	case errors.As(err, &re) && re.Status == http.StatusNotFound && re.Code == "no_live_token":
+		return errNoLiveToken
+	case errors.As(err, &re) && re.Code == "unknown_handle":
+		n.st.DeletePushIOSHandle(d.Handle)
+		return errNoLiveToken
+	}
+	return err
+}
+
+// --- sending ----------------------------------------------------------------------
 
 // SendUser pushes m to every paired device of an account. Dead handles are dropped.
 // It returns the first error that was not a dead handle.

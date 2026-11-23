@@ -6,10 +6,13 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ScotyLucas/kinora/internal/push"
+	"github.com/ScotyLucas/kinora/internal/store"
 )
 
 // handles are 32 random bytes, base64url without padding
@@ -39,11 +42,85 @@ func (s *Server) handlePushIOS(w http.ResponseWriter, r *http.Request, c *reqCtx
 		return
 	}
 	out["enabled"], out["relay_url"], out["server_id"] = true, s.Push.Relay.URL(), id
+	out["categories"] = push.Categories
 	if c.DeviceID != "" {
 		p, _ := s.st.PushIOSFor(c.DeviceID)
 		out["paired"] = p != nil
+		if p != nil {
+			muted := p.Muted
+			if muted == nil {
+				muted = []string{}
+			}
+			out["muted"], out["live"] = muted, p.Live
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// pushPrefsIn is what the app may send with a pairing and on its own.
+type pushPrefsIn struct {
+	Muted *[]string `json:"muted"`
+	Live  *bool     `json:"live"`
+}
+
+// prefs turns the request into the device's preferences on top of old: the language comes from the
+// client's UI language header, the title language from the profile's view of it.
+func (s *Server) pushPrefs(r *http.Request, c *reqCtx, in pushPrefsIn, old *store.PushPrefs) (store.PushPrefs, bool) {
+	var p store.PushPrefs
+	if old != nil {
+		p = *old
+	}
+	if lang := strings.TrimSpace(r.Header.Get(langHeader)); lang != "" && len(lang) <= 16 {
+		p.Lang = lang
+	}
+	if c.Profile != nil {
+		p.MetaLang = c.Profile.MetaLang
+	}
+	if in.Muted != nil {
+		p.Muted = nil
+		for _, m := range *in.Muted {
+			if !slices.Contains(push.Categories, m) {
+				return p, false
+			}
+			if !slices.Contains(p.Muted, m) {
+				p.Muted = append(p.Muted, m)
+			}
+		}
+	}
+	if in.Live != nil {
+		p.Live = *in.Live
+	}
+	return p, true
+}
+
+// handlePushIOSPrefs changes the language and the categories of this device's notifications.
+func (s *Server) handlePushIOSPrefs(w http.ResponseWriter, r *http.Request, c *reqCtx) {
+	if !pushSession(w, c) {
+		return
+	}
+	var in pushPrefsIn
+	if !decode(w, r, &in) {
+		return
+	}
+	cur, err := s.st.PushIOSFor(c.DeviceID)
+	if err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	if cur == nil {
+		writeErr(w, http.StatusNotFound, "ez az eszköz nincs párosítva")
+		return
+	}
+	prefs, valid := s.pushPrefs(r, c, in, &cur.PushPrefs)
+	if !valid {
+		writeErr(w, http.StatusBadRequest, "ismeretlen értesítéstípus")
+		return
+	}
+	if _, err := s.st.SetPushPrefs(c.DeviceID, prefs); err != nil {
+		s.internalErr(w, r, err)
+		return
+	}
+	ok(w)
 }
 
 // handlePushIOSPair stores the handle the relay gave the app and the key the app made.
@@ -58,6 +135,7 @@ func (s *Server) handlePushIOSPair(w http.ResponseWriter, r *http.Request, c *re
 	var in struct {
 		Handle string `json:"handle"`
 		Key    string `json:"key"`
+		pushPrefsIn
 	}
 	if !decode(w, r, &in) {
 		return
@@ -71,7 +149,16 @@ func (s *Server) handlePushIOSPair(w http.ResponseWriter, r *http.Request, c *re
 		return
 	}
 	old, _ := s.st.PushIOSFor(c.DeviceID)
-	if err := s.st.SetPushIOS(c.DeviceID, c.User.ID, in.Handle, key); err != nil {
+	var oldPrefs *store.PushPrefs
+	if old != nil {
+		oldPrefs = &old.PushPrefs
+	}
+	prefs, valid := s.pushPrefs(r, c, in.pushPrefsIn, oldPrefs)
+	if !valid {
+		writeErr(w, http.StatusBadRequest, "ismeretlen értesítéstípus")
+		return
+	}
+	if err := s.st.SetPushIOS(c.DeviceID, c.User.ID, in.Handle, key, prefs); err != nil {
 		s.internalErr(w, r, err)
 		return
 	}
@@ -111,8 +198,12 @@ func (s *Server) handlePushIOSTest(w http.ResponseWriter, r *http.Request, c *re
 		writeErr(w, http.StatusNotFound, "ez az eszköz nincs párosítva")
 		return
 	}
+	T := push.Format
+	if lang := r.Header.Get(langHeader); lang != "" && lang != "hu" {
+		T = s.pushText(lang)
+	}
 	err = s.Push.SendDevice(r.Context(), *p, push.Message{V: 1, Type: "test", Title: s.st.Setting("server_name"),
-		Body: "Az értesítések működnek.", Tag: "test"})
+		Body: T("Az értesítések működnek."), Tag: "test"})
 	var re *push.RelayError
 	switch {
 	case err == nil:
@@ -140,4 +231,43 @@ func (s *Server) forgetHandle(h string) {
 			s.log.Warn("push: relay delete", "err", err)
 		}
 	}()
+}
+
+// pushTexts caches the apps' texts per language for the notifier (re-read every few minutes, so a
+// language the admin edits shows up without a restart).
+type pushTexts struct {
+	mu   sync.Mutex
+	at   time.Time
+	byLn map[string]map[string]any
+}
+
+// pushText returns the translator of one language: the "app" table of the language the apps use,
+// keyed by the Hungarian source text. Unknown languages fall back to English, missing texts to Hungarian.
+func (s *Server) pushText(lang string) func(string, ...any) string {
+	s.pushTx.mu.Lock()
+	if s.pushTx.byLn == nil || time.Since(s.pushTx.at) > 5*time.Minute {
+		s.pushTx.byLn = map[string]map[string]any{}
+		for _, l := range s.appLangs() {
+			if app, ok := l.Strings["app"].(map[string]any); ok {
+				s.pushTx.byLn[l.Code] = app
+			}
+		}
+		s.pushTx.at = time.Now()
+	}
+	tbl, ok := s.pushTx.byLn[lang]
+	if !ok {
+		if base, _, cut := strings.Cut(lang, "-"); cut {
+			tbl, ok = s.pushTx.byLn[base]
+		}
+	}
+	if !ok && lang != "hu" {
+		tbl = s.pushTx.byLn["en"]
+	}
+	s.pushTx.mu.Unlock()
+	return func(hu string, args ...any) string {
+		if t, ok := tbl[hu].(string); ok && t != "" {
+			return push.Format(t, args...)
+		}
+		return push.Format(hu, args...)
+	}
 }

@@ -522,6 +522,42 @@ CREATE INDEX push_ios_user ON push_ios(user_id);
 ALTER TABLE acq_requests ADD COLUMN pushed INTEGER NOT NULL DEFAULT 0;
 UPDATE acq_requests SET pushed=1;
 `,
+	// 18: push notifications for every request change (an outbox filled by triggers, so no code path that
+	// changes a status can forget it), per-device language and categories, and live download activities
+	`
+CREATE TABLE push_outbox(
+  id INTEGER PRIMARY KEY,
+  request_id INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  old_status TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE TRIGGER push_request_status AFTER UPDATE OF status ON acq_requests
+WHEN NEW.status <> OLD.status AND (NEW.status IN ('denied','failed','available') OR (NEW.status='approved' AND OLD.status='pending'))
+BEGIN
+  INSERT INTO push_outbox(request_id,status,old_status,created_at) VALUES(NEW.id,NEW.status,OLD.status,CAST(strftime('%s','now') AS INTEGER));
+END;
+CREATE TRIGGER push_request_new AFTER INSERT ON acq_requests WHEN NEW.status='pending'
+BEGIN
+  INSERT INTO push_outbox(request_id,status,created_at) VALUES(NEW.id,'pending',CAST(strftime('%s','now') AS INTEGER));
+END;
+ALTER TABLE push_ios ADD COLUMN lang TEXT NOT NULL DEFAULT '';
+ALTER TABLE push_ios ADD COLUMN meta_lang TEXT NOT NULL DEFAULT '';
+ALTER TABLE push_ios ADD COLUMN muted TEXT NOT NULL DEFAULT '';
+ALTER TABLE push_ios ADD COLUMN live INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE push_live(
+  device_id TEXT NOT NULL REFERENCES push_ios(device_id) ON DELETE CASCADE,
+  request_id INTEGER NOT NULL,
+  started_at INTEGER NOT NULL,
+  sent_at INTEGER NOT NULL,
+  progress REAL NOT NULL DEFAULT 0,
+  state TEXT NOT NULL DEFAULT '',
+  ended INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(device_id, request_id)
+);
+INSERT INTO settings(key,value) VALUES('push_episode_id', COALESCE((SELECT MAX(id) FROM items),0))
+  ON CONFLICT(key) DO UPDATE SET value=excluded.value;
+`,
 }
 
 func (s *Store) migrate() error {
