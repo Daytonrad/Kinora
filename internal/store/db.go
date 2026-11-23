@@ -577,6 +577,15 @@ CREATE TABLE password_links(
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL
 );`,
+	// what an import from Sonarr / Radarr / Prowlarr created, so running it again updates instead of duplicating
+	`CREATE TABLE import_map(
+  source TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  external_id TEXT NOT NULL,
+  local_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(source, kind, external_id)
+);`,
 }
 
 // ErrNewerSchema: the database was written by a newer Kinora (after rolling back an update, for example).

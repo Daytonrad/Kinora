@@ -334,3 +334,20 @@ func (s *Store) SeriesUnder(dir string) int64 {
 	}
 	return id
 }
+
+// ------------------------------------------------------------------ imported configuration
+
+// ImportedID returns what an earlier import made of an external object (source: "radarr@http://…",
+// kind: "indexer", "client", "profile", …); 0 when nothing.
+func (s *Store) ImportedID(source, kind, externalID string) int64 {
+	var id int64
+	s.DB.QueryRow(`SELECT local_id FROM import_map WHERE source=? AND kind=? AND external_id=?`, source, kind, externalID).Scan(&id)
+	return id
+}
+
+// MapImported remembers what an import made of an external object.
+func (s *Store) MapImported(source, kind, externalID string, localID int64) error {
+	_, err := s.DB.Exec(`INSERT INTO import_map(source,kind,external_id,local_id,created_at) VALUES(?,?,?,?,?)
+		ON CONFLICT(source,kind,external_id) DO UPDATE SET local_id=excluded.local_id`, source, kind, externalID, localID, now())
+	return err
+}
