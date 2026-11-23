@@ -562,6 +562,21 @@ CREATE TABLE push_live(
 INSERT INTO settings(key,value) VALUES('push_episode_id', COALESCE((SELECT MAX(id) FROM items),0))
   ON CONFLICT(key) DO UPDATE SET value=excluded.value;
 `,
+	// imports from other servers: which external user became which account, and one-time password links
+	// for accounts created without a password
+	`CREATE TABLE import_links(
+  source TEXT NOT NULL,
+  external_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(source, external_id)
+);
+CREATE TABLE password_links(
+  code_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);`,
 }
 
 // ErrNewerSchema: the database was written by a newer Kinora (after rolling back an update, for example).
