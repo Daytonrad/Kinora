@@ -17,6 +17,8 @@ final class AppModel {
         case quickConnect
         case profiles
         case home
+        /// The server can't be reached, but the last profile used here has downloads: only those (iOS).
+        case offline
     }
 
     private(set) var screen: Screen = .launching {
@@ -31,7 +33,9 @@ final class AppModel {
     private(set) var servers: [SavedServer] = []
     private(set) var server: SavedServer?
     private(set) var status: ServerStatus?
-    private(set) var me: Me?
+    private(set) var me: Me? { didSet { meChanged() } }
+    /// The profile shown on the offline screen (the last one used with this server).
+    private(set) var offlineProfile: Profile?
     /// A message shown once on the next screen (e.g. "session expired").
     var notice: String?
     /// The current playback; it outlives the player screen in picture in picture.
@@ -97,6 +101,9 @@ final class AppModel {
         } catch KinoraError.unauthorized {
             sessionLost()
         } catch {
+            #if os(iOS)
+            if enterOffline(saved) { return }
+            #endif
             notice = error.localizedDescription
             screen = .servers
         }
@@ -162,6 +169,12 @@ final class AppModel {
 
     func open(_ saved: SavedServer) async throws {
         guard let reached = await Discovery.reach(saved) else {
+            #if os(iOS)
+            if store.token(for: saved.id) != nil {
+                use(saved)
+                if enterOffline(saved) { return }
+            }
+            #endif
             throw KinoraError.unreachable(ServerAddress.host(of: saved.url), isPrivate: ServerAddress.isPrivateHost(ServerAddress.host(of: saved.url)))
         }
         var s = reached
@@ -185,6 +198,9 @@ final class AppModel {
         Task { await PushManager.shared.signedOut(saved, client: c) }
         #endif
         store.remove(saved.id)
+        #if os(iOS)
+        LastProfile.forget(server: saved.id)
+        #endif
         servers = store.servers
         if server?.id == saved.id { server = nil; client = nil; me = nil }
     }
@@ -337,6 +353,9 @@ final class AppModel {
         #endif
         await client?.logout()
         store.setToken(nil, for: server.id)
+        #if os(iOS)
+        LastProfile.forget(server: server.id) // signed out: no offline start on this account's downloads
+        #endif
         await client?.setToken(nil)
         me = nil
         screen = .login
@@ -373,7 +392,12 @@ final class AppModel {
     /// The token was rejected: back to login, keep the server.
     func sessionLost() {
         settingsVisible = false
-        if let server { store.setToken(nil, for: server.id) }
+        if let server {
+            store.setToken(nil, for: server.id)
+            #if os(iOS)
+            LastProfile.forget(server: server.id)
+            #endif
+        }
         me = nil
         notice = KinoraError.unauthorized.errorDescription
         screen = .login
@@ -396,7 +420,9 @@ final class AppModel {
         // Siri learns what the user watches and offers it on the lock screen and in Spotlight.
         if party == nil { IntentRouter.donate(item) }
         #endif
-        let resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
+        var resume = item.progress != nil ? (item.userData?.position ?? 0) : 0
+        // watched offline, not sent yet: the queued position is the newer one
+        if let queued = ProgressQueue.pending[item.id] { resume = queued.ended ? 0 : queued.position }
         // A downloaded copy plays from the device: no server load, works without a connection.
         #if os(iOS)
         let local = DownloadStore.shared.localInfo(for: item)
@@ -404,7 +430,7 @@ final class AppModel {
         let local: PlaybackInfo? = nil
         #endif
         // A party streams from the server, so everyone sees the same cut and the same segments.
-        let p = PlayerModel(item: item, start: start ?? resume, client: client, profile: me?.profile,
+        let p = PlayerModel(item: item, start: start ?? resume, client: client, profile: me?.profile ?? offlineProfile,
                             local: party == nil ? local : nil)
         p.party = party
         party?.player = p
@@ -509,6 +535,52 @@ final class AppModel {
         guard let client else { throw KinoraError.network }
         return try await guarded { try await work(client) }
     }
+
+    // MARK: - offline
+
+    /// Downloads belong to profiles: the download store follows the profile in use, and the last one is kept
+    /// per server, so the app can start without a connection on that profile's downloads.
+    private func meChanged() {
+        #if os(iOS)
+        guard let me else { return } // between servers: the store keeps the last profile until the next one
+        DownloadStore.shared.use(profile: me.profile)
+        if let p = me.profile, let id = server?.id { LastProfile.save(p, server: id) }
+        #endif
+    }
+
+    #if os(iOS)
+    /// No connection to the server: when the last profile used with it has downloads, they are shown and play
+    /// from the device. Switching profiles needs the server (a PIN can only be checked there).
+    private func enterOffline(_ s: SavedServer) -> Bool {
+        guard let p = LastProfile.load(server: s.id) else { return false }
+        DownloadStore.shared.use(profile: p)
+        guard !DownloadStore.shared.visible.isEmpty else { return false }
+        offlineProfile = p
+        screen = .offline
+        return true
+    }
+
+    /// From the offline screen: try the server again; on success the app goes on as usual.
+    func retryOnline() async {
+        guard server != nil else { return }
+        do {
+            try await loadMe()
+            offlineProfile = nil
+            screen = me?.profile == nil ? .profiles : .home
+        } catch KinoraError.unauthorized {
+            offlineProfile = nil
+            sessionLost()
+        } catch {
+            notice = error.localizedDescription
+        }
+    }
+
+    /// From the offline screen: back to the server list.
+    func leaveOffline() {
+        offlineProfile = nil
+        screen = .servers
+    }
+    #endif
 
     /// Sends progress saved while offline; on home, on foreground and when the network is back.
     func syncOffline() {

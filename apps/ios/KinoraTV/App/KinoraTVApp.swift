@@ -49,6 +49,8 @@ struct TVRootView: View {
                 TVProfilesView()
             case .home:
                 TVMainView()
+            case .offline: // iOS only (downloads); never set on tvOS
+                TVServersView()
             }
         }
         .animation(.default, value: model.screen)
