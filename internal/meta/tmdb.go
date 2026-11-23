@@ -925,3 +925,32 @@ func (f *Fetcher) TVList(ctx context.Context, list string, page int) ([]SearchRe
 	}
 	return out, nil
 }
+
+// FindByExternal finds the TMDB id of a series ("tv") or film ("movie") by an id of another catalogue:
+// source is "tvdb_id" or "imdb_id". 0 when TMDB knows none.
+func (f *Fetcher) FindByExternal(ctx context.Context, kind, source, id string) (int64, error) {
+	if (source != "tvdb_id" && source != "imdb_id") || strings.TrimSpace(id) == "" {
+		return 0, nil
+	}
+	var d struct {
+		Movies []struct {
+			ID int64 `json:"id"`
+		} `json:"movie_results"`
+		TV []struct {
+			ID int64 `json:"id"`
+		} `json:"tv_results"`
+	}
+	if err := f.get(ctx, "/find/"+url.PathEscape(strings.TrimSpace(id)), url.Values{"external_source": {source}}, &d); err != nil {
+		if errors.Is(err, errNotFound) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	switch {
+	case kind == "tv" && len(d.TV) > 0:
+		return d.TV[0].ID, nil
+	case kind == "movie" && len(d.Movies) > 0:
+		return d.Movies[0].ID, nil
+	}
+	return 0, nil
+}
