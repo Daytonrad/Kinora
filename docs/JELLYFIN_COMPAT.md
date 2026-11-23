@@ -1,7 +1,8 @@
 # Jellyfin-kompatibilis API
 
-Állapot: **megvalósítva** (`internal/jfcompat`). Automatikus tesztek: igen. Valódi kliensekkel: **még nincs kipróbálva**,
-lásd a „Kliens-mátrix” részt. Az eredeti terv lent változatlanul olvasható; ahol a megvalósítás eltér tőle, a
+Állapot: **megvalósítva** (`internal/jfcompat`). Automatikus tesztek: igen. Valódi kliensek: **Kodi 21.3 + JellyCon
+1.1.0** kipróbálva Windowson (2026-11-23, részletek lent: „Kodi + JellyCon: teszteredmény”); az Infuse, a Swiftfin
+és a Findroid még nincs kipróbálva. Az eredeti terv lent változatlanul olvasható; ahol a megvalósítás eltér tőle, a
 „Döntések és eltérések” rész mondja meg.
 
 ## Döntések és eltérések (a jóváhagyás után)
@@ -22,6 +23,18 @@ lásd a „Kliens-mátrix” részt. Az eredeti terv lent változatlanul olvasha
   korláttal). A transcode a `master.m3u8` lekérésekor indul, nem a `PlaybackInfo`-nál.
 - **Media Segments:** a Kinora intro-, stáblista-, recap- és előzetes-szakaszai a `/MediaSegments/{id}` végponton
   Jellyfin-típusokként (`Intro`, `Outro`, `Recap`, `Preview`) jönnek.
+- **Token nélküli stream-URL:** a JellyCon a direkt stream címét (`/Videos/{id}/stream?static=True&PlaySessionId=…`)
+  token nélkül adja át a Kodi lejátszójának. Az ilyen kérést a Kinora csak akkor szolgálja ki, ha a `PlaySessionId`
+  egy ugyanerre az elemre kiadott `PlaybackInfo`-ból jön, és a token, amellyel azt kérték, még érvényes ugyanannak
+  a profilnak (kiléptetett eszköznél tehát nem). A `PlaySessionId` 16 véletlen bájt, legfeljebb 12 óráig él a
+  memóriában. A profil korhatár- és könyvtárszűrése a kiszolgáláskor is lefut.
+- **Évek és címkék:** `GET /Years` és `GET /Tags` a profil által látható filmek/sorozatok alapján (a kliens
+  `ParentId`-jével és `IncludeItemTypes`-ával), az `/Items` pedig szűr `Tags`-re (név) és `TagIds`-re. A címke-ID a
+  címke nevéből képzett stabil hash, mert a Kinorában nincs külön címketábla. A `GET /Genres` is figyeli az
+  `IncludeItemTypes`-t.
+- **Felirat-mezők:** minden streamben ott van az `IsHearingImpaired` (a Kinora ezt nem tárolja; `true` csak akkor,
+  ha a sáv címében „SDH” áll). A SubRip feliratok `DeliveryUrl`-je `Stream.srt`, a többi szöveges feliraté
+  `Stream.vtt`, mert a JellyCon a letöltött fájlt a `Codec` alapján nevezi el.
 - **Ismert korlát:** ha a kliens a transcode-ot egy kezdőpozícióval kéri (`StartTimeTicks`), a HLS-lista ettől a
   ponttól indul. Hogy a kliensek ezt hogyan kezelik (az idővonal 0-tól vagy a kezdőponttól számol), azt valódi
   kliensekkel kell ellenőrizni.
@@ -32,9 +45,54 @@ lásd a „Kliens-mátrix” részt. Az eredeti terv lent változatlanul olvasha
 |---|---|---|---|
 | Infuse | Apple TV, iPhone | nincs kipróbálva | a tulajdonos teszteli, lásd a tesztlistát |
 | Swiftfin | iPhone, Apple TV | nincs kipróbálva | a tulajdonos teszteli, lásd a tesztlistát |
-| Kodi + JellyCon / Jellyfin for Kodi | Windows | nincs kipróbálva | a Kodi fel van telepítve; a bővítmény vezérléséhez engedély kell (lásd a fázis-összefoglalót) |
+| Kodi + JellyCon | Windows (Kodi 21.3, JellyCon 1.1.0) | **működik** | direct play teljesen; átkódolásnál nincs tekerés (lásd lent) |
+| Kodi + Jellyfin for Kodi | – | nincs kipróbálva | a JellyCon-nal közös API-t használja, de külön nem teszteltük |
 | Findroid | Android | nincs kipróbálva | Android-emulátor kell hozzá (nincs a gépen) |
 | Jellyfin Web, Jellyfin Media Player, hivatalos Android-app | – | nem támogatott | a szerver webes felületét töltenék be |
+
+## Kodi + JellyCon: teszteredmény
+
+Környezet: Windows 11, Kodi 21.3, JellyCon 1.1.0 (a hivatalos `repository.jellyfin.kodi`-ból), Kinora Docker-konténer
+a `testmedia` könyvtárral (3 film, 2 sorozat), `KINORA_JELLYFIN_COMPAT=1`. A Kodit JSON-RPC-n vezéreltük (a JellyCon
+menüit `Files.GetDirectory`-val jártuk be, a lejátszást `Player.Open`-nel indítottuk), a Kinora oldalát a napló és a
+Kinora saját API-ja mutatta.
+
+**Működik:**
+
+- Szerver hozzáadása címmel; Quick Connect (kód a Kodiban → jóváhagyás a Kinorában, profil- és PIN-választással; a
+  hibás PIN-t elutasítja); kézi belépés felhasználónévvel és jelszóval.
+- A gyerekprofillal belépve a korhatár feletti és a besorolás nélküli filmek sehol nem látszanak.
+- Böngészés: könyvtárak, „Show All”, Unwatched, Recently Added, In Progress, Favorites, Genres, A–Z, Pages, Years,
+  Decades, Tags, Latest, sorozat → évadok → epizódok, a globális listák (Movies / TV Shows).
+- Direct play (MP4 és MKV): lejátszás, tekerés, külső magyar `.srt` felirat, hangsáv nyelve, sorozat/évad/epizód
+  adatai a lejátszóban.
+- Állapot: a Kodiban megállított film pozíciója a Kinorában megjelenik (Folytatás sor), és a Kinorában tárolt
+  pozícióról a Kodi folytatja. A „Mark Watched” és a „Set Favourite” a Kinorában is beáll.
+- A JellyCon „Skip” ablaka a Kinora intro/stáblista-szakaszaiból (`/MediaSegments`) dolgozik.
+- Átkódolás („Force Transcode”): HLS (`master.m3u8` → `main.m3u8` → szegmensek) lejátszódik; leállításkor a
+  Kinora leállítja az átkódolást (`DELETE /Videos/ActiveEncodings`).
+- WebSocket (`/socket`): a JellyCon csatlakozik és keep-alive-ot küld.
+
+**A teszt közben talált és javított hibák** (mindegyikre regressziós teszt készült):
+
+| Hiba | Javítás |
+|---|---|
+| `/socket` mindig HTTP 500 | a naplózó `ResponseWriter` nem adta tovább a `Hijack`-et (`socket_test.go`) |
+| `/Years`, `/Tags` 404 → a Years, Decades, Tags menük hibát adtak | új végpontok és `Tags`/`TagIds` szűrő (`facets_test.go`) |
+| a globális „TV Shows – Latest” filmeket is mutatott | `/Items/Latest` figyeli az `IncludeItemTypes`-t (`latest_test.go`) |
+| lejátszáskor `KeyError: 'IsHearingImpaired'` a JellyCon-ban | a mező minden streamben ott van (`TestPlaybackAndState`) |
+| a direkt stream 401-et kapott (a JellyCon tokent nem tesz a URL-be) | `PlaySessionId`-alapú hozzáférés (lásd fent, `stream_auth_test.go`) |
+
+**Nem működik / korlát:**
+
+- **Átkódolásnál nincs tekerés.** A Kinora HLS-listája az átkódolással együtt nő (nincs előre teljes VOD-lista),
+  ezért a Kodi `canseek: false`-t és 0 teljes hosszt jelez. Emiatt a JellyCon átkódolásnál a folytatást sem tudja
+  beállítani: az elejétől indul, és a következő állapotjelentés felülírja a korábbi pozíciót. Direct playnél (ez a
+  JellyCon alapértelmezése, mert nem küld `DeviceProfile`-t) a tekerés és a folytatás működik.
+- Ha a Kinora adatbázisa újraindul (új telepítés), a JellyCon a régi tokent és a régi elem-ID-ket a saját
+  gyorsítótárában tartja: újra be kell lépni (Change User), és a régi ID-kre épülő Kodi-listák üresek lesznek. A
+  JellyCon WebSocket-kliense a Kodi indulásakor rögzíti a tokent, ezért belépés után a Kodi újraindításáig a socket
+  401-et kap. Mindkettő a kliens viselkedése.
 
 ## Tesztlista: Infuse és Swiftfin
 
@@ -173,6 +231,7 @@ A ✱ jelű végpontokat a kliensek indításkor hívják. Ezek nélkül el sem 
 | Állapot | `POST /Sessions/Playing`, `/Sessions/Playing/Progress`, `/Sessions/Playing/Stopped`; `POST`/`DELETE /UserPlayedItems/{id}` és `/Users/{uid}/PlayedItems/{id}`; `POST`/`DELETE /UserFavoriteItems/{id}` és `/Users/{uid}/FavoriteItems/{id}` | `ReportProgress`, `SetPlayed`, `SetFlag` |
 | Kliens-kellékek | `POST /Sessions/Capabilities/Full`, `GET`/`POST /DisplayPreferences/{id}`, `GET /Localization/Cultures`, `GET /Localization/Options` | üres vagy állandó válasz |
 | WebSocket | `/socket` | elfogadja, keep-alive-ot küld, mást nem (a kliensek enélkül is működnek, de egyesek újrapróbálkoznak) |
+| Évek, címkék (megvalósítás közben) | `GET /Genres`, `GET /Years`, `GET /Tags` | `store.FacetsOf` (a profil láthatósági szűrőjével) |
 
 A régi (`/Users/{id}/…`) és az új (10.9 utáni, `userId` paraméteres) útvonalpárokat is kiszolgálja, mert a kliensek
 vegyesen használják őket.
