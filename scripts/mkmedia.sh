@@ -61,7 +61,7 @@ Second line in English.
 EOF
 ff -f lavfi -i "testsrc2=size=1920x1080:rate=24" -f lavfi -i "sine=frequency=330:sample_rate=48000" -i "$d/eng.srt" \
    -map 0:v -map 1:a -map 2:s -t 40 -c:v libx265 -preset ultrafast -x265-params log-level=error -pix_fmt yuv420p \
-   -c:a ac3 -b:a 192k -ac 2 -c:s srt -metadata:s:s:0 language=eng -metadata:s:a:0 language=eng \
+   -c:a ac3 -b:a 192k -ac 2 -c:s srt -disposition:s:0 hearing_impaired -metadata:s:s:0 language=eng -metadata:s:a:0 language=eng \
    "$d/Space.Drama.2015.1080p.BluRay.x265.mkv"
 rm "$d/eng.srt"
 cat > "$d/movie.nfo" <<'EOF'

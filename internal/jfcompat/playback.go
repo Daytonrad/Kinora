@@ -82,9 +82,8 @@ func (s *Server) mediaSource(it *store.Item, c *reqCtx) map[string]any {
 	for i, st := range jfStreams(it) {
 		m := map[string]any{"Index": i, "Codec": st.Codec, "IsDefault": st.Default, "IsForced": st.Forced, "IsExternal": st.External,
 			"IsInterlaced": false, "IsTextSubtitleStream": false, "SupportsExternalStream": false,
-			// Kinora does not track the hearing-impaired flag; a title saying SDH is the one hint it has.
 			// JellyCon reads this key without a default, so it is always sent.
-			"IsHearingImpaired": strings.Contains(strings.ToUpper(st.Title), "SDH")}
+			"IsHearingImpaired": st.HearingImpaired || strings.Contains(strings.ToUpper(st.Title), "SDH")}
 		if st.Lang != "" {
 			m["Language"] = st.Lang
 		}

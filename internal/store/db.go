@@ -592,6 +592,9 @@ CREATE TABLE password_links(
 );`,
 	// a library can span several folders: the extra ones as a JSON array next to the main path
 	`ALTER TABLE libraries ADD COLUMN extra_paths TEXT NOT NULL DEFAULT '[]';`,
+	// Re-probe files with embedded subtitles on the next scan to populate their disposition.
+	`ALTER TABLE media_streams ADD COLUMN hearing_impaired INTEGER NOT NULL DEFAULT 0;
+UPDATE items SET sidecar_sig='' WHERE id IN (SELECT item_id FROM media_streams WHERE type='subtitle' AND external_path='');`,
 }
 
 // ErrNewerSchema: the database was written by a newer Kinora (after rolling back an update, for example).

@@ -77,16 +77,17 @@ type LocalMeta struct {
 
 // StreamRow is a stream to persist.
 type StreamRow struct {
-	Idx      int
-	Type     string
-	TypeIdx  int
-	Codec    string
-	Lang     string
-	Title    string
-	Channels int
-	Default  bool
-	Forced   bool
-	External string
+	Idx             int
+	Type            string
+	TypeIdx         int
+	Codec           string
+	Lang            string
+	Title           string
+	Channels        int
+	Default         bool
+	Forced          bool
+	HearingImpaired bool
+	External        string
 }
 
 // ChapterRow is a chapter marker to persist.
@@ -183,8 +184,8 @@ func (s *Store) SaveFile(r *FileRecord, sortTitle func(string) string) (int64, e
 		return 0, err
 	}
 	for _, st := range r.Streams {
-		if _, err := tx.Exec(`INSERT OR REPLACE INTO media_streams(item_id,idx,type,type_idx,codec,lang,title,channels,is_default,is_forced,external_path)
-			VALUES(?,?,?,?,?,?,?,?,?,?,?)`, id, st.Idx, st.Type, st.TypeIdx, st.Codec, st.Lang, st.Title, st.Channels, st.Default, st.Forced, st.External); err != nil {
+		if _, err := tx.Exec(`INSERT OR REPLACE INTO media_streams(item_id,idx,type,type_idx,codec,lang,title,channels,is_default,is_forced,hearing_impaired,external_path)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, id, st.Idx, st.Type, st.TypeIdx, st.Codec, st.Lang, st.Title, st.Channels, st.Default, st.Forced, st.HearingImpaired, st.External); err != nil {
 			return 0, err
 		}
 	}

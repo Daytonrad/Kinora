@@ -844,7 +844,7 @@ func (sc *Scanner) processFile(ctx context.Context, lib *store.Library, f *fileE
 
 	for _, s := range pr.Streams {
 		rec.Streams = append(rec.Streams, store.StreamRow{Idx: s.Index, Type: s.Type, TypeIdx: s.TypeIndex, Codec: s.Codec,
-			Lang: langOr(s.Lang), Title: s.Title, Channels: s.Channels, Default: s.Default, Forced: s.Forced})
+			Lang: langOr(s.Lang), Title: s.Title, Channels: s.Channels, Default: s.Default, Forced: s.Forced, HearingImpaired: s.HearingImpaired})
 	}
 	nsub := 0
 	for _, s := range pr.Streams {

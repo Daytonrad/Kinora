@@ -51,6 +51,24 @@ func TestProbe(t *testing.T) {
 	}
 }
 
+func TestProbeSubtitleDisposition(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "subtitles.mkv")
+	cmd := exec.Command(FFmpeg, "-v", "error", "-f", "srt", "-i", "pipe:0",
+		"-map", "0:s:0", "-map", "0:s:0", "-c", "copy",
+		"-disposition:s:0", "hearing_impaired", "-disposition:s:1", "0", path)
+	cmd.Stdin = strings.NewReader("1\n00:00:00,000 --> 00:00:01,000\nHello\n")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generate test subtitles: %v: %s", err, out)
+	}
+	pr, err := Probe(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pr.Streams) != 2 || !pr.Streams[0].HearingImpaired || pr.Streams[1].HearingImpaired {
+		t.Fatalf("unexpected subtitle dispositions: %+v", pr.Streams)
+	}
+}
+
 func segmentProbe(t *testing.T, seg string) string {
 	t.Helper()
 	out, err := exec.Command(FFprobe, "-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0", seg).Output()

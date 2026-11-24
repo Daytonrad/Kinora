@@ -335,6 +335,9 @@ func TestPlaybackAndState(t *testing.T) {
 		if ms.IsHearingImpaired == nil {
 			t.Fatalf("stream %d without IsHearingImpaired", ms.Index)
 		}
+		if want := ms.Type == "Subtitle" && !ms.IsExternal; *ms.IsHearingImpaired != want {
+			t.Fatalf("stream %d: IsHearingImpaired = %v, want %v", ms.Index, *ms.IsHearingImpaired, want)
+		}
 		if ms.Type == "Subtitle" && ms.IsTextSubtitleStream {
 			sub = ms.DeliveryUrl
 			// SubRip goes out as SRT (JellyCon names the saved file after the codec), the rest as WebVTT

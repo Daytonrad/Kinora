@@ -58,18 +58,19 @@ type Item struct {
 
 // StreamInfo describes a playable stream of a file item.
 type StreamInfo struct {
-	Index        int    `json:"index"`
-	Type         string `json:"type"`
-	TypeIndex    int    `json:"type_index"`
-	Codec        string `json:"codec"`
-	Lang         string `json:"lang"`
-	Title        string `json:"title"`
-	Channels     int    `json:"channels,omitempty"`
-	Default      bool   `json:"default"`
-	Forced       bool   `json:"forced"`
-	External     bool   `json:"external"`
-	ExternalPath string `json:"-"`
-	TextBased    bool   `json:"text_based"`
+	Index           int    `json:"index"`
+	Type            string `json:"type"`
+	TypeIndex       int    `json:"type_index"`
+	Codec           string `json:"codec"`
+	Lang            string `json:"lang"`
+	Title           string `json:"title"`
+	Channels        int    `json:"channels,omitempty"`
+	Default         bool   `json:"default"`
+	Forced          bool   `json:"forced"`
+	HearingImpaired bool   `json:"hearing_impaired"`
+	External        bool   `json:"external"`
+	ExternalPath    string `json:"-"`
+	TextBased       bool   `json:"text_based"`
 	// DownloadID is set on a subtitle fetched from a subtitle service (item_subtitles.id).
 	DownloadID int64  `json:"download_id,omitempty"`
 	Provider   string `json:"provider,omitempty"`
@@ -220,7 +221,7 @@ func (s *Store) ItemFull(id int64, p *Profile) (*Item, error) {
 
 // Streams returns the streams of a file item ordered by type and index.
 func (s *Store) Streams(id int64) ([]StreamInfo, error) {
-	rows, err := s.DB.Query(`SELECT idx,type,type_idx,codec,lang,title,channels,is_default,is_forced,external_path
+	rows, err := s.DB.Query(`SELECT idx,type,type_idx,codec,lang,title,channels,is_default,is_forced,hearing_impaired,external_path
 		FROM media_streams WHERE item_id=? ORDER BY CASE type WHEN 'video' THEN 0 WHEN 'audio' THEN 1 ELSE 2 END, type_idx`, id)
 	if err != nil {
 		return nil, err
@@ -229,7 +230,7 @@ func (s *Store) Streams(id int64) ([]StreamInfo, error) {
 	out := []StreamInfo{}
 	for rows.Next() {
 		var st StreamInfo
-		if err := rows.Scan(&st.Index, &st.Type, &st.TypeIndex, &st.Codec, &st.Lang, &st.Title, &st.Channels, &st.Default, &st.Forced, &st.ExternalPath); err != nil {
+		if err := rows.Scan(&st.Index, &st.Type, &st.TypeIndex, &st.Codec, &st.Lang, &st.Title, &st.Channels, &st.Default, &st.Forced, &st.HearingImpaired, &st.ExternalPath); err != nil {
 			return nil, err
 		}
 		st.External = st.ExternalPath != ""

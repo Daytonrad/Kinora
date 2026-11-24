@@ -21,7 +21,7 @@ type DownloadedSub struct {
 // appendDownloadedSubs adds the item's downloaded subtitles to its streams, numbered
 // after the last subtitle stream.
 func (s *Store) appendDownloadedSubs(itemID int64, streams []StreamInfo) ([]StreamInfo, error) {
-	rows, err := s.DB.Query(`SELECT id,lang,title,path,provider,forced FROM item_subtitles WHERE item_id=? ORDER BY id`, itemID)
+	rows, err := s.DB.Query(`SELECT id,lang,title,path,provider,forced,hearing_impaired FROM item_subtitles WHERE item_id=? ORDER BY id`, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (s *Store) appendDownloadedSubs(itemID int64, streams []StreamInfo) ([]Stre
 	}
 	for rows.Next() {
 		st := StreamInfo{Type: "subtitle", Codec: "subrip", External: true, TextBased: true}
-		if err := rows.Scan(&st.DownloadID, &st.Lang, &st.Title, &st.ExternalPath, &st.Provider, &st.Forced); err != nil {
+		if err := rows.Scan(&st.DownloadID, &st.Lang, &st.Title, &st.ExternalPath, &st.Provider, &st.Forced, &st.HearingImpaired); err != nil {
 			return nil, err
 		}
 		st.TypeIndex, st.Index = next, idx

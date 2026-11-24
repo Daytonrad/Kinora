@@ -28,16 +28,17 @@ var (
 
 // Stream is one elementary stream.
 type Stream struct {
-	Index     int    `json:"index"`      // absolute ffprobe index
-	Type      string `json:"type"`       // video | audio | subtitle
-	TypeIndex int    `json:"type_index"` // index among streams of the same type
-	Codec     string `json:"codec"`
-	Lang      string `json:"lang"`
-	Title     string `json:"title"`
-	Channels  int    `json:"channels,omitempty"`
-	Default   bool   `json:"default"`
-	Forced    bool   `json:"forced"`
-	External  string `json:"-"` // path of an external subtitle file
+	Index           int    `json:"index"`      // absolute ffprobe index
+	Type            string `json:"type"`       // video | audio | subtitle
+	TypeIndex       int    `json:"type_index"` // index among streams of the same type
+	Codec           string `json:"codec"`
+	Lang            string `json:"lang"`
+	Title           string `json:"title"`
+	Channels        int    `json:"channels,omitempty"`
+	Default         bool   `json:"default"`
+	Forced          bool   `json:"forced"`
+	HearingImpaired bool   `json:"hearing_impaired"`
+	External        string `json:"-"` // path of an external subtitle file
 }
 
 // Chapter marker.
@@ -129,6 +130,7 @@ func normalize(ff *ffOutput, path string) *ProbeResult {
 			Index: s.Index, Type: s.CodecType, TypeIndex: counts[s.CodecType], Codec: s.CodecName,
 			Lang: s.Tags["language"], Title: s.Tags["title"], Channels: s.Channels,
 			Default: s.Disposition["default"] == 1, Forced: s.Disposition["forced"] == 1,
+			HearingImpaired: s.Disposition["hearing_impaired"] == 1,
 		}
 		if st.Lang == "und" {
 			st.Lang = ""
