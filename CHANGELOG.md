@@ -3,6 +3,13 @@
 A kiadások részletes jegyzete: [docs/releases/](docs/releases/). Ez a fájl a még ki nem adott változásokat gyűjti.
 / Detailed notes of each release: [docs/releases/](docs/releases/). This file collects the changes not released yet.
 
+## 1.1.1 – 2026-11-24
+
+- **Biztonság:** `gorilla/websocket` a GO-2026-6278 javításával (gyenge véletlenszám a WebSocket maszkkulcsához).
+  Az 1.1.0-hoz nem készült Docker-image, a Dockeres telepítések ezzel kapják meg az 1.1-es változásokat.
+- **Security:** `gorilla/websocket` with the fix for GO-2026-6278 (weak random numbers for the WebSocket mask key).
+  No Docker image was built for 1.1.0; Docker installs get the 1.1 changes with this release.
+
 ## 1.1.0 – 2026-11-24
 
 ### Magyar
