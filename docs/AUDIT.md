@@ -22,7 +22,7 @@ No High finding was confirmed. Several areas were checked and look sound; see "C
 | L3 path mapping | fixed | a mapped path outside the local folder fails the import |
 | L4 retention | fixed | counted from `DoneAt` |
 | L5 kids subtitles | fixed | `notKids` on subtitle download/delete |
-| L6 first-run setup | documented | README (HU/EN): finish the setup before exposing the server; the optional private-address limit is not done |
+| L6 first-run setup | fixed | `POST /api/setup` only from private, loopback, link-local or Tailscale addresses (`KINORA_ALLOW_REMOTE_SETUP=1` overrides); documented in the README |
 | L7 DSN | fixed | `?`/`#` in the database path is refused with a clear message |
 
 Fuzzing (phase 1) found three more bugs, fixed with regression inputs under `testdata/fuzz/`:

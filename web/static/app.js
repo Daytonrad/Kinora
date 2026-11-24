@@ -482,6 +482,8 @@ function authPage(title, lede, form) {
 function field(label, input, hint) { return h('label.field', null, h('span', null, label), input, hint && h('div.hint', { class: 'mt1' }, hint)); }
 
 function viewSetup() {
+  // opened from outside the local network: the server refuses the setup (KINORA_ALLOW_REMOTE_SETUP=1 allows it)
+  const blocked = !!(state.status && state.status.setup_blocked);
   const name = h('input', { type: 'text', value: 'Kinora', autocomplete: 'off' });
   const user = h('input', { type: 'text', autocomplete: 'username' });
   const pw = h('input', { type: 'password', autocomplete: 'new-password' });
@@ -495,8 +497,9 @@ function viewSetup() {
       for (const v of ['dark', 'light']) await uploadLogo(v, logo.files[0]).catch(err => toast(err.message, true));
     }
     state.status = null; await loadMe(); go('#/setup/' + WIZ[0]);
-  } }, field(T.serverName, name), field(T.username, user), field(T.password, pw), field(T.password2, pw2), field(T.setupLogo, logo, T.logoHint),
-  h('button.btn.primary.big', { type: 'submit', class: 'wide' }, T.createAdmin));
+  } }, blocked && h('p.bad', { role: 'alert' }, T.setupBlocked),
+  field(T.serverName, name), field(T.username, user), field(T.password, pw), field(T.password2, pw2), field(T.setupLogo, logo, T.logoHint),
+  h('button.btn.primary.big', { type: 'submit', class: 'wide', disabled: blocked }, T.createAdmin));
   authPage(T.setupTitle, T.setupLede, form);
 }
 

@@ -117,6 +117,7 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	}
 
 	store.AllowNewerSchema = os.Getenv("KINORA_ALLOW_NEWER_DB") == "1"
+	cfg.AllowRemoteSetup = os.Getenv("KINORA_ALLOW_REMOTE_SETUP") == "1"
 	st, err := store.Open(filepath.Join(cfg.DataDir, "kinora.db"))
 	if err != nil {
 		return err

@@ -3,6 +3,13 @@
 A kiadások részletes jegyzete: [docs/releases/](docs/releases/). Ez a fájl a még ki nem adott változásokat gyűjti.
 / Detailed notes of each release: [docs/releases/](docs/releases/). This file collects the changes not released yet.
 
+## Kiadatlan / Unreleased
+
+- **Biztonság:** a kezdő beállítás (az első admin fiók) csak a helyi hálózatról, loopbackről vagy Tailscale-ről
+  végezhető el; `KINORA_ALLOW_REMOTE_SETUP=1` feloldja. A beállító oldal előre elmagyarázza, ha innen nem lehet (#7).
+- **Security:** the initial setup (the first admin account) is accepted only from the local network, loopback or
+  Tailscale; `KINORA_ALLOW_REMOTE_SETUP=1` lifts this. The setup page explains it up front when it applies (#7).
+
 ## 1.1.1 – 2026-11-24
 
 - **Biztonság:** `gorilla/websocket` a GO-2026-6278 javításával (gyenge véletlenszám a WebSocket maszkkulcsához).

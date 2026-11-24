@@ -1673,6 +1673,7 @@
    "{0} letöltései offline is lejátszhatók. A többihez kapcsolat kell.": "Die Downloads von {0} lassen sich auch offline abspielen. Für alles andere braucht es eine Verbindung."
   },
   "srv": {
+   "a kezdő beállítás csak a helyi hálózatról végezhető el (vagy KINORA_ALLOW_REMOTE_SETUP=1 beállítással)": "die Ersteinrichtung ist nur aus dem lokalen Netzwerk möglich (oder mit KINORA_ALLOW_REMOTE_SETUP=1)",
    "válassz profilt ehhez az eszközhöz": "wähle ein Profil für dieses Gerät",
    "ez az importálás már fut": "dieser Import läuft bereits",
    "a jelszóbeállító link érvénytelen vagy lejárt": "der Passwort-Link ist ungültig oder abgelaufen",
@@ -2286,6 +2287,7 @@
   "dlTransferring": "Download aufs Gerät: {0} %",
   "dlDeviceTitle": "Auf diesem Gerät",
   "dlDeviceEmpty": "Dieses Profil hat auf diesem Gerät keine Downloads.",
-  "dlDeviceHint": "Diese lassen sich in der Kinora-App auch ohne Server abspielen (in der Serverliste: Offline-Downloads). Offline erscheinen nur die Downloads des zuletzt genutzten Profils; Angesehenes erreicht den Server bei der nächsten Verbindung."
+  "dlDeviceHint": "Diese lassen sich in der Kinora-App auch ohne Server abspielen (in der Serverliste: Offline-Downloads). Offline erscheinen nur die Downloads des zuletzt genutzten Profils; Angesehenes erreicht den Server bei der nächsten Verbindung.",
+  "setupBlocked": "Dieser Server lässt sich nur aus dem lokalen Netzwerk (oder über Tailscale) einrichten, damit kein Fremder das Admin-Konto anlegen kann, wenn der Server schon von außen erreichbar ist. Öffne ihn von zu Hause, zum Beispiel unter http://<server-ip>:8096. Wenn er doch von hier eingerichtet werden muss, starte den Server mit der Umgebungsvariable KINORA_ALLOW_REMOTE_SETUP=1."
  }
 };

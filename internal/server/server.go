@@ -45,6 +45,9 @@ type Config struct {
 	CORSOrigins string
 	// DiscoveryPort is the UDP port of LAN server discovery (0 = off)
 	DiscoveryPort int
+	// AllowRemoteSetup lets the first admin be created from any address (KINORA_ALLOW_REMOTE_SETUP=1);
+	// by default only from the local network, loopback or Tailscale (setupAllowed).
+	AllowRemoteSetup bool
 }
 
 // Server is the HTTP application.

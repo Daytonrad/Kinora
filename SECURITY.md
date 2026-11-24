@@ -25,8 +25,9 @@ Biztonsági javítás a **legújabb kiadásba** kerül. Régebbi verzióra friss
 
 ## Ami a szoftver működéséből adódik
 
-- Az első admin fiókot az hozza létre, aki elsőként megnyitja a szervert: a kezdő beállítást azelőtt végezd el, hogy a
-  szervert kívülről elérhetővé tennéd.
+- Az első admin fiókot az hozza létre, aki elsőként beállítja a szervert. A Kinora ezt csak a helyi hálózatról (vagy
+  Tailscale-en át) fogadja el (`KINORA_ALLOW_REMOTE_SETUP=1` feloldja); a beállítást így is érdemes azelőtt elvégezni, hogy
+  a szervert kívülről elérhetővé tennéd.
 - A Jellyfin-kompatibilis API alapból ki van kapcsolva; a Jellyfin- és *arr-import csak adminnak érhető el.
 - A belső biztonsági áttekintés és az ismert, még nyitott tételek: [docs/AUDIT.md](docs/AUDIT.md).
 
@@ -53,6 +54,7 @@ Security fixes go into the **latest release**; older versions are fixed by updat
 
 ### By design
 
-Whoever opens a new server first creates the first admin account, so finish the setup before exposing the server.
+Whoever sets up a new server first creates the first admin account; Kinora accepts the setup only from the local network
+or Tailscale (`KINORA_ALLOW_REMOTE_SETUP=1` lifts this), and it is still best to finish the setup before exposing the server.
 The Jellyfin-compatible API is off by default, and imports are admin-only. The internal security review and the known
 open items: [docs/AUDIT.md](docs/AUDIT.md).

@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, c *reqCtx)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"product":              "kinora",
 		"setup_needed":         n == 0,
+		"setup_blocked":        n == 0 && !s.setupAllowed(r), // the setup page explains it before the form
 		"version":              Version,
 		"api_version":          APIVersion,
 		"min_client_api":       MinClientAPI,
@@ -46,6 +48,22 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, c *reqCtx)
 		"quickconnect_enabled": s.qcEnabled(),
 		"logged_in":            c.User != nil,
 	})
+}
+
+// errSetupRemote is shown on the setup page (translated by the web client's srv table).
+const errSetupRemote = "a kezdő beállítás csak a helyi hálózatról végezhető el (vagy KINORA_ALLOW_REMOTE_SETUP=1 beállítással)"
+
+// setupAllowed: the first admin can be created only from the local network (private, loopback, link-local),
+// or over Tailscale, unless KINORA_ALLOW_REMOTE_SETUP=1. A server exposed to the internet before its setup can't
+// be claimed by a stranger. The address is clientIP: a reverse proxy on the local network passes the real one.
+// Where every client arrives from a private address (some Docker setups), this check can't tell them apart:
+// it is a safety net, not a reason to expose a server before its setup.
+func (s *Server) setupAllowed(r *http.Request) bool {
+	if s.cfg.AllowRemoteSetup {
+		return true
+	}
+	ip := net.ParseIP(clientIP(r))
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || isTailscaleIP(ip))
 }
 
 type credentials struct {
@@ -66,6 +84,11 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, c *reqCtx) 
 		return
 	} else if n > 0 { // fast path; CreateFirstAdmin re-checks atomically
 		writeErr(w, http.StatusConflict, store.ErrSetupDone.Error())
+		return
+	}
+	if !s.setupAllowed(r) {
+		s.log.Warn("setup refused from a public address", "ip", clientIP(r))
+		writeErr(w, http.StatusForbidden, errSetupRemote)
 		return
 	}
 	if msg := validCredentials(in.Username, in.Password); msg != "" {

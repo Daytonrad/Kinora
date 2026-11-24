@@ -1201,6 +1201,7 @@
   "dlTransferring": "Letöltés az eszközre: {0}%",
   "dlDeviceTitle": "Ezen az eszközön",
   "dlDeviceEmpty": "Ennek a profilnak nincs letöltése ezen az eszközön.",
-  "dlDeviceHint": "Ezek a Kinora appban szerver nélkül is lejátszhatók (a szerverlistán: Letöltések offline). Offline csak az utoljára használt profil letöltései látszanak; a megnézett részek a következő csatlakozáskor kerülnek a szerverre."
+  "dlDeviceHint": "Ezek a Kinora appban szerver nélkül is lejátszhatók (a szerverlistán: Letöltések offline). Offline csak az utoljára használt profil letöltései látszanak; a megnézett részek a következő csatlakozáskor kerülnek a szerverre.",
+  "setupBlocked": "Ezt a szervert csak a helyi hálózatról (vagy Tailscale-en át) lehet beállítani, hogy egy idegen ne hozhassa létre az admin fiókot, ha a szerver már kívülről is elérhető. Nyisd meg otthonról, például a http://<szerver-ip>:8096 címen. Ha mégis innen kell beállítani, indítsd a szervert KINORA_ALLOW_REMOTE_SETUP=1 környezeti változóval."
  }
 };

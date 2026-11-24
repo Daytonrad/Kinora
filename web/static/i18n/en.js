@@ -1679,6 +1679,7 @@
    "{0} letöltései offline is lejátszhatók. A többihez kapcsolat kell.": "{0}’s downloads play offline too. Everything else needs a connection."
   },
   "srv": {
+   "a kezdő beállítás csak a helyi hálózatról végezhető el (vagy KINORA_ALLOW_REMOTE_SETUP=1 beállítással)": "initial setup is only possible from the local network (or with KINORA_ALLOW_REMOTE_SETUP=1)",
    "válassz profilt ehhez az eszközhöz": "choose a profile for this device",
    "ez az importálás már fut": "this import is already running",
    "a jelszóbeállító link érvénytelen vagy lejárt": "the password link is invalid or has expired",
@@ -2292,6 +2293,7 @@
   "dlTransferring": "Downloading to the device: {0}%",
   "dlDeviceTitle": "On this device",
   "dlDeviceEmpty": "This profile has no downloads on this device.",
-  "dlDeviceHint": "These play in the Kinora app without the server (on the server list: Offline downloads). Offline only the last profile’s downloads show; what you watch reaches the server the next time you connect."
+  "dlDeviceHint": "These play in the Kinora app without the server (on the server list: Offline downloads). Offline only the last profile’s downloads show; what you watch reaches the server the next time you connect.",
+  "setupBlocked": "This server can only be set up from the local network (or over Tailscale), so that a stranger can't create the admin account once the server is reachable from outside. Open it from home, for example at http://<server-ip>:8096. If you have to set it up from here, start the server with the KINORA_ALLOW_REMOTE_SETUP=1 environment variable."
  }
 };

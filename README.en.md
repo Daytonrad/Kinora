@@ -41,7 +41,7 @@ services:
 docker compose up -d
 ```
 
-Then open `http://<server-ip>:8096`. On first launch, a setup wizard asks for a server name and administrator account, then walks you through media folders (the folder picker opens in `/media`; add `/media/movies` and `/media/shows`), a TMDB key, a hardware acceleration test, a download client and indexer, and remote access. Every step can be skipped and done later on the Admin pages; the wizard can be opened again from **Admin → Settings**. Whoever opens the server first creates the administrator account, so finish the setup before you make the server reachable from outside.
+Then open `http://<server-ip>:8096`. On first launch, a setup wizard asks for a server name and administrator account, then walks you through media folders (the folder picker opens in `/media`; add `/media/movies` and `/media/shows`), a TMDB key, a hardware acceleration test, a download client and indexer, and remote access. Every step can be skipped and done later on the Admin pages; the wizard can be opened again from **Admin → Settings**. Whoever sets up the server first creates the administrator account, so Kinora accepts the initial setup only from the local network (or over Tailscale); set `KINORA_ALLOW_REMOTE_SETUP=1` if it has to be done from outside. Where every client arrives from a private address (some Docker setups) the check can't tell them apart, so still finish the setup before you make the server reachable from outside.
 
 | Container path | Purpose | Back it up? |
 |---|---|---|
@@ -78,6 +78,7 @@ All settings can also be provided through environment variables. When set this w
 | `KINORA_JELLYFIN_ADDR` | `:8097` | address of the Jellyfin-compatible API |
 | `KINORA_MAX_TRANSCODES` | – | server-wide cap on simultaneous transcodes (each account is always limited to 8) |
 | `KINORA_ALLOW_NEWER_DB` | – | `1` = also opens a database written by a newer Kinora (after a downgrade; at your own risk) |
+| `KINORA_ALLOW_REMOTE_SETUP` | – | `1` = the initial setup (the first admin account) can be done from any address; by default only from the local network, loopback or Tailscale |
 | `KINORA_CORS_ORIGINS` | — | Comma-separated extra app origins allowed for token-authenticated CORS requests |
 | `KINORA_ACCENT` | — | Accent color (`#rrggbb`); also used by the apps |
 | `KINORA_LOGO` | — | Logo file (for example `/config/logo.png`); adopted at startup when changed (PNG/JPG/WebP/SVG, max. 2 MB) |
