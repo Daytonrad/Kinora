@@ -15,9 +15,9 @@ enum LiveActivities {
     private static var done = 0
     private static var failed = 0
 
-    /// One download finished or failed; counted into the current activity.
+    /// One download finished or failed; counted into the current run of downloads, even before
+    /// its activity could start (the request fails while the app is in the background).
     static func downloadEnded(failed didFail: Bool) {
-        guard downloads != nil else { return }
         if didFail { failed += 1 } else { done += 1 }
     }
 
@@ -30,20 +30,21 @@ enum LiveActivities {
         state.eta = estimate(active: active, fraction: fraction, preparing: preparing)
         guard let current = downloads else {
             guard enabled else { return }
-            done = 0
-            failed = 0
-            var fresh = state
-            fresh.done = 0
-            fresh.failed = 0
+            // The previous run's summary stays up for a while after it ended; a new run replaces
+            // it instead of showing a second activity next to it.
+            for a in Activity<DownloadsActivityAttributes>.activities {
+                end(a.id, DownloadsActivityAttributes.self, nil, .immediate)
+            }
             downloads = try? Activity.request(attributes: DownloadsActivityAttributes(),
-                                              content: .init(state: fresh, staleDate: nil))
-            lastDownloads = fresh
+                                              content: .init(state: state, staleDate: nil))
+            lastDownloads = state
             lastDownloadsUpdate = .now
             return
         }
         // Progress moves many times a second; the lock screen needs a few steps, not every byte.
         let structural = lastDownloads.map {
             $0.active != state.active || $0.done != state.done || $0.failed != state.failed || $0.title != state.title
+                || $0.preparing != state.preparing
         } ?? true
         // The bar runs on its own towards `eta`, so progress alone needs an update only now and then.
         let gotEstimate = lastDownloads?.eta == nil && state.eta != nil
@@ -85,22 +86,28 @@ enum LiveActivities {
     static func demoDownload() async {
         downloadsChanged(active: 1, title: "Demo", fraction: 0.1, preparing: true)
         try? await Task.sleep(for: .seconds(3))
-        for i in 0...20 {
-            downloadsChanged(active: 1, title: "Demo", fraction: 0.5 + Double(i) * 0.01, preparing: false)
+        for i in 0..<20 {
+            downloadsChanged(active: 1, title: "Demo", fraction: 0.5 + Double(i) * 0.025, preparing: false)
             try? await Task.sleep(for: .seconds(1))
         }
+        // Through to the end, so the finished summary shows too.
+        downloadEnded(failed: false)
+        downloadsChanged(active: 0, title: "", fraction: 1, preparing: false)
     }
     #endif
 
     private static func endDownloads() {
-        guard let current = downloads else { return }
-        downloads = nil
-        sample = nil
-        rate = nil
         let final = DownloadsActivityAttributes.ContentState(
             active: 0, done: done, failed: failed, title: lastDownloads?.title ?? "",
             fraction: 1, preparing: false)
+        // The run is over: the next one counts from zero, with or without an activity.
+        done = 0
+        failed = 0
+        sample = nil
+        rate = nil
         lastDownloads = nil
+        guard let current = downloads else { return }
+        downloads = nil
         end(current.id, DownloadsActivityAttributes.self, .init(state: final, staleDate: nil), .after(.now.addingTimeInterval(10 * 60)))
     }
 

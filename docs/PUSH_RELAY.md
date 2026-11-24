@@ -140,6 +140,38 @@ A közvetítő az APNs-nek ezt küldi (`apns-push-type: alert`, `apns-priority: 
 Ugyanazzal az aláírással, mint a `/v1/send` (`DELETE`, a saját útvonalával, üres body). A handle-t és – ha más szerverhez már nem tartozik – az
 eszközt törli. Válasz `200 {"ok":true}`.
 
+### `POST /v1/live/tokens` (eszköz → közvetítő)
+
+Az app itt adja le a Live Activity tokenjeit. A hitelesítés a handle: csak az eszköz és a saját szervere ismeri.
+
+```json
+{ "handle": "<handle>", "token": "<hex APNs token>", "ref": "<aktivitás azonosító>" }
+```
+
+- `ref` nélkül a push-to-start token (ezzel a szerver új aktivitást indíthat).
+- `ref`-fel egy futó aktivitás frissítő tokenje; `token` nélkül (`null`) a `ref` törlődik.
+- A tokenek 12 óráig élnek; a régieket a következő leadáskor törli.
+- Hibák: `400 bad_request` / `bad_ref` / `bad_token`, `404 unknown_handle`, `403 disabled`, `429`.
+
+### `POST /v1/live` (szerver → közvetítő)
+
+Aláírt Live Activity indítás, frissítés vagy lezárás, ugyanazzal az aláírással, mint a `/v1/send`.
+
+```json
+{ "handle": "<handle>", "ref": "<aktivitás azonosító>", "event": "start|update|end",
+  "payload": "<base64 titkosított állapot>", "stale_date": 1764000000, "dismissal_date": 1764003600, "priority": 5 }
+```
+
+- A `payload` ugyanúgy titkosított, mint a `/v1/send` csomagja, legfeljebb 1024 bájt; a közvetítő nem látja a tartalmát.
+- `start` a push-to-start tokennel megy és mindig 10-es prioritású; a `RequestActivityAttributes` aktivitást indítja (`s` = szerver, `ref`).
+  `update` és `end` a `ref` tokenjével megy, alapból 5-ös prioritással (`priority: 10` kérhető).
+- `stale_date` és `dismissal_date` Unix-másodperc, nem kötelező.
+- Ha nincs token, vagy az Apple már nem fogadja: `404 no_live_token`. Ez szándékosan nem `410`, mert az az egész párosítást törölné a szerveren.
+- `end` után, és ha az Apple elutasítja a tokent, a közvetítő elfelejti azt.
+- Egyéb hibák: `400 bad_request` / `bad_date` / `bad_payload`, `413 payload_too_large`, `502 apns_error`, `503 send_disabled`.
+
+A letöltések élő aktivitása (a készülékre töltés) helyben fut az appban, nem a közvetítőn megy.
+
 ## A titkosított csomag
 
 A titkosítatlan tartalom JSON, legfeljebb ~1,5 KB:
@@ -157,9 +189,11 @@ csomagban lévő `s` mező alapján választja ki a kulcsot.
 | Mire | Alapérték | Beállítás |
 |---|---|---|
 | küldés handle-enként | 30 / óra | `LIMIT_HANDLE_HOURLY` |
-| küldés szerverenként | 600 / óra | `LIMIT_SERVER_HOURLY` |
+| küldés szerverenként (a `/v1/live` is) | 600 / óra | `LIMIT_SERVER_HOURLY` |
 | szerverregisztráció IP-nként | 2 / 24 óra | `LIMIT_REGISTER_DAILY` |
-| eszközregisztráció IP-nként | 5 / 24 óra | `LIMIT_DEVICE_DAILY` |
+| eszközregisztráció IP-nként | 10 / 24 óra | `LIMIT_DEVICE_DAILY` |
+| Live Activity küldés handle-enként | 120 / óra | `LIMIT_LIVE_HOURLY` |
+| Live Activity token leadás handle-enként | 48 / 24 óra (IP-nként a négyszerese) | `LIMIT_LIVE_TOKENS_DAILY` |
 | challenge kérés IP-nként | az eszközkeret 4-szerese / 24 óra | – |
 
 ## Vészfék
