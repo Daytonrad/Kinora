@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -156,7 +157,7 @@ func BuildHLSArgs(sp HLSSpec, dir string) []string {
 	}
 	args = append(args, "-sn", "-dn", "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "2048",
 		"-f", "hls", "-hls_time", "4", "-hls_list_size", "0", "-hls_playlist_type", "event",
-		"-hls_flags", "independent_segments+temp_file")
+		"-hls_flags", hlsFlags)
 	// Output paths use forward slashes: ffmpeg's HLS muxer finds the playlist folder by the last '/',
 	// so with Windows backslashes it wrote init.mp4 into the working directory instead of the session.
 	if fmp4 {
@@ -196,6 +197,10 @@ func (m *Manager) Start(ctx context.Context, sp HLSSpec) (*Session, error) {
 	}
 	go func() {
 		s.err = cmd.Wait()
+		pl, _ := readShared(filepath.Join(dir, "index.m3u8"))
+		m.log.Info("ffmpeg done", "session", id, "took", time.Since(s.Started).Round(time.Millisecond), "err", s.err,
+			"segments", bytes.Count(pl, []byte("#EXTINF")), "endlist", bytes.Contains(pl, []byte("#EXT-X-ENDLIST")),
+			"stderr", lastLine(tb.String()))
 		if s.err == nil {
 			if n := settleTemp(dir); n > 0 {
 				m.log.Warn("ffmpeg left files under their temporary name; put in place", "session", id, "files", n, "stderr", lastLine(tb.String()))
@@ -371,6 +376,17 @@ func (m *Manager) Reap(ctx context.Context) {
 	}
 }
 
+// hlsFlags: the playlist is written to a .tmp and renamed over the old one, so a reader never sees half
+// of it. On Windows a rename onto a file someone has open fails, and a failed playlist rename leaves an
+// early playlist behind (the player stops a minute in), so there ffmpeg rewrites it in place; Playlist
+// cuts a half-written last line.
+var hlsFlags = func() string {
+	if runtime.GOOS == "windows" {
+		return "independent_segments"
+	}
+	return "independent_segments+temp_file"
+}()
+
 // settleTemp runs once ffmpeg has exited cleanly. ffmpeg writes the playlist and every segment to a .tmp
 // and renames it into place; on Windows that rename fails now and then (an antivirus scan or a reader
 // holds the target), and ffmpeg only logs it. A failed last playlist rename leaves an early playlist,
@@ -412,7 +428,12 @@ func (s *Session) Playlist() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if s.Finished() && !bytes.Contains(b, []byte("#EXT-X-ENDLIST")) {
+	if !s.Finished() {
+		// rewritten in place (Windows): drop a line ffmpeg is still writing
+		if i := bytes.LastIndexByte(b, '\n'); i >= 0 {
+			b = b[:i+1]
+		}
+	} else if !bytes.Contains(b, []byte("#EXT-X-ENDLIST")) {
 		if !bytes.HasSuffix(b, []byte("\n")) {
 			b = append(b, '\n')
 		}

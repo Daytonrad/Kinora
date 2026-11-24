@@ -5,6 +5,15 @@ A kiadások részletes jegyzete: [docs/releases/](docs/releases/). Ez a fájl a 
 
 ## Kiadatlan / Unreleased
 
+## 1.1.5 – 2026-11-24
+
+- **Javítás (Windows):** a lejátszás 1.1.4-gyel is megállt kb. másfél perc után. Windowson az ffmpeg már nem
+  cseréli (átnevezéssel) a lejátszási listát, hanem helyben írja újra, így nem maradhat meg egy korai, rövid lista.
+  A napló minden ffmpeg-futás végén rögzíti, hány szegmens készült.
+- **Fix (Windows):** playback still stopped about a minute and a half in with 1.1.4. On Windows ffmpeg no longer
+  replaces the playlist by a rename but rewrites it in place, so no early, short playlist can be left behind. The
+  log records how many segments each ffmpeg run made.
+
 ## 1.1.4 – 2026-11-24
 
 - **Javítás (Windows):** a lejátszás kb. másfél perc után megállt, mintha vége lenne a résznek. Az ffmpeg a
