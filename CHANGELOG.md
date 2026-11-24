@@ -3,7 +3,7 @@
 A kiadások részletes jegyzete: [docs/releases/](docs/releases/). Ez a fájl a még ki nem adott változásokat gyűjti.
 / Detailed notes of each release: [docs/releases/](docs/releases/). This file collects the changes not released yet.
 
-## Kiadatlan / Unreleased
+## 1.1.0 – 2026-11-24
 
 ### Magyar
 
