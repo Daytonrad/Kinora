@@ -81,3 +81,25 @@ func TestReleaseCheckNow(t *testing.T) {
 		t.Fatalf("after the gap check now must ask GitHub: calls=%d", calls)
 	}
 }
+
+func TestReleaseAssets(t *testing.T) {
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"tag_name":"v1.0.10","html_url":"https://github.com/ScotyLucas/Kinora/releases/tag/v1.0.10","assets":[
+			{"name":"kinora-windows-amd64.zip","browser_download_url":"https://github.com/ScotyLucas/kinora/releases/download/v1.0.10/kinora-windows-amd64.zip"},
+			{"name":"kinora-windows-amd64.zip.sha256","browser_download_url":"https://evil.example/kinora-windows-amd64.zip.sha256"}]}`))
+	}))
+	defer gh.Close()
+	oldURL := ReleaseURL
+	ReleaseURL = gh.URL
+	defer func() { ReleaseURL = oldURL }()
+	rel, err := newReleaseChecker().fetch(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel.zipURL == "" {
+		t.Error("the repository's own package was not picked up")
+	}
+	if rel.sumURL != "" {
+		t.Error("a download from another host was accepted")
+	}
+}

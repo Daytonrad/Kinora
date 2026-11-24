@@ -99,7 +99,7 @@ try {
   $have = ParseVersion $current
   $want = ParseVersion $rel.tag_name
   if (-not $Force -and $want -le $have) {
-    Write-Host "Naprakész: $current (legújabb kiadás: $($rel.tag_name))"
+    Log "Naprakész: $current (legújabb kiadás: $($rel.tag_name))"
     exit 0
   }
   $za = $rel.assets | Where-Object name -eq $asset

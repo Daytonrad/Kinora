@@ -50,10 +50,13 @@ Az ütemezett feladat naponta egyszer (04:00 és 04:30 között) SYSTEM-ként fu
 A frissítés naplója: `C:\Program Files\Kinora\update.log`. A szerver naplója: `C:\ProgramData\Kinora\kinora.log`.
 
 **Frissítés a webes felületről:** ha van újabb kiadás, az **Admin → Irányítópult** a verziószám alatt jelzi,
-és megjelenik a **Frissítés most** gomb. Megerősítés után a szerver a háttérben elindítja ugyanezt az `update.ps1`-et
-(mentés, csere, állapotellenőrzés, hiba esetén visszaállás); a szolgáltatás kb. egy percre leáll, az oldal megvárja
-az új verziót, majd újratölt. Ha az előző frissítés nem sikerült, az irányítópult az `update.log` hibaüzenetét mutatja.
-PowerShell ehhez nem kell, és akkor is működik, ha az automatikus frissítés ki van kapcsolva (`-NoAutoUpdate`).
+és megjelenik a **Frissítés most** gomb. Megerősítés után a szerver **saját maga** frissít, `update.ps1` nélkül:
+futás közben letölti a csomagot és ellenőrzi az SHA-256-ot, majd leáll, elmenti az adatbázist és a régi programfájlokat
+(`C:\Program Files\Kinora\update\backup`), a helyükre teszi az újakat, és a Windows szolgáltatáskezelője újraindítja.
+Az új verzió próbaidőn van: ha háromszor egymás után nem indul el, vagy 3 percen belül nem kezd kiszolgálni, a régi
+program és adatbázis visszakerül. Az oldal megvárja az új verziót, majd újratölt. Ha az előző frissítés nem sikerült,
+az irányítópult az `update.log` hibaüzenetét mutatja. Akkor is működik, ha az automatikus frissítés ki van kapcsolva
+(`-NoAutoUpdate`). Az éjszakai frissítés és a kézi parancssori frissítés továbbra is az `update.ps1`-et használja.
 
 Kézi frissítés parancssorból (rendszergazdaként):
 

@@ -5,6 +5,15 @@ A kiadások részletes jegyzete: [docs/releases/](docs/releases/). Ez a fájl a 
 
 ## Kiadatlan / Unreleased
 
+## 1.1.3 – 2026-11-24
+
+- **Javítás (Windows):** az irányítópult **Frissítés most** gombja nem csinált semmit. A szerver most saját maga
+  frissít, PowerShell nélkül: letölt, ellenőriz, ment, cserél, és a szolgáltatáskezelő újraindítja; ha az új verzió
+  nem indul el rendben, a régi program és adatbázis visszakerül.
+- **Fix (Windows):** the dashboard's **Update now** button did nothing. The server now updates itself without
+  PowerShell: it downloads, verifies, backs up, swaps and is restarted by the service manager; if the new version
+  does not start properly, the old program and database are put back.
+
 ## 1.1.2 – 2026-11-24
 
 - **Javítás (Windows):** a lejátszás pár percenként megállt, remuxnál is, mert a szerver olvasás közben zárolta

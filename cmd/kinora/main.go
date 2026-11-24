@@ -27,6 +27,7 @@ import (
 	"github.com/ScotyLucas/kinora/internal/party"
 	"github.com/ScotyLucas/kinora/internal/safe"
 	"github.com/ScotyLucas/kinora/internal/scanner"
+	"github.com/ScotyLucas/kinora/internal/selfupdate"
 	"github.com/ScotyLucas/kinora/internal/server"
 	"github.com/ScotyLucas/kinora/internal/store"
 )
@@ -254,7 +255,18 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 
 	errc := make(chan error, 1)
 	go func() { errc <- httpSrv.Serve(ln) }()
+	if install := selfupdate.InstallDir(); install != "" {
+		// a version on probation after a self-update counts as good once it has served for a while
+		go func() {
+			select {
+			case <-time.After(30 * time.Second):
+				selfupdate.Confirm(install)
+			case <-ctx.Done():
+			}
+		}()
+	}
 
+	var result error
 	select {
 	case err := <-errc:
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -262,6 +274,9 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 		}
 	case <-ctx.Done():
 		log.Info("shutting down")
+	case <-selfupdate.Restart():
+		log.Info("shutting down for the update", "to", selfupdate.StagedTag())
+		result = selfupdate.ErrRestart
 	}
 	shCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -272,7 +287,7 @@ func run(ctx context.Context, cfg server.Config, log *slog.Logger) error {
 	srv.Shutdown(shCtx)
 	waitOrTimeout(shCtx, sc.Wait)
 	log.Info("bye")
-	return nil
+	return result
 }
 
 // bundledTool prefers an ffmpeg shipped next to the executable (Windows installer:

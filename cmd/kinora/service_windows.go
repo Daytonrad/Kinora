@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 
+	"github.com/ScotyLucas/kinora/internal/selfupdate"
 	"github.com/ScotyLucas/kinora/internal/server"
 )
 
@@ -41,6 +43,27 @@ func (s *service) Execute(args []string, req <-chan svc.ChangeRequest, status ch
 		w = f
 	}
 	log := newLogger(w)
+	// self-update: put a failed update back before anything opens the database (see internal/selfupdate)
+	install := exeDir()
+	var exit, probation bool
+	if install != "" {
+		selfupdate.Enable(install)
+		exit, probation = selfupdate.Guard(install, s.cfg.DataDir, server.Version)
+	}
+	if exit {
+		log.Error("the update did not start properly – previous version restored, restarting")
+		restartProcess()
+	}
+	if probation {
+		log.Info("new version on probation after the update", "version", server.Version)
+		go func() {
+			time.Sleep(selfupdate.ProbationTime)
+			if selfupdate.Pending(install) {
+				log.Error("the new version did not start serving in time, restarting")
+				restartProcess()
+			}
+		}()
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
@@ -49,6 +72,16 @@ func (s *service) Execute(args []string, req <-chan svc.ChangeRequest, status ch
 	for {
 		select {
 		case err := <-done:
+			if errors.Is(err, selfupdate.ErrRestart) {
+				to := selfupdate.StagedTag()
+				if err := selfupdate.Swap(install, s.cfg.DataDir, server.Version, to); err != nil {
+					selfupdate.Log(install, "HIBA: "+err.Error())
+					log.Error("update swap failed, restarting the current version", "err", err)
+				} else {
+					log.Info("update swapped in, restarting", "to", to)
+				}
+				restartProcess()
+			}
 			if err != nil {
 				log.Error("kinora stopped", "err", err)
 				return false, 1
@@ -105,8 +138,8 @@ func serviceCommand(args []string) int {
 			return 1
 		}
 		defer s.Close()
-		// restart after a crash (and after an update the installer starts it again)
-		s.SetRecoveryActions([]mgr.RecoveryAction{{Type: mgr.ServiceRestart, Delay: 5 * time.Second}, {Type: mgr.ServiceRestart, Delay: 30 * time.Second}}, 86400)
+		// restart after a crash; a self-update restarts this way too
+		setRecovery(s)
 		if err := s.Start(); err != nil {
 			fmt.Fprintln(os.Stderr, "a szolgáltatás nem indult el:", err)
 			return 1
@@ -145,6 +178,43 @@ func serviceCommand(args []string) int {
 		return 2
 	}
 	return 0
+}
+
+// setRecovery makes the service manager restart Kinora whenever the process ends unexpectedly. The last
+// action repeats for every further failure, so a self-update is never left stopped.
+func setRecovery(s *mgr.Service) {
+	s.SetRecoveryActions([]mgr.RecoveryAction{
+		{Type: mgr.ServiceRestart, Delay: 2 * time.Second},
+		{Type: mgr.ServiceRestart, Delay: 5 * time.Second},
+		{Type: mgr.ServiceRestart, Delay: 30 * time.Second},
+	}, 86400)
+	s.SetRecoveryActionsOnNonCrashFailures(true)
+}
+
+// restartProcess ends the process without reporting a stop, so the service manager's recovery action
+// starts kinora.exe again (the new one after a swap, the old one after a rollback). It first makes sure the
+// recovery actions are set: installs made by older versions had only two of them.
+func restartProcess() {
+	if m, err := mgr.Connect(); err == nil {
+		if s, err := m.OpenService(serviceName); err == nil {
+			setRecovery(s)
+			s.Close()
+		}
+		m.Disconnect()
+	}
+	os.Exit(3)
+}
+
+// exeDir is the folder of the running kinora.exe.
+func exeDir() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if r, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = r
+	}
+	return filepath.Dir(exe)
 }
 
 func stopService(s *mgr.Service) error {

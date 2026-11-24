@@ -3,7 +3,7 @@ package server
 // Release check for the admin dashboard: the server asks GitHub for the latest published release (not the main
 // branch) at most every few hours, in the background, and the dashboard shows whether a newer one exists.
 // Nothing is downloaded or installed here; the admin updates the way their install mode updates
-// (on Windows the dashboard can start update.ps1, see selfupdate.go).
+// (on Windows the dashboard can update the server itself, see selfupdate.go).
 
 import (
 	"context"
@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ScotyLucas/kinora/internal/selfupdate"
 )
 
 const (
@@ -39,9 +41,9 @@ type releaseInfo struct {
 	Error     bool       `json:"error,omitempty"`
 	Disabled  bool       `json:"disabled,omitempty"`  // dev build or KINORA_UPDATE_CHECK=0
 	Mode      string     `json:"mode"`                // install mode, so the UI can say how to update
-	CanApply  bool       `json:"can_apply,omitempty"` // Windows: the dashboard can start update.ps1 itself
+	CanApply  bool       `json:"can_apply,omitempty"` // Windows service: the dashboard can update the server
 	Applying  bool       `json:"applying,omitempty"`  // an update started from the dashboard is running
-	LastRun   *updateRun `json:"last_run,omitempty"`  // outcome of the last update.ps1 run (update.log)
+	LastRun   *updateRun `json:"last_run,omitempty"`  // outcome of the last update (update.log)
 }
 
 type releaseChecker struct {
@@ -51,7 +53,9 @@ type releaseChecker struct {
 	next    time.Time
 	last    time.Time // when the last check started
 	running bool
-	applied time.Time // when the dashboard last started update.ps1
+	applied time.Time // when the dashboard last started an update
+	zipURL  string    // the latest release's Windows package and its checksum (self-update)
+	sumURL  string
 }
 
 func newReleaseChecker() *releaseChecker {
@@ -133,7 +137,7 @@ func (rc *releaseChecker) CheckNow(ctx context.Context) releaseInfo {
 }
 
 func (rc *releaseChecker) check(ctx context.Context) {
-	latest, url, published, err := rc.fetch(ctx)
+	rel, err := rc.fetch(ctx)
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.running = false
@@ -143,26 +147,35 @@ func (rc *releaseChecker) check(ctx context.Context) {
 		rc.next = now.Add(releaseRetryTTL)
 		return
 	}
-	rc.info = releaseInfo{Latest: latest, URL: url, Published: published, CheckedAt: now.Unix()}
+	rc.info = releaseInfo{Latest: rel.tag, URL: rel.url, Published: rel.published, CheckedAt: now.Unix()}
+	rc.zipURL, rc.sumURL = rel.zipURL, rel.sumURL
 	rc.next = now.Add(releaseCheckTTL)
 }
 
-func (rc *releaseChecker) fetch(ctx context.Context) (tag, url string, published int64, err error) {
+// latestRelease is what fetch reads from GitHub.
+type latestRelease struct {
+	tag, url       string
+	published      int64
+	zipURL, sumURL string // Windows package, only from this repository's release downloads
+}
+
+func (rc *releaseChecker) fetch(ctx context.Context) (latestRelease, error) {
+	var out latestRelease
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ReleaseURL, nil)
 	if err != nil {
-		return "", "", 0, err
+		return out, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "kinora-server/"+Version)
 	resp, err := rc.hc.Do(req)
 	if err != nil {
-		return "", "", 0, err
+		return out, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", "", 0, fmt.Errorf("github: %s", resp.Status)
+		return out, fmt.Errorf("github: %s", resp.Status)
 	}
 	var rel struct {
 		Tag        string    `json:"tag_name"`
@@ -170,20 +183,37 @@ func (rc *releaseChecker) fetch(ctx context.Context) (tag, url string, published
 		Draft      bool      `json:"draft"`
 		Prerelease bool      `json:"prerelease"`
 		Published  time.Time `json:"published_at"`
+		Assets     []struct {
+			Name string `json:"name"`
+			URL  string `json:"browser_download_url"`
+		} `json:"assets"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&rel); err != nil {
-		return "", "", 0, err
+		return out, err
 	}
 	if _, ok := parseSemver(rel.Tag); !ok || rel.Draft || rel.Prerelease {
-		return "", "", 0, fmt.Errorf("github: unexpected release %q", rel.Tag)
+		return out, fmt.Errorf("github: unexpected release %q", rel.Tag)
 	}
 	// only link to GitHub, never to whatever the response claims
 	if !strings.HasPrefix(rel.URL, "https://github.com/") {
 		rel.URL = "https://github.com/" + releaseRepo + "/releases"
 	}
-	var pub int64
+	out.tag, out.url = rel.Tag, rel.URL
 	if !rel.Published.IsZero() {
-		pub = rel.Published.Unix()
+		out.published = rel.Published.Unix()
 	}
-	return rel.Tag, rel.URL, pub, nil
+	// download only from this repository's release files
+	dl := strings.ToLower("https://github.com/" + releaseRepo + "/releases/download/")
+	for _, a := range rel.Assets {
+		if !strings.HasPrefix(strings.ToLower(a.URL), dl) {
+			continue
+		}
+		switch a.Name {
+		case selfupdate.Asset:
+			out.zipURL = a.URL
+		case selfupdate.Asset + ".sha256":
+			out.sumURL = a.URL
+		}
+	}
+	return out, nil
 }

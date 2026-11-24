@@ -1,16 +1,20 @@
 package server
 
-// One-click update from the admin dashboard on a native Windows install. The server does not replace itself:
-// it starts the same update.ps1 the nightly scheduled task runs (download, SHA-256 check, backup, swap, health
-// check, rollback), as a detached process that outlives the service it stops. The dashboard then waits for the
-// new version to answer.
+// One-click update from the admin dashboard on a native Windows install. The server updates itself (see
+// internal/selfupdate): it downloads and checks the release while it keeps serving, then stops, swaps the
+// files and is started again by the service manager. The dashboard waits for the new version to answer.
+// update.ps1 stays for the nightly scheduled task and for updating by hand; both write update.log.
 
 import (
 	"bufio"
+	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ScotyLucas/kinora/internal/selfupdate"
 )
 
 // applyWindow is how long one started update counts as running: a second click inside it is refused.
@@ -21,34 +25,6 @@ type updateRun struct {
 	At   string `json:"at"`
 	OK   bool   `json:"ok"`
 	Line string `json:"line"`
-}
-
-// installDir is the folder of the running kinora.exe (update.ps1 and update.log live there).
-var installDir = func() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return ""
-	}
-	if r, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = r
-	}
-	return filepath.Dir(exe)
-}
-
-// updateScript returns the path of update.ps1 when this install can update itself from the dashboard.
-func updateScript() (string, bool) {
-	if installMode() != "windows" {
-		return "", false
-	}
-	dir := installDir()
-	if dir == "" {
-		return "", false
-	}
-	p := filepath.Join(dir, "update.ps1")
-	if fi, err := os.Stat(p); err != nil || fi.IsDir() {
-		return "", false
-	}
-	return p, true
 }
 
 // lastUpdateRun reads the final result line of update.log: success, failure or rollback.
@@ -93,19 +69,20 @@ func sameRun(a, b string) bool {
 
 // withApply fills in what the dashboard needs for the "update now" button.
 func (rc *releaseChecker) withApply(info releaseInfo) releaseInfo {
-	if _, ok := updateScript(); !ok {
+	install := selfupdate.InstallDir()
+	if install == "" {
 		return info
 	}
 	info.CanApply = true
 	info.Applying = !rc.applied.IsZero() && time.Since(rc.applied) < applyWindow
-	info.LastRun = lastUpdateRun(installDir())
+	info.LastRun = lastUpdateRun(install)
 	return info
 }
 
-// Apply starts update.ps1 in the background. It returns a short reason when it cannot.
+// Apply starts the self-update in the background. It returns a short reason when it cannot.
 func (rc *releaseChecker) Apply() (ok bool, reason string) {
-	script, can := updateScript()
-	if !can {
+	install := selfupdate.InstallDir()
+	if install == "" {
 		return false, "ez a telepítés nem frissíthető innen"
 	}
 	rc.mu.Lock()
@@ -116,9 +93,27 @@ func (rc *releaseChecker) Apply() (ok bool, reason string) {
 	if !withAvailable(rc.info).Available {
 		return false, "nincs újabb kiadás"
 	}
-	if err := startDetached(script); err != nil {
-		return false, "a frissítés nem indult el: " + err.Error()
+	if rc.zipURL == "" || rc.sumURL == "" {
+		return false, "a(z) " + rc.info.Latest + " kiadásban nincs Windows-csomag"
 	}
+	rel := selfupdate.Release{Tag: rc.info.Latest, ZipURL: rc.zipURL, SumURL: rc.sumURL}
 	rc.applied = time.Now()
+	selfupdate.Log(install, "Frissítés: kinora "+Version+" → "+rel.Tag)
+	go rc.prepare(install, rel)
 	return true, ""
+}
+
+// prepare downloads and stages rel, then asks the process to restart into it. A failure goes to update.log,
+// where the dashboard shows it, and frees the button again.
+func (rc *releaseChecker) prepare(install string, rel selfupdate.Release) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	if err := selfupdate.Prepare(ctx, &http.Client{}, install, rel); err != nil {
+		selfupdate.Log(install, "HIBA: "+err.Error())
+		rc.mu.Lock()
+		rc.applied = time.Time{}
+		rc.mu.Unlock()
+		return
+	}
+	selfupdate.RequestRestart()
 }
