@@ -26,6 +26,8 @@ final class ContentProvider: TVTopShelfContentProvider {
             resume: await Shelf.cards(WidgetFeed.continueWatching(home).prefix(12), resume: true, client: client),
             recent: await Shelf.cards(WidgetFeed.recentlyAdded(home).prefix(12), resume: false, client: client)
         )
+        // An empty answer (a profile just left, say) must not wipe the last good shelf.
+        if shelf.resume.isEmpty && shelf.recent.isEmpty { return Shelf.cached() ?? shelf }
         shelf.save()
         return shelf
     }
@@ -100,10 +102,13 @@ struct Shelf: Codable, Sendable {
 
     // MARK: - storage
 
-    static var directory: URL? { AppGroup.container?.appending(path: "Library/Caches/TopShelf") }
+    // Not Library/Caches: tvOS empties caches often, and then a server that cannot be reached
+    // (or a session without a chosen profile, which home refuses) leaves the shelf empty.
+    static var directory: URL? { AppGroup.container?.appending(path: "Library/Application Support/TopShelf") }
 
     func save() {
         guard let dir = Self.directory else { return }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try? JSONEncoder().encode(self).write(to: dir.appending(path: "shelf.json"), options: .atomic)
         // Drop images of titles that left the shelf.
         let keep = Set((resume + recent).compactMap(\.image) + ["shelf.json"])
