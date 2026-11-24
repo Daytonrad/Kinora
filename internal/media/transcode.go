@@ -262,7 +262,7 @@ func (m *Manager) makeRoom(userID int64) error {
 }
 
 func hasSegment(playlist string) bool {
-	b, err := os.ReadFile(playlist)
+	b, err := readShared(playlist)
 	return err == nil && (bytes.Contains(b, []byte(".ts")) || bytes.Contains(b, []byte(".m4s")))
 }
 
@@ -366,7 +366,7 @@ func (m *Manager) Reap(ctx context.Context) {
 
 // Playlist returns the playlist, appending #EXT-X-ENDLIST once ffmpeg is done.
 func (s *Session) Playlist() ([]byte, error) {
-	b, err := os.ReadFile(filepath.Join(s.Dir, "index.m3u8"))
+	b, err := readShared(filepath.Join(s.Dir, "index.m3u8"))
 	if err != nil {
 		return nil, err
 	}

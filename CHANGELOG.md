@@ -5,10 +5,20 @@ A kiadások részletes jegyzete: [docs/releases/](docs/releases/). Ez a fájl a 
 
 ## Kiadatlan / Unreleased
 
+## 1.1.2 – 2026-11-24
+
+- **Javítás (Windows):** a lejátszás pár percenként megállt, remuxnál is, mert a szerver olvasás közben zárolta
+  az ffmpeg lejátszási listáját, és a csere elakadt. Most a szerver úgy olvassa, hogy az ffmpeg közben lecserélheti.
+- **Fix (Windows):** playback stopped every few minutes, remux included: the server locked ffmpeg's playlist while
+  reading it, so ffmpeg could not replace it. The server now reads it in a way that lets ffmpeg replace it.
 - **Biztonság:** a kezdő beállítás (az első admin fiók) csak a helyi hálózatról, loopbackről vagy Tailscale-ről
   végezhető el; `KINORA_ALLOW_REMOTE_SETUP=1` feloldja. A beállító oldal előre elmagyarázza, ha innen nem lehet (#7).
 - **Security:** the initial setup (the first admin account) is accepted only from the local network, loopback or
   Tailscale; `KINORA_ALLOW_REMOTE_SETUP=1` lifts this. The setup page explains it up front when it applies (#7).
+
+- **Új:** egy médiakönyvtár több mappát is tartalmazhat. **New:** a library can span several folders.
+- **Javítás / Fix:** iOS letöltési Live Activity; hallássérült-felirat jelölés a Jellyfin-kompatibilis API-ban.
+  / iOS downloads Live Activity; hearing-impaired subtitle flag in the Jellyfin-compatible API.
 
 ## 1.1.1 – 2026-11-24
 
