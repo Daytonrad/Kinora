@@ -279,13 +279,13 @@ input[type=checkbox]:checked::after {
 }
 input[type=radio]:checked::after { content: ""; width: calc(var(--mark) / 3); height: calc(var(--mark) / 3); border-radius: var(--round); background: var(--amber-ink); }
 input[type=checkbox]:disabled, input[type=radio]:disabled { opacity: .5; cursor: default; }
-label.field { display: block; margin-bottom: var(--s4); }
-label.field > span { display: block; font-size: var(--f0); color: var(--t2); margin-bottom: var(--s1); }
+label.field, div.field { display: block; margin-bottom: var(--s4); }
+label.field > span, div.field > span { display: block; font-size: var(--f0); color: var(--t2); margin-bottom: var(--s1); }
 label.check { display: flex; gap: var(--s3); align-items: center; min-height: var(--hit); cursor: pointer; }
 .row-gap { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--s4); }
 .hint { font-size: var(--f0); color: var(--t2); margin: calc(-1 * var(--s2)) 0 var(--s4); }
-label.field > .hint { margin: var(--s1) 0 0; }
+label.field > .hint, div.field > .hint { margin: var(--s1) 0 0; }
 input[type=file] { display: block; width: 100%; color: var(--t2); font-size: var(--f1); }
 input[type=file]::file-selector-button {
   min-height: var(--hit); padding: 0 var(--s4); margin-right: var(--s3); border-radius: var(--r2);
@@ -581,8 +581,8 @@ pre.code { background: var(--g1); border-left: var(--hair) solid var(--rule-hi);
 }
 
 /* admin: shared polish */
-.admin label.field > span, .admin .tbl th, .admin .stat span { font-size: calc((var(--f0) + var(--f1)) / 2); }
-.admin label.field > span { color: var(--t1); }
+.admin label.field > span, .admin div.field > span, .admin .tbl th, .admin .stat span { font-size: calc((var(--f0) + var(--f1)) / 2); }
+.admin label.field > span, .admin div.field > span { color: var(--t1); }
 .admin label.field, .admin .form-row { max-width: 30rem; }
 .form-h { font-family: var(--text); font-size: var(--f1); font-weight: 700; color: var(--t0); margin: var(--s5) 0 var(--s3); }
 .form-h:first-child { margin-top: 0; }

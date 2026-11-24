@@ -763,6 +763,9 @@
    "mixed": "Vegyes"
   },
   "choose": "Tallózás…",
+  "addFolder": "Mappa hozzáadása",
+  "removeFolder": "Mappa eltávolítása",
+  "libFoldersHint": "Egy könyvtárhoz több mappa is tartozhat (például két lemezen lévő filmek). A letöltések az első mappába kerülnek.",
   "scan": "Szkennelés",
   "lastScan": "Utolsó szkennelés",
   "never": "még soha",

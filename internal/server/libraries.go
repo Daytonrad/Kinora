@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -37,9 +38,10 @@ func (s *Server) visibleLibraries(p *store.Profile) ([]*store.Library, error) {
 
 func (s *Server) handleLibraryCreate(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 	var in struct {
-		Name string `json:"name"`
-		Path string `json:"path"`
-		Kind string `json:"kind"`
+		Name  string   `json:"name"`
+		Path  string   `json:"path"`
+		Paths []string `json:"paths"` // several folders; overrides path
+		Kind  string   `json:"kind"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -49,21 +51,64 @@ func (s *Server) handleLibraryCreate(w http.ResponseWriter, r *http.Request, c *
 		writeErr(w, http.StatusBadRequest, "a könyvtár típusa movies, shows vagy mixed lehet")
 		return
 	}
-	p, ok := s.libraryFolder(w, in.Path)
+	if len(in.Paths) == 0 {
+		in.Paths = []string{in.Path}
+	}
+	paths, ok := s.libraryFolders(w, in.Paths)
 	if !ok {
 		return
 	}
 	if in.Name == "" {
-		in.Name = filepath.Base(p)
+		in.Name = filepath.Base(paths[0])
 	}
-	lib, err := s.st.CreateLibrary(in.Name, p, in.Kind)
+	lib, err := s.st.CreateLibraryPaths(in.Name, paths, in.Kind)
 	if err != nil {
 		s.internalErr(w, r, err)
 		return
 	}
-	s.log.Info("library added", "name", lib.Name, "path", lib.Path, "kind", lib.Kind)
+	s.log.Info("library added", "name", lib.Name, "paths", lib.Paths, "kind", lib.Kind)
 	s.Scanner.Trigger(s.bgCtx, lib.ID)
 	writeJSON(w, http.StatusCreated, lib)
+}
+
+// libraryFolders validates the folders of a library (empty entries are dropped): each must pass
+// libraryFolder, and none may repeat or lie inside another (its files would be scanned twice).
+func (s *Server) libraryFolders(w http.ResponseWriter, in []string) ([]string, bool) {
+	var out []string
+	for _, raw := range in {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		p, ok := s.libraryFolder(w, strings.TrimSpace(raw))
+		if !ok {
+			return nil, false
+		}
+		for _, q := range out {
+			if samePath(p, q) || within(p, q) || within(q, p) {
+				writeErr(w, http.StatusBadRequest, "a mappák nem ismétlődhetnek és nem lehetnek egymáson belül: "+q+" – "+p)
+				return nil, false
+			}
+		}
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		writeErr(w, http.StatusBadRequest, "adj meg egy abszolút mappaútvonalat")
+		return nil, false
+	}
+	return out, true
+}
+
+// within reports whether p is inside dir.
+func within(p, dir string) bool {
+	rel, err := filepath.Rel(dir, p)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func samePath(a, b string) bool {
+	if os.PathSeparator == '\\' {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 // libraryFolder validates a library folder: absolute, an existing directory, readable by the
@@ -98,32 +143,37 @@ func (s *Server) handleLibraryUpdate(w http.ResponseWriter, r *http.Request, c *
 		return
 	}
 	var in struct {
-		Name *string `json:"name"`
-		Path *string `json:"path"`
+		Name  *string   `json:"name"`
+		Path  *string   `json:"path"`
+		Paths *[]string `json:"paths"` // all folders; overrides path
 	}
 	if !decode(w, r, &in) {
 		return
 	}
-	name, path := lib.Name, lib.Path
+	name, paths := lib.Name, lib.Paths
 	if in.Name != nil {
 		if name = strings.TrimSpace(*in.Name); name == "" || len([]rune(name)) > 60 {
 			writeErr(w, http.StatusBadRequest, "a könyvtár neve 1–60 karakter lehet")
 			return
 		}
 	}
-	if in.Path != nil && filepath.Clean(*in.Path) != lib.Path {
-		p, ok := s.libraryFolder(w, *in.Path)
+	if in.Paths == nil && in.Path != nil { // older clients: replace the main folder only
+		p := append([]string{*in.Path}, lib.Paths[1:]...)
+		in.Paths = &p
+	}
+	if in.Paths != nil && !slices.Equal(cleanAll(*in.Paths), lib.Paths) {
+		p, ok := s.libraryFolders(w, *in.Paths)
 		if !ok {
 			return
 		}
-		path = p
+		paths = p
 	}
-	if err := s.st.UpdateLibrary(id, name, path); err != nil {
+	if err := s.st.UpdateLibrary(id, name, paths); err != nil {
 		s.internalErr(w, r, err)
 		return
 	}
-	if path != lib.Path {
-		s.log.Info("library folder changed", "name", name, "from", lib.Path, "to", path)
+	if !slices.Equal(paths, lib.Paths) {
+		s.log.Info("library folders changed", "name", name, "from", lib.Paths, "to", paths)
 		s.Scanner.Cancel(id)
 		go func() { // a cancelled scan of the old folder needs a moment to let go of the library
 			for i := 0; i < 300 && !s.Scanner.Trigger(s.bgCtx, id); i++ {
@@ -166,12 +216,24 @@ func (s *Server) handleLibraryScan(w http.ResponseWriter, r *http.Request, c *re
 		return
 	}
 	if canGrantRead { // Windows: a folder the service cannot read gets the rights before the scan
-		if rep, err := s.fixPerms(lib.Path); err == nil && !rep.OK {
-			s.log.Warn("library not readable", "path", lib.Path, "user", rep.User)
+		for _, p := range lib.Paths {
+			if rep, err := s.fixPerms(p); err == nil && !rep.OK {
+				s.log.Warn("library not readable", "path", p, "user", rep.User)
+			}
 		}
 	}
 	started := s.Scanner.Trigger(s.bgCtx, id)
 	writeJSON(w, http.StatusAccepted, map[string]bool{"started": started})
+}
+
+func cleanAll(in []string) []string {
+	out := []string{}
+	for _, p := range in {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, filepath.Clean(p))
+		}
+	}
+	return out
 }
 
 func (s *Server) handleScanStatus(w http.ResponseWriter, r *http.Request, c *reqCtx) {

@@ -223,6 +223,7 @@ func (sc *Scanner) Run(ctx context.Context) {
 
 type fileEntry struct {
 	abs, rel string
+	root     string // the library folder the file was found in
 	size     int64
 	mtime    int64
 	sig      string
@@ -250,9 +251,13 @@ func (sc *Scanner) scan(ctx context.Context, libID int64) error {
 	if err != nil {
 		return err
 	}
-	root := filepath.Clean(lib.Path)
-	if _, err := os.ReadDir(root); err != nil {
-		return fmt.Errorf("%w (%s: %v)", ErrRootUnavailable, root, err)
+	roots := make([]string, 0, len(lib.Paths))
+	for _, p := range lib.Paths {
+		root := filepath.Clean(p)
+		if _, err := os.ReadDir(root); err != nil {
+			return fmt.Errorf("%w (%s: %v)", ErrRootUnavailable, root, err)
+		}
+		roots = append(roots, root)
 	}
 	known, err := sc.st.KnownFiles(libID)
 	if err != nil {
@@ -267,58 +272,81 @@ func (sc *Scanner) scan(ctx context.Context, libID int64) error {
 	var files []*fileEntry
 	var unreadable []string
 	videosPerDir := map[string]int{}
-	walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err != nil {
-			if d != nil && d.IsDir() || p == root {
-				unreadable = append(unreadable, p)
-				return fs.SkipDir
+	perRoot := map[string]int{}
+	for _, root := range roots {
+		walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
-			return nil
-		}
-		name := d.Name()
-		if d.IsDir() {
-			if p != root && (strings.HasPrefix(name, ".") || skipDirs[strings.ToLower(name)]) {
-				return fs.SkipDir
+			if err != nil {
+				if d != nil && d.IsDir() || p == root {
+					unreadable = append(unreadable, p)
+					return fs.SkipDir
+				}
+				return nil
 			}
+			name := d.Name()
+			if d.IsDir() {
+				if p != root && (strings.HasPrefix(name, ".") || skipDirs[strings.ToLower(name)]) {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(name))
+			if !VideoExts[ext] || strings.HasPrefix(name, ".") {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+			if isSampleOrTrailer(name, info.Size()) {
+				return nil
+			}
+			rel, _ := filepath.Rel(root, p)
+			rel = filepath.ToSlash(rel)
+			dir := filepath.Dir(p)
+			videosPerDir[dir]++
+			files = append(files, &fileEntry{abs: p, rel: rel, root: root, size: info.Size(), mtime: info.ModTime().Unix(), dir: dir,
+				base: strings.TrimSuffix(name, filepath.Ext(name))})
+			perRoot[root]++
+			sc.update(libID, func(s *Status) { s.Total = len(files) })
 			return nil
+		})
+		if walkErr != nil {
+			return walkErr
 		}
-		ext := strings.ToLower(filepath.Ext(name))
-		if !VideoExts[ext] || strings.HasPrefix(name, ".") {
-			return nil
+		for _, u := range unreadable {
+			if u == root {
+				return fmt.Errorf("%w (%s)", ErrRootUnavailable, root)
+			}
 		}
-		info, err := d.Info()
-		if err != nil {
-			return nil
-		}
-		if isSampleOrTrailer(name, info.Size()) {
-			return nil
-		}
-		rel, _ := filepath.Rel(root, p)
-		rel = filepath.ToSlash(rel)
-		dir := filepath.Dir(p)
-		videosPerDir[dir]++
-		files = append(files, &fileEntry{abs: p, rel: rel, size: info.Size(), mtime: info.ModTime().Unix(), dir: dir,
-			base: strings.TrimSuffix(name, filepath.Ext(name))})
-		sc.update(libID, func(s *Status) { s.Total = len(files) })
-		return nil
-	})
-	if walkErr != nil {
-		return walkErr
 	}
-	if len(unreadable) > 0 && unreadable[0] == root {
-		return fmt.Errorf("%w (%s)", ErrRootUnavailable, root)
-	}
-	present := 0
-	for _, k := range known {
-		if !k.Missing {
-			present++
+	// a folder that is suddenly empty (an unmounted share) aborts the scan without touching anything
+	if len(files) == 0 {
+		present := 0
+		for _, k := range known {
+			if !k.Missing {
+				present++
+			}
+		}
+		if present > 0 {
+			return fmt.Errorf("a(z) %s mappa üres, pedig %d ismert fájl volt benne – lehet, hogy a hálózati megosztás nincs csatolva; semmit nem jelöltem hiányzónak", strings.Join(roots, ", "), present)
 		}
 	}
-	if len(files) == 0 && present > 0 {
-		return fmt.Errorf("a(z) %s mappa üres, pedig %d ismert fájl volt benne – lehet, hogy a hálózati megosztás nincs csatolva; semmit nem jelöltem hiányzónak", root, present)
+	for _, root := range roots {
+		if perRoot[root] > 0 {
+			continue
+		}
+		present := 0
+		for p, k := range known {
+			if !k.Missing && underAny(p, []string{root}) {
+				present++
+			}
+		}
+		if present > 0 {
+			return fmt.Errorf("a(z) %s mappa üres, pedig %d ismert fájl volt benne – lehet, hogy a hálózati megosztás nincs csatolva; semmit nem jelöltem hiányzónak", root, present)
+		}
 	}
 
 	// listings & sidecar signatures (one ReadDir per folder that has videos)
@@ -420,7 +448,7 @@ func (sc *Scanner) scan(ctx context.Context, libID int64) error {
 		if se == nil {
 			se = &seriesEntry{key: f.parsed.SeriesKey, title: f.parsed.Series, year: f.parsed.SeriesYear, seasons: map[int]string{}}
 			if f.parsed.SeriesDir != "" {
-				se.dirAbs = filepath.Join(root, filepath.FromSlash(f.parsed.SeriesDir))
+				se.dirAbs = filepath.Join(f.root, filepath.FromSlash(f.parsed.SeriesDir))
 			}
 			series[se.key] = se
 		}

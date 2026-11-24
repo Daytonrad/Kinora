@@ -545,9 +545,11 @@ func planFolder(path string, maps []PathMap, libs []*store.Library) *FolderPlan 
 	fp := &FolderPlan{Path: path, Mapped: mapPath(path, maps)}
 	clean := filepath.Clean(fp.Mapped)
 	for _, l := range libs {
-		if filepath.Clean(l.Path) == clean {
-			fp.Action, fp.LocalID = ActLink, l.ID
-			return fp
+		for _, lp := range l.Paths {
+			if filepath.Clean(lp) == clean {
+				fp.Action, fp.LocalID = ActLink, l.ID
+				return fp
+			}
 		}
 	}
 	if st, err := os.Stat(fp.Mapped); err != nil || !st.IsDir() {

@@ -763,6 +763,9 @@
    "mixed": "Gemischt"
   },
   "choose": "Durchsuchen…",
+  "addFolder": "Ordner hinzufügen",
+  "removeFolder": "Ordner entfernen",
+  "libFoldersHint": "Eine Mediathek kann mehrere Ordner umfassen (zum Beispiel Filme auf zwei Festplatten). Downloads landen im ersten Ordner.",
   "scan": "Scannen",
   "lastScan": "Letzter Scan",
   "never": "noch nie",

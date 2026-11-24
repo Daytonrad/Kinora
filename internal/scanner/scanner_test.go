@@ -214,6 +214,53 @@ func TestUnavailableRootDeletesNothing(t *testing.T) {
 	}
 }
 
+// A library of two folders scans both, and one of them going empty (an unmounted disk) changes nothing.
+func TestLibraryOfSeveralFolders(t *testing.T) {
+	st, sc, media := setup(t)
+	ctx := context.Background()
+	one, _ := st.CreateLibrary("Egy", filepath.Join(media, "Movies"), "movies")
+	if _, err := sc.ScanNow(ctx, one.ID); err != nil {
+		t.Fatal(err)
+	}
+	want := count(t, st, `SELECT COUNT(*) FROM items WHERE library_id=? AND missing=0`, one.ID)
+	st.DeleteLibrary(one.ID)
+
+	// move the first movie folder onto a second "disk"
+	ents, _ := os.ReadDir(filepath.Join(media, "Movies"))
+	var moved string
+	for _, e := range ents {
+		if e.IsDir() {
+			moved = e.Name()
+			break
+		}
+	}
+	second := filepath.Join(media, "Movies2")
+	os.MkdirAll(second, 0o755)
+	if err := os.Rename(filepath.Join(media, "Movies", moved), filepath.Join(second, moved)); err != nil {
+		t.Fatal(err)
+	}
+	lib, err := st.CreateLibraryPaths("Két mappa", []string{filepath.Join(media, "Movies"), second}, "movies")
+	if err != nil || len(lib.Paths) != 2 || lib.Path != filepath.Join(media, "Movies") {
+		t.Fatalf("library: %+v %v", lib, err)
+	}
+	if _, err := sc.ScanNow(ctx, lib.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := count(t, st, `SELECT COUNT(*) FROM items WHERE library_id=? AND missing=0`, lib.ID); got != want {
+		t.Fatalf("two folders: %d items, one folder had %d", got, want)
+	}
+
+	// the second disk is unmounted: an empty mountpoint must not mark its films missing
+	os.Rename(second, second+".offline")
+	os.MkdirAll(second, 0o755)
+	if _, err := sc.ScanNow(ctx, lib.ID); err == nil {
+		t.Fatal("scan with a suddenly empty folder must fail")
+	}
+	if got := count(t, st, `SELECT COUNT(*) FROM items WHERE library_id=? AND missing=0`, lib.ID); got != want {
+		t.Fatalf("items changed: %d → %d", want, got)
+	}
+}
+
 func itoa(i int64) string { return filepath.Base(ImageDir("", i)) }
 
 // Episodes downloaded one by one (a folder per release) form one show, and episodes an

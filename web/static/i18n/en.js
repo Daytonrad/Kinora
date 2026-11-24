@@ -766,6 +766,9 @@
    "mixed": "Mixed"
   },
   "choose": "Browse…",
+  "addFolder": "Add folder",
+  "removeFolder": "Remove folder",
+  "libFoldersHint": "A library can span several folders (movies on two disks, for example). Downloads go to the first folder.",
   "scan": "Scan",
   "lastScan": "Last scan",
   "never": "never",

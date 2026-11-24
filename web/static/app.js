@@ -2666,7 +2666,7 @@ async function adminLibs(body) {
     put(body, aHead(T.aLibs, T.aLedeLibs, libs.length > 0 && h('button.btn.primary', { onclick: addLib }, icon('plus'), T.addLibrary)),
       libs.length ? aTable([T.libName, T.libPath, T.libKind, T.lastScan, ''], libs.map(l => {
         const s = scanOf(l.id);
-        return h('tr', null, tdl('', T.libName, h('b', null, l.name), h('div.small.muted', null, T.titlesN(l.count))), tdl('.mono.path', T.libPath, l.path), tdl('.nowrap', T.libKind, T.kinds[l.kind]),
+        return h('tr', null, tdl('', T.libName, h('b', null, l.name), h('div.small.muted', null, T.titlesN(l.count))), tdl('.mono.path', T.libPath, (l.paths || [l.path]).map(p => h('div', null, p))), tdl('.nowrap', T.libKind, T.kinds[l.kind]),
           tdl('.td-progress', T.lastScan, s && s.running ? h('div', null, `${T.phase[s.phase]} – ${s.done}/${s.total}`, aBar(s.done, s.total))
             : s && s.error ? h('span.bad', null, srv(s.error)) : l.last_scan_at ? ago(Date.now() / 1000 - l.last_scan_at) : T.never,
             s && s.errors ? h('div.small.bad', { title: srv(s.last_error) }, `${T.badFiles(s.errors)}: ${srv(s.last_error)}`) : null),
@@ -2682,14 +2682,32 @@ async function adminLibs(body) {
   onCleanup(() => { dead = true; clearTimeout(t); });
   await render();
 
-  // rename, or point at another folder; items and watch state stay (moved files are matched by size)
+  // the folders of a library: one row per folder (browse, remove) and "add folder"
+  function folderRows(initial, onPick) {
+    const rows = h('div');
+    const add = (v = '') => {
+      const input = h('input', { type: 'text', value: v, placeholder: rows.children.length ? '' : '/media/movies' });
+      const row = h('div.row-gap', { class: 'nowrap mt1' }, input,
+        h('button.btn', { type: 'button', onclick: () => folderPicker(input.value, p => { input.value = p; if (onPick) onPick(p); }) }, T.choose),
+        h('button.btn.ghost.icon-only', { type: 'button', 'aria-label': T.removeFolder, title: T.removeFolder, onclick: () => { if (rows.children.length > 1) row.remove(); else input.value = ''; } }, icon('x')));
+      rows.append(row);
+      return input;
+    };
+    (initial.length ? initial : ['']).forEach(v => add(v));
+    const el = h('div.field', null, h('span', null, T.libPath), rows,
+      h('button.btn.ghost', { type: 'button', class: 'mt1', onclick: () => add().focus() }, icon('plus'), T.addFolder),
+      h('div.hint', null, T.libFoldersHint));
+    return { el, values: () => [...rows.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean) };
+  }
+
+  // rename, or point at other folders; items and watch state stay (moved files are matched by size)
   function editLib(l) {
     const name = h('input', { type: 'text', value: l.name });
-    const path = h('input', { type: 'text', value: l.path });
-    modal(T.editLibrary, h('div', null, field(T.libName, name), h('label.field', null, h('span', null, T.libPath), h('div.row-gap', { class: 'nowrap' }, path, h('button.btn', { type: 'button', onclick: () => folderPicker(path.value, p => { path.value = p; }) }, T.choose))),
+    const folders = folderRows(l.paths || [l.path]);
+    modal(T.editLibrary, h('div', null, field(T.libName, name), folders.el,
       h('div.hint', { class: 'mt0' }, T.libEditHint)), close => [h('button.btn', { onclick: close }, T.cancel),
       h('button.btn.primary', { onclick: async () => {
-        try { await api('PATCH', '/api/libraries/' + l.id, { name: name.value, path: path.value }, { quiet: true }); }
+        try { await api('PATCH', '/api/libraries/' + l.id, { name: name.value, paths: folders.values() }, { quiet: true }); }
         catch (e) { if (e.body && e.body.perm) permDialog(e.body.perm); else toast(e.message, true); return; }
         close(); state.libs = null; toast(T.saved); render();
       } }, T.save)]);
@@ -2697,12 +2715,12 @@ async function adminLibs(body) {
 
   function addLib() {
     const name = h('input', { type: 'text' });
-    const path = h('input', { type: 'text', placeholder: '/media/movies' });
+    const folders = folderRows([], p => { if (!name.value) name.value = p.split(/[\\/]/).filter(Boolean).pop() || ''; });
     const kind = h('select', null, Object.entries(T.kinds).map(([k, v]) => h('option', { value: k }, v)));
-    modal(T.addLibrary, h('div', null, field(T.libName, name), h('label.field', null, h('span', null, T.libPath), h('div.row-gap', { class: 'nowrap' }, path, h('button.btn', { type: 'button', onclick: () => folderPicker(path.value, p => { path.value = p; if (!name.value) name.value = p.split(/[\\/]/).filter(Boolean).pop() || ''; }) }, T.choose))),
+    modal(T.addLibrary, h('div', null, field(T.libName, name), folders.el,
       h('div.hint', { class: 'mt0' }, state.installMode === 'docker' ? T.mediaHintDocker : T.mediaHintNative), field(T.libKind, kind)), close => [h('button.btn', { onclick: close }, T.cancel),
       h('button.btn.primary', { onclick: async () => {
-        try { await POST('/api/libraries', { name: name.value, path: path.value, kind: kind.value }, { quiet: true }); }
+        try { await POST('/api/libraries', { name: name.value, paths: folders.values(), kind: kind.value }, { quiet: true }); }
         catch (e) { if (e.body && e.body.perm) permDialog(e.body.perm); else toast(e.message, true); return; }
         close(); state.libs = null; render();
       } }, T.addLibrary)]);

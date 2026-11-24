@@ -2,27 +2,30 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 )
 
 // Library is a scanned media folder.
 type Library struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	Path       string `json:"path"`
-	Kind       string `json:"kind"` // movies | shows | mixed
-	LastScanAt *int64 `json:"last_scan_at"`
-	CreatedAt  int64  `json:"created_at"`
-	Count      int    `json:"count"` // top level titles (movies + series), not missing
+	ID         int64    `json:"id"`
+	Name       string   `json:"name"`
+	Path       string   `json:"path"`  // main folder (downloads are imported here)
+	Paths      []string `json:"paths"` // every folder of the library, Path first
+	Kind       string   `json:"kind"`  // movies | shows | mixed
+	LastScanAt *int64   `json:"last_scan_at"`
+	CreatedAt  int64    `json:"created_at"`
+	Count      int      `json:"count"` // top level titles (movies + series), not missing
 }
 
-const libCols = `l.id,l.name,l.path,l.kind,l.last_scan_at,l.created_at,
+const libCols = `l.id,l.name,l.path,l.extra_paths,l.kind,l.last_scan_at,l.created_at,
  (SELECT COUNT(*) FROM items i WHERE i.library_id=l.id AND i.kind IN ('movie','series') AND i.missing=0)`
 
 func scanLibrary(row interface{ Scan(...any) error }) (*Library, error) {
 	l := &Library{}
 	var last sql.NullInt64
-	if err := row.Scan(&l.ID, &l.Name, &l.Path, &l.Kind, &last, &l.CreatedAt, &l.Count); err != nil {
+	var extra string
+	if err := row.Scan(&l.ID, &l.Name, &l.Path, &extra, &l.Kind, &last, &l.CreatedAt, &l.Count); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -30,6 +33,11 @@ func scanLibrary(row interface{ Scan(...any) error }) (*Library, error) {
 	}
 	if last.Valid {
 		l.LastScanAt = &last.Int64
+	}
+	l.Paths = []string{l.Path}
+	var more []string
+	if json.Unmarshal([]byte(extra), &more) == nil {
+		l.Paths = append(l.Paths, more...)
 	}
 	return l, nil
 }
@@ -57,9 +65,17 @@ func (s *Store) Library(id int64) (*Library, error) {
 	return scanLibrary(s.DB.QueryRow(`SELECT `+libCols+` FROM libraries l WHERE l.id=?`, id))
 }
 
-// CreateLibrary adds a library.
+// CreateLibrary adds a library of one folder.
 func (s *Store) CreateLibrary(name, path, kind string) (*Library, error) {
-	res, err := s.DB.Exec(`INSERT INTO libraries(name,path,kind,created_at) VALUES(?,?,?,?)`, name, path, kind, now())
+	return s.CreateLibraryPaths(name, []string{path}, kind)
+}
+
+// CreateLibraryPaths adds a library of one or more folders (the first is the main one).
+func (s *Store) CreateLibraryPaths(name string, paths []string, kind string) (*Library, error) {
+	if len(paths) == 0 {
+		return nil, errors.New("no library folder")
+	}
+	res, err := s.DB.Exec(`INSERT INTO libraries(name,path,extra_paths,kind,created_at) VALUES(?,?,?,?,?)`, name, paths[0], extraJSON(paths), kind, now())
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +83,22 @@ func (s *Store) CreateLibrary(name, path, kind string) (*Library, error) {
 	return s.Library(id)
 }
 
-// UpdateLibrary renames a library or changes its folder; items are kept.
-func (s *Store) UpdateLibrary(id int64, name, path string) error {
-	res, err := s.DB.Exec(`UPDATE libraries SET name=?, path=? WHERE id=?`, name, path, id)
+// extraJSON encodes the folders after the main one.
+func extraJSON(paths []string) string {
+	more := []string{}
+	if len(paths) > 1 {
+		more = paths[1:]
+	}
+	b, _ := json.Marshal(more)
+	return string(b)
+}
+
+// UpdateLibrary renames a library or changes its folders (the first is the main one); items are kept.
+func (s *Store) UpdateLibrary(id int64, name string, paths []string) error {
+	if len(paths) == 0 {
+		return errors.New("no library folder")
+	}
+	res, err := s.DB.Exec(`UPDATE libraries SET name=?, path=?, extra_paths=? WHERE id=?`, name, paths[0], extraJSON(paths), id)
 	if err != nil {
 		return err
 	}

@@ -590,6 +590,8 @@ CREATE TABLE password_links(
   created_at INTEGER NOT NULL,
   PRIMARY KEY(source, kind, external_id)
 );`,
+	// a library can span several folders: the extra ones as a JSON array next to the main path
+	`ALTER TABLE libraries ADD COLUMN extra_paths TEXT NOT NULL DEFAULT '[]';`,
 }
 
 // ErrNewerSchema: the database was written by a newer Kinora (after rolling back an update, for example).
