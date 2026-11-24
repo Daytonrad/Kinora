@@ -196,9 +196,16 @@ func (m *Manager) Start(ctx context.Context, sp HLSSpec) (*Session, error) {
 	}
 	go func() {
 		s.err = cmd.Wait()
+		if s.err == nil {
+			if n := settleTemp(dir); n > 0 {
+				m.log.Warn("ffmpeg left files under their temporary name; put in place", "session", id, "files", n, "stderr", lastLine(tb.String()))
+			}
+		}
 		close(s.done)
 		if s.err != nil && !s.stopping.Load() {
 			m.log.Warn("ffmpeg exited", "session", id, "err", s.err, "stderr", lastLine(tb.String()))
+		} else if s.err == nil && strings.TrimSpace(tb.String()) != "" {
+			m.log.Info("ffmpeg finished with messages", "session", id, "stderr", lastLine(tb.String()))
 		}
 	}()
 	m.mu.Lock()
@@ -364,9 +371,44 @@ func (m *Manager) Reap(ctx context.Context) {
 	}
 }
 
+// settleTemp runs once ffmpeg has exited cleanly. ffmpeg writes the playlist and every segment to a .tmp
+// and renames it into place; on Windows that rename fails now and then (an antivirus scan or a reader
+// holds the target), and ffmpeg only logs it. A failed last playlist rename leaves an early playlist,
+// which the ENDLIST added by Playlist turns into a short video: the player stops a minute in. The .tmp
+// files are complete at this point, so they are put in place here. It returns how many it moved.
+func settleTemp(dir string) int {
+	tmps, _ := filepath.Glob(filepath.Join(dir, "*.tmp"))
+	n := 0
+	for _, t := range tmps {
+		for i := 0; i < 20; i++ {
+			if err := os.Rename(t, strings.TrimSuffix(t, ".tmp")); err == nil {
+				n++
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	return n
+}
+
+// file is the path to serve for name: once ffmpeg is done, a file that is still under its temporary name
+// (settleTemp could not move it) is served from there.
+func (s *Session) file(name string) string {
+	p := filepath.Join(s.Dir, name)
+	if s.Finished() {
+		if _, err := os.Stat(p + ".tmp"); err == nil {
+			return p + ".tmp"
+		}
+	}
+	return p
+}
+
+// SegmentPath is the file to serve for a segment or init.mp4 of this session.
+func (s *Session) SegmentPath(name string) string { return s.file(name) }
+
 // Playlist returns the playlist, appending #EXT-X-ENDLIST once ffmpeg is done.
 func (s *Session) Playlist() ([]byte, error) {
-	b, err := readShared(filepath.Join(s.Dir, "index.m3u8"))
+	b, err := readShared(s.file("index.m3u8"))
 	if err != nil {
 		return nil, err
 	}

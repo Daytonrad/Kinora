@@ -242,7 +242,7 @@ func (s *Server) handleHLS(w http.ResponseWriter, r *http.Request, c *reqCtx) {
 		w.Write(b)
 		return
 	}
-	p := filepath.Join(sess.Dir, file)
+	p := sess.SegmentPath(file)
 	if _, err := os.Stat(p); err != nil {
 		writeErr(w, http.StatusNotFound, "a szegmens még nem készült el")
 		return

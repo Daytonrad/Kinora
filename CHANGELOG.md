@@ -5,6 +5,16 @@ A kiadások részletes jegyzete: [docs/releases/](docs/releases/). Ez a fájl a 
 
 ## Kiadatlan / Unreleased
 
+## 1.1.4 – 2026-11-24
+
+- **Javítás (Windows):** a lejátszás kb. másfél perc után megállt, mintha vége lenne a résznek. Az ffmpeg a
+  lejátszási lista utolsó cseréjét néha nem tudta elvégezni, és egy korai, rövid lista maradt meg. A szerver most az
+  ffmpeg végeztével a helyére teszi a teljes listát és szegmenseket.
+- **Fix (Windows):** playback stopped about a minute and a half in, as if the episode had ended. ffmpeg sometimes
+  failed its last playlist rename and an early, short playlist was left behind. The server now puts the complete
+  playlist and segments in place once ffmpeg is done.
+- **Javítás / Fix:** a frissítés fájlcseréjének hibái már nem vesznek el. / errors of the update's file swap are no longer lost.
+
 ## 1.1.3 – 2026-11-24
 
 - **Javítás (Windows):** az irányítópult **Frissítés most** gombja nem csinált semmit. A szerver most saját maga

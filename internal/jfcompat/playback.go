@@ -568,12 +568,13 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request, c *reqCtx
 		writeErr(w, http.StatusNotFound, "the session has ended")
 		return
 	}
-	p := filepath.Join(sess.Dir, file)
+	p := sess.SegmentPath(file)
 	for i := 0; i < 100; i++ { // a player may ask for the next segment a moment before ffmpeg finishes it
 		if _, err := os.Stat(p); err == nil || sess.Finished() {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
+		p = sess.SegmentPath(file)
 	}
 	if _, err := os.Stat(p); err != nil {
 		writeErr(w, http.StatusNotFound, "the segment is not ready")

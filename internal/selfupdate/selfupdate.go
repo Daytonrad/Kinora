@@ -148,7 +148,7 @@ func Prepare(ctx context.Context, hc *http.Client, install string, rel Release) 
 		return fmt.Errorf("az ellenőrzőösszeg nem tölthető le: %w", err)
 	}
 	if !strings.EqualFold(want, sum) {
-		return errors.New("SHA-256 eltérés, a frissítés megszakítva.")
+		return errors.New("SHA-256 eltérés, a frissítés megszakítva")
 	}
 	if err := unzip(zipPath, stageDir(install)); err != nil {
 		os.RemoveAll(stageDir(install))
@@ -364,7 +364,8 @@ func Swap(install, data, from, to string) error {
 		dest := filepath.Join(install, rel)
 		mv := moved{Path: filepath.ToSlash(rel)}
 		if _, err := os.Lstat(dest); err == nil {
-			if err := os.MkdirAll(filepath.Dir(filepath.Join(bk, rel)), 0o755); err == nil {
+			err := os.MkdirAll(filepath.Dir(filepath.Join(bk, rel)), 0o755)
+			if err == nil {
 				err = os.Rename(dest, filepath.Join(bk, rel))
 			}
 			if err != nil {
@@ -374,7 +375,8 @@ func Swap(install, data, from, to string) error {
 			mv.HadOld = true
 		}
 		m.Files = append(m.Files, mv) // before the move: putBack must also undo a half-done step
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err == nil {
+		err := os.MkdirAll(filepath.Dir(dest), 0o755)
+		if err == nil {
 			err = os.Rename(filepath.Join(stage, rel), dest)
 		}
 		if err != nil {
