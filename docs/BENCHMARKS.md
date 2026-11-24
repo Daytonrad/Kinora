@@ -75,7 +75,7 @@ Medián, zárójelben a legkisebb és a legnagyobb érték. Mindhárom ismétlé
 
 - **Üresjárati CPU:** átlagosan 0,4%, a Jellyfiné 0,1%. A Kinora alapterhelése kb. 0,08%, de nagyjából 30 másodpercenként
   egy-egy 4–5%-os kiugrás jelentkezik; a Jellyfiné kb. 0,02%. Abszolút értékben kicsi, de mérhető különbség; a forrását
-  még nem kerestük meg.
+  még nem kerestük meg ([#13](https://github.com/ScotyLucas/Kinora/issues/13)).
 - **Átlagos CPU terhelés alatt:** 394% a Jellyfin 353%-ával szemben, a 4 mag szinte teljes kihasználása. Mivel közben
   9-szer annyi kérést szolgált ki, ez kérésenként kevesebb CPU-t jelent.
 
@@ -149,7 +149,7 @@ data in `scripts/bench/results/20261123-1908/`.
 | Transcode, first HLS segment (p50 / p95) | **1995 / 2000 ms** | 3018 / 4156 ms |
 
 Where Kinora is worse: idle CPU (0.4% vs 0.1%; Kinora idles at about 0.08% with a 4–5% spike roughly every 30 seconds; the
-cause is not known yet) and average CPU under load (394% vs 353%, while serving nine times as many requests). Limits: one
+cause is not known yet, [#13](https://github.com/ScotyLucas/Kinora/issues/13)) and average CPU under load (394% vs 353%, while serving nine times as many requests). Limits: one
 machine, one run, short identical clips; see the Hungarian sections above for exactly what each number measures. The
 benchmark also found two Kinora performance bugs (idle SQLite connections, SQLite's global memory-statistics lock), fixed
 before these numbers were taken.
