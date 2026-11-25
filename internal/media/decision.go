@@ -137,10 +137,10 @@ func Decide(it *store.Item, req PlaybackRequest, audioLangs []string, maxKbps in
 	hdrBlocked := it.HDR != "" && !req.Caps.HDR
 
 	if !containerOK {
-		why = append(why, fmt.Sprintf("a böngésző nem tudja lejátszani a(z) %s konténert", it.Container))
+		why = append(why, fmt.Sprintf("az eszköz nem tudja lejátszani a(z) %s konténert", it.Container))
 	}
 	if !videoOK {
-		why = append(why, fmt.Sprintf("a böngésző nem tudja lejátszani a(z) %s videót", vc))
+		why = append(why, fmt.Sprintf("az eszköz nem tudja lejátszani a(z) %s videót", vc))
 	}
 	if !audioOK {
 		why = append(why, fmt.Sprintf("a(z) %s hang nem támogatott", audioCodec))
