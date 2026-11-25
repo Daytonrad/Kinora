@@ -1934,12 +1934,12 @@
     "weil du {0} magst"
    ],
    [
-    "^a böngésző nem tudja lejátszani a\\(z\\) (.+) konténert$",
-    "der Browser kann den Container {0} nicht abspielen"
+    "^az eszköz nem tudja lejátszani a\\(z\\) (.+) konténert$",
+    "das Gerät kann den Container {0} nicht abspielen"
    ],
    [
-    "^a böngésző nem tudja lejátszani a\\(z\\) (.+) videót$",
-    "der Browser kann {0}-Video nicht abspielen"
+    "^az eszköz nem tudja lejátszani a\\(z\\) (.+) videót$",
+    "das Gerät kann {0}-Video nicht abspielen"
    ],
    [
     "^a\\(z\\) (.+) hang nem támogatott$",
