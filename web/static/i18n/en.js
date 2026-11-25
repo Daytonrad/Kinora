@@ -1940,12 +1940,12 @@
     "because you like {0}"
    ],
    [
-    "^a böngésző nem tudja lejátszani a\\(z\\) (.+) konténert$",
-    "the browser can’t play the {0} container"
+    "^az eszköz nem tudja lejátszani a\\(z\\) (.+) konténert$",
+    "the device can’t play the {0} container"
    ],
    [
-    "^a böngésző nem tudja lejátszani a\\(z\\) (.+) videót$",
-    "the browser can’t play {0} video"
+    "^az eszköz nem tudja lejátszani a\\(z\\) (.+) videót$",
+    "the device can’t play {0} video"
    ],
    [
     "^a\\(z\\) (.+) hang nem támogatott$",
